@@ -656,12 +656,12 @@ tiles_grids_test <- tiles_grids_selected %>%
   anti_join(tiles_grids_valid) %>% 
   mutate(usage = 'test') %>% 
   dplyr::select(tile, index, usage)
-catalog_pred_val_test <- rbind(tiles_grids_train, 
+catalog_train_val_test <- rbind(tiles_grids_train, 
                                tiles_grids_valid, 
                                tiles_grids_test)
-write.csv(catalog_pred_val_test, 
-          'data/intermid/catalog_pred_val_test.csv',
-          row.names = T)
+write.csv(catalog_train_val_test, 
+          'data/intermid/catalog_train_val_test.csv',
+          row.names = F)
 ```
 
 #### Generate labels images

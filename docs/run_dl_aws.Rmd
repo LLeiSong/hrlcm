@@ -1,0 +1,20 @@
+---
+title: "Run deep learning on AWS instance"
+author: "Lei Song"
+date: "`r Sys.Date()`"
+output: 
+  rmdformats::readthedown:
+    highlight: pygments
+    toc_depth: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
+
+## Launch instance
+
+
+## Parameters setting
+
+## Result visualization

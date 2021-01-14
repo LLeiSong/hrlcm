@@ -4,5 +4,6 @@
 .Ruserdata
 .DS_Store
 .idea/
+docs/*.html
 data
 !data/geoms
