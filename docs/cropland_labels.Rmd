@@ -1,0 +1,39 @@
+---
+title: "Cropland labels"
+author: "Lei Song"
+date: "1/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Object-based cropland labels
+```{r ecozones}
+ecozones <- st_read('data/ecozones/ecozones_shp.shp', 
+                    quiet = T) %>% 
+  group_by(PHY_REG) %>% summarise() %>% 
+  setNames(c('zone', 'geometry'))
+st_write(ecozones, 'data/geoms/ecozones.geojson')
+```
+
+### Validation
+Choose out 100 grids for evaluation. These 100 grids will be used to evaluate the labeller as well.
+
+```{r val_grids}
+set.seed(1000)
+vals_grid <- ecozones %>% 
+  st_sample(size = rep(10, nrow(.))) %>% 
+  st_sf() %>% mutate(id = 1:nrow(.))
+```
+
+### Calibration
+First, skip the buffered area around validation grids.
+
+```{r cal_grids}
+vals_grid_buffer <- vals_grid %>% 
+  st_buffer(dist = 0.5, endCapStyle = 'SQUARE') %>% 
+  st_union()
+ecozones_dif <- st_difference(ecozones, vals_grid_buffer)
+```
