@@ -13,8 +13,58 @@ knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 ```
 
 ## Launch instance
+The information of instance that we used:
 
+- AMI ID: `ami-0643df3b347740189`, which is our customized deep learning AWS instance.
+- Instance type: `g3.8xlarge`.
+- Security group: `labeller-security`.
+
+Before start, install `jq`.
+Then use the scripts in `pytorch_planet/aws_tools/create_spot_instance.sh` using the template:
+```
+cd /path/to/pytorch_planet/folder
+chmod 777 ./aws_tools/create_spot_instance.sh
+./aws_tools/create_spot_instance.sh <ami_id> <instance_type> <security_group_id> <new_instance_name> <spot_type> <valid_until> <key_name>
+```
+For example:
+```
+cd /path/to/pytorch_planet/folder
+chmod 777 ./aws_tools/create_spot_instance.sh
+./aws_tools/create_spot_instance.sh ami-0643df3b347740189 g3.8xlarge sg-0a8bbc91697d6a76b lc_tz persistent 2021-01-20T23:00:00 lsong-keypair
+```
 
 ## Parameters setting
+After successfully launched the instance, then it is ready to get into the instance to work.
+
+The most essential work are arguably to clone project and set jupyter notebook:
+
+- STEP 1: Set up GitHub token (because the repo is private). More details could be found in this [tutorial](https://docs.github.com/en/free-pro-team@latest/github/authenticating-to-github/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
+  ```
+  ssh-keygen -t ed25519 -C "your_email@example.com"
+  eval "$(ssh-agent -s)"
+  ssh-add ~/.ssh/id_ed25519
+  vim ~/.ssh/id_ed25519.pub
+  ```
+  Copy out the ssh key, and type `:q` to exit, and then go to GitHub page to add into the records.
+    
+- STEP 2: Clone the repo into instance:
+  
+  ```
+  git clone git@github.com:agroimpacts/pytorch_planet.git
+  ```
+  
+  If necessary, use `git checkout` to switch branch and use `git pull` to grab the updates.
+  
+- STEP 3: Set up jupyter notebook
+
+  ```
+  jupyter notebook password
+  ```
+  to set a log in password for jupyter notebook, then
+  ```
+  jupyter notebook
+  ```
+  replace the private IP with the public IP to open it in browser. If you can log in without issues, then it is ready to go.
 
 ## Result visualization

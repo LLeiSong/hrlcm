@@ -561,9 +561,9 @@ tiles <- do.call(rbind, mclapply(1:nrow(tiles), function(n){
 st_write(tiles, 'data/geoms/tiles_grids.geojson')
 tiles <- tiles %>% vect()
 
-tiles_labels <- do.call(bind_rows, mclapply(1:nrow(tiles), function(n){
+tiles_labels <- mclapply(1:nrow(tiles), function(n){
   labels_each <- crop(lc_labels, tiles[n, ])
-  freq(labels_each) %>% data.frame() %>% 
+  lb <- freq(labels_each) %>% data.frame() %>% 
     filter(value != 0) %>%
     mutate(count = count / (dim(labels_each)[1] * dim(labels_each)[2])) %>%
     left_join(., lc_types, by = c('value' = 'id')) %>%
@@ -571,7 +571,9 @@ tiles_labels <- do.call(bind_rows, mclapply(1:nrow(tiles), function(n){
     pivot_wider(names_from = name, values_from = count) %>%
     mutate(tile = tiles[n, ]$tile,
            index = tiles[n, ]$index)
-}, mc.cores = 12))
+  if (nrow(lb) > 0) lb
+}, mc.cores = 12) %>% bind_rows()
+save(tiles_labels, file = 'data/intermid/tiles_labels.rda')
 
 labels_sum <- labels_sum %>% filter(count > 0)
 tiles_grids_selected <- do.call(rbind, 
@@ -579,7 +581,7 @@ tiles_grids_selected <- do.call(rbind,
                function(nm){
   if (nm %in% c('Forest', 'Grassland', 'Cropland', 'Shrubland')){
     tile_select <- tiles_labels %>% 
-      dplyr::select(tile, index, nm) %>% 
+      dplyr::select(tile, index, all_of(nm)) %>% 
       # arrange_at(nm, funs(desc)) %>% 
       filter(!is.na(!!rlang::sym(nm))) %>% 
       filter((!!rlang::sym(nm)) >= 0.4) %>% 
@@ -638,7 +640,7 @@ tiles_grids_selected <- do.call(rbind,
 ```{r split}
 set.seed(1000)
 tiles_grids_train <- tiles_grids_selected %>% 
-  group_by(name) %>% sample_frac(0.6) %>% 
+  group_by(name) %>% sample_frac(0.7) %>% 
   ungroup() %>% dplyr::select(-name) %>% 
   unique() %>% mutate(usage = 'train') %>%
   dplyr::select(tile, index, usage)

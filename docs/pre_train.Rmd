@@ -105,7 +105,7 @@ lc_labels <- unlist(keys) %>%
     data.frame(dir_label = .) %>% 
     mutate(name = str_extract(dir_label, 
                               '[0-9]+-[0-9]+_[0-9]+')) %>% 
-    separate(name, c('tile', 'index'), '_')
+    tidyr::separate(name, c('tile', 'index'), '_')
 imgs <- merge(lc_labels, plts, by = 'tile')
 rm(plts, lc_labels)
 
@@ -113,7 +113,7 @@ catalog_train_val_test <- read.csv('data/intermid/catalog_train_val_test.csv',
                                   stringsAsFactors = F) %>% 
     merge(imgs, by = c('tile', 'index')) %>% 
     mutate(name = paste(tile, index, sep = '-')) %>% 
-    select(name, usage, dir_gs, dir_os, dir_label)
+    dplyr::select(name, usage, dir_gs, dir_os, dir_label)
 write.csv(catalog_train_val_test, 'data/intermid/catalog_DL_train_val_test.csv',
           row.names = F)
 put_object(file = 'data/intermid/catalog_DL_train_val_test.csv', 
