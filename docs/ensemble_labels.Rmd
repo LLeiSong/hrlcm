@@ -548,17 +548,20 @@ But in order to get more labels for minor type, we:
 ```{r}
 library(tidyr)
 library(parallel)
+# Define the width of chips to cut
+# In this case, 256 *256 chip.
+width_chips <- 16
 lc_labels <- rast('data/intermid/lc_labels_exd_val.tif')
 tiles <- st_read('data/geoms/tiles_nicfi.geojson',
                  quiet = T) %>% dplyr::select(tile)
 tiles <- do.call(rbind, mclapply(1:nrow(tiles), function(n){
   tile <- tiles %>% slice(n)
-  tiles_grids <- st_make_grid(tile, n = c(8, 8)) %>% 
+  tiles_grids <- st_make_grid(tile, n = c(width_chips, width_chips)) %>% 
     st_sf() %>% arrange() %>% 
     mutate(tile = tile$tile,
-                       index = c(1:64))
-}, mc.cores = 10))
-st_write(tiles, 'data/geoms/tiles_grids.geojson')
+                       index = c(1:(width_chips^2)))
+}, mc.cores = 12))
+st_write(tiles, 'data/intermid/tiles_grids_256.geojson')
 tiles <- tiles %>% vect()
 
 tiles_labels <- mclapply(1:nrow(tiles), function(n){
@@ -573,65 +576,45 @@ tiles_labels <- mclapply(1:nrow(tiles), function(n){
            index = tiles[n, ]$index)
   if (nrow(lb) > 0) lb
 }, mc.cores = 12) %>% bind_rows()
-save(tiles_labels, file = 'data/intermid/tiles_labels.rda')
+save(tiles_labels, file = 'data/intermid/tiles_labels_256.rda')
 
 labels_sum <- labels_sum %>% filter(count > 0)
 tiles_grids_selected <- do.call(rbind, 
-        lapply(labels_sum$name, 
-               function(nm){
-  if (nm %in% c('Forest', 'Grassland', 'Cropland', 'Shrubland')){
-    tile_select <- tiles_labels %>% 
-      dplyr::select(tile, index, all_of(nm)) %>% 
-      # arrange_at(nm, funs(desc)) %>% 
-      filter(!is.na(!!rlang::sym(nm))) %>% 
-      filter((!!rlang::sym(nm)) >= 0.4) %>% 
-      mutate(group = ifelse(!!rlang::sym(nm) >= 0.8, 1, 
-                            ifelse(!!rlang::sym(nm) >= 0.6, 2, 3))) 
-    ns <- tile_select %>% group_by(group) %>% summarise(n = n()) %>% 
-      mutate(n = ifelse(n < 1000, n, 1000))
-    tile_select <- do.call(rbind, 
-                           lapply(unique(tile_select$group), 
-                                  function(g){
-      set.seed(124 + g)
-      tile_select %>% filter(group == g) %>% 
-        sample_n(size = ns %>% 
-                   filter(group == g) %>% 
-                   pull(n))
-    }))
-  } else if (nm == 'Water'){
-    tile_select <- tiles_labels %>% 
-      dplyr::select(tile, index, nm) %>% 
-      # arrange_at(nm, funs(desc)) %>% 
-      filter(!is.na(!!rlang::sym(nm))) %>% 
-      filter((!!rlang::sym(nm)) >= 0.4) %>% 
-      mutate(group = ifelse(!!rlang::sym(nm) >= 0.8, 1, 
-                            ifelse(!!rlang::sym(nm) >= 0.6, 2, 3))) 
-    ns <- tile_select %>% group_by(group) %>% summarise(n = n()) %>% 
-      mutate(n = ifelse(n < 500, n, 500))
-    tile_select <- do.call(rbind, 
-                           lapply(unique(tile_select$group), 
-                                  function(g){
-      set.seed(124 + g)
-      tile_select %>% filter(group == g) %>% 
-        sample_n(size = ns %>% 
-                   filter(group == g) %>% 
-                   pull(n))
-   }))
-  } else {
-    # Bare land, wetland, and urban are classes that are hard to tell,
-    # and the ensemble labels are less,
-    # so we keep as many samples as possible.
-    # but also if there are too few labels within a grid,
-    # we assume the labels are not reliable anymore.
-    # So we use a threshold 0.1.
-    tile_select <- tiles_labels %>% 
-      dplyr::select(tile, index, nm) %>%
-      filter(!is.na(!!rlang::sym(nm))) %>%
-      filter((!!rlang::sym(nm)) > 0.1)
-  }
-  data.frame(name = nm, 
-             tile = tile_select$tile, 
-             index = tile_select$index)
+                                lapply(labels_sum$name, 
+                                       function(nm){
+    message(nm)
+    if (nm %in% c('Forest', 'Grassland', 'Cropland', 'Shrubland')){
+        set.seed(123)
+        tile_select <- tiles_labels %>% 
+            dplyr::select(tile, index, nm) %>% 
+            # arrange_at(nm, funs(desc)) %>% 
+            filter(!is.na(!!rlang::sym(nm))) %>% 
+            filter((!!rlang::sym(nm)) >= 0.7) %>% 
+            sample_n(min(1000, nrow(.)))
+    } else if (nm == 'Water'){
+        set.seed(566)
+        tile_select <- tiles_labels %>% 
+            dplyr::select(tile, index, nm) %>% 
+            # arrange_at(nm, funs(desc)) %>% 
+            filter(!is.na(!!rlang::sym(nm))) %>%
+            filter((!!rlang::sym(nm)) <= 0.8) %>%
+            filter((!!rlang::sym(nm)) >= 0.4) %>% 
+            sample_n(500)
+    } else {
+        # Bare land, wetland, and urban are classes that are hard to tell,
+        # and the ensemble labels are less,
+        # so we keep as many samples as possible.
+        # but also if there are too few labels within a grid,
+        # we assume the labels are not reliable anymore.
+        # So we use a threshold 0.1.
+        tile_select <- tiles_labels %>% 
+            dplyr::select(tile, index, all_of(nm)) %>%
+            filter(!is.na(!!rlang::sym(nm))) %>%
+            filter((!!rlang::sym(nm)) > 0.1)
+    }
+    data.frame(name = nm, 
+               tile = tile_select$tile, 
+               index = tile_select$index)
 }))
 ```
 
@@ -640,7 +623,7 @@ tiles_grids_selected <- do.call(rbind,
 ```{r split}
 set.seed(1000)
 tiles_grids_train <- tiles_grids_selected %>% 
-  group_by(name) %>% sample_frac(0.7) %>% 
+  group_by(name) %>% sample_frac(0.6) %>% 
   ungroup() %>% dplyr::select(-name) %>% 
   unique() %>% mutate(usage = 'train') %>%
   dplyr::select(tile, index, usage)
@@ -648,7 +631,7 @@ set.seed(1200)
 tiles_grids_valid <- tiles_grids_selected %>% 
   anti_join(tiles_grids_train, 
             by = c('tile', 'index')) %>% 
-  group_by(name) %>% sample_frac(0.5) %>% 
+  group_by(name) %>% sample_frac(0.6) %>% 
   ungroup() %>% dplyr::select(-name) %>% 
   unique() %>% mutate(usage = 'validate') %>%  
   dplyr::select(tile, index, usage)
@@ -667,8 +650,23 @@ write.csv(catalog_train_val_test,
 ```
 
 #### Generate labels images
+In order to save the resources for deep learning, we re-defined the class index to be continuous. So:
+
+```
+id          name
+1       Cropland
+2         Forest
+3      Grassland
+4      Shrubland
+5        Wetland
+6          Water
+7 Urban/Built up (8)
+8       Bareland (9)
+```
+
 ```{r labels_img}
-tiles <- st_read('data/geoms/tiles_grids.geojson',
+library(glue)
+tiles <- st_read('data/intermid/tiles_grids.geojson',
                  quiet = T)
 lc_labels <- rast('data/intermid/lc_labels_exd_val.tif')
 
@@ -676,16 +674,21 @@ plt_path <- '/Volumes/elephant/plt_nicfi'
 plt_nms <- list.files(plt_path, full.names = T)
 labels_path <- '/Volumes/elephant/labels'
 
-lapply(unique(catalog_pred_val_test$tile), function(tile_nm){
-  tiles_each <- catalog_pred_val_test %>% filter(tile == tile_nm)
+mclapply(unique(catalog_train_val_test$tile), 
+         function(tile_nm){
+  tiles_each <- catalog_train_val_test %>% 
+    filter(tile == tile_nm)
   lc_labels_each <- crop(lc_labels, tiles %>% 
                            filter(tile == tile_nm) %>% 
                            st_union() %>% 
                            st_buffer(0.01) %>% 
                            st_sf() %>% vect())
   nm <- grep(tile_nm, plt_nms, value = TRUE)[1]
-  temp <- rast(nm)[[1]] %>% aggregate(fact = 512)
-  vals <- matrix(1:64, nrow = 8, ncol = 8) %>% t()
+  temp <- rast(nm)[[1]] %>% 
+    aggregate(fact = 4096/width_chips)
+  vals <- matrix(1:(width_chips^2), 
+                 nrow = width_chips, 
+                 ncol = width_chips) %>% t()
   vals <- vals[nrow(vals):1, ]
   values(temp) <- vals
   lapply(1:nrow(tiles_each), function(n){
@@ -693,9 +696,11 @@ lapply(unique(catalog_pred_val_test$tile), function(tile_nm){
     temp_each <- temp
     index <- tile_each$index
     temp_each[temp_each != index] <- NA
-    temp_each <- trim(temp_each) %>% 
-      disaggregate(fact = 512)
+    temp_each <- terra::trim(temp_each) %>% 
+      disaggregate(fact = 4096/width_chips)
     label_each <- resample(lc_labels_each, temp_each, method = 'near')
+    label_each[label_each == 8] <- 7
+    label_each[label_each == 9] <- 8
     writeRaster(label_each, 
                 file.path(labels_path, 
                           glue('labels_{tile_nm}_{index}.tif')),
@@ -704,7 +709,7 @@ lapply(unique(catalog_pred_val_test$tile), function(tile_nm){
     rm(tile_each, temp_each, label_each, index);gc()
   })
   rm(tiles_each, lc_labels_each, nm, temp, vals);gc()
-})
+}, mc.cores = 12)
 ```
 
 ### Sampling the label points [DEPRECATED]

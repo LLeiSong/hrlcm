@@ -30,7 +30,7 @@ For example:
 ```
 cd /path/to/pytorch_planet/folder
 chmod 777 ./aws_tools/create_spot_instance.sh
-./aws_tools/create_spot_instance.sh ami-0643df3b347740189 g3.8xlarge sg-0a8bbc91697d6a76b lc_tz persistent 2021-01-20T23:00:00 lsong-keypair
+./aws_tools/create_spot_instance.sh ami-0643df3b347740189 g3.16xlarge sg-0a8bbc91697d6a76b lc_dl_tz persistent 2021-01-22T23:00:00 lsong-keypair
 ```
 
 ## Parameters setting
@@ -67,4 +67,76 @@ The most essential work are arguably to clone project and set jupyter notebook:
   ```
   replace the private IP with the public IP to open it in browser. If you can log in without issues, then it is ready to go.
 
-## Result visualization
+## Experiemnts
+
+### Experiment 1
+
+```
+Model: Deeplab3+
+train_batch = 32
+val_batch = 16
+transformation = ['vflip', 'hflip', 'rotate', 'resize']
+rotate_degree = [-90, 90]
+epoch = 30
+lr_init = 0.0005
+lr_decay = 0.1
+lr_decay_step = 1
+momentum = 0.99
+criterion = BalancedTverskyFocalLoss(ignore_index=0)
+optimizer = "adam"
+```
+
+**Result**: terminate early. The model performance stuck quickly. Then it got stuck here.
+
+```
+train loss: 0.6423281792689253
+train acc: 0.7882347084857799
+validation loss: 0.872987336890642
+validation acc: 0.8824300759060438
+time: 409
+[14/100]
+train loss: 0.6659585610032082
+train acc: 0.7867565039131377
+validation loss: 0.8747954650153947
+validation acc: 0.8814900846675385
+time: 391
+```
+
+Seems like BalancedTverskyFocalLoss and adam is a good combination of compiler parameters. The problems left is which model and the learning rate. The experiments shown that the complexity of the model is not enough.
+
+### Experiments
+
+```
+Model: Unet
+
+train loss: 0.6717923217349582
+train acc: 0.7490688176066788
+validation loss: 0.8887722446301649
+validation acc: 0.8503072788549024
+```
+
+```
+Model: Deeper Unet
+
+train loss: 0.6798290364720203
+train acc: 0.7305447139121868
+validation loss: 0.8891407523390858
+validation acc: 0.8469047265690427
+time: 245
+```
+
+```
+Model: VGG 
+```
+
+```
+Model: ResNet 
+```
+
+```
+Model: DenseNet 
+```
+
+```
+Model: SegNet 
+```

@@ -32,7 +32,7 @@ plt_quads_dry_season <- list.files('/Volumes/elephant/plt_nicfi',
                         full.names = T, pattern = '2018-06_2018-11')
 ## Labels
 lc_labels <- list.files('/Volumes/elephant/labels',
-                        full.names = T, pattern = '.tif')
+                        full.names = T, pattern = '.tif$')
 
 ## Upload function
 s3_upload <- function(fnames, prefix, bucket){
@@ -62,6 +62,7 @@ s3_upload(lc_labels,
 library(dplyr)
 library(stringr)
 library(tidyr)
+library(aws.s3)
 
 # Rain season
 items <- get_bucket(bucket = 'activemapper', 
