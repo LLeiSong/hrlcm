@@ -546,10 +546,13 @@ But in order to get more labels for minor type, we:
 - For water and forest, we sample 5% as train.
 
 ```{r}
+library(ggplot2)
 library(tidyr)
 library(parallel)
 # Define the width of chips to cut
-# In this case, 256 *256 chip.
+# In this case, 256 * 256 chip.
+# The chip size is the trade-off between computing cost, 
+# purity of ensemble labels, and the keep of geographic context.
 width_chips <- 16
 lc_labels <- rast('data/intermid/lc_labels_exd_val.tif')
 tiles <- st_read('data/geoms/tiles_nicfi.geojson',
@@ -578,6 +581,41 @@ tiles_labels <- mclapply(1:nrow(tiles), function(n){
 }, mc.cores = 12) %>% bind_rows()
 save(tiles_labels, file = 'data/intermid/tiles_labels_256.rda')
 
+labels_sum <- labels_sum %>% filter(count > 0)
+tiles_grids_pure <- do.call(rbind, 
+                            lapply(labels_sum$name, 
+                                   function(nm){
+    message(nm)
+    tile_select <- tiles_labels %>% 
+        dplyr::select(tile, index, all_of(nm)) %>% 
+        filter(!is.na(!!rlang::sym(nm))) %>% 
+        filter((!!rlang::sym(nm)) >= 0.8)
+    data.frame(name = nm, 
+               tile = tile_select$tile, 
+               index = tile_select$index)
+}))
+
+grids_pure_count <- tiles_grids_pure %>% 
+  group_by(name) %>% summarize(n = n()) %>% 
+  arrange(n)
+```
+
+```{r, eval=T, echo=F, message=F, warning=F}
+grids_pure_count <- read.csv('data/intermid/pure_grids_count.csv',
+                             stringsAsFactors = F)
+
+# Based on the table, the first three minor classes 
+grids_pure_count %>%
+  kbl(caption = "Pure label grids summary") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+Based on the table, the first three minor classes (`r grids_pure_count$name[1:3]`) have the similar number of pure grids. So we keep all grids from these classes, and then randomly select the average number (`r ceiling(mean(grids_pure_count$n[1:3]))`) of grids from other classes.
+
+##### [ARCHIVED] Get large amount of weak labels.
+Based on the prior experiments, this method didn't do well. The train dataset is "under-representative" in terms of DL training (Validate loss curve is below the train loss significantly). This might be caused by either the super imbalance in both train and validate dataset, or the noises in the labels.
+
+```{r old-method}
 labels_sum <- labels_sum %>% filter(count > 0)
 tiles_grids_selected <- do.call(rbind, 
                                 lapply(labels_sum$name, 
@@ -617,6 +655,7 @@ tiles_grids_selected <- do.call(rbind,
                index = tile_select$index)
 }))
 ```
+
 
 #### Split training, validation, and test
 
