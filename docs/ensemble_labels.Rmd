@@ -5,7 +5,7 @@ date: "`r Sys.Date()`"
 output: 
   rmdformats::readthedown:
     highlight: pygments
-    toc_depth: 5
+    toc_depth: 6
 ---
 
 ```{r setup, include=FALSE}
@@ -537,13 +537,7 @@ writeRaster(labels, 'data/intermid/lc_labels_exd_val.tif',
 ```
 
 #### Select out sub-grids
-
-But in order to get more labels for minor type, we:
-
-- For bareland, wetland, and urban, we sample 95% as train;
-- For shrubland and grassland, we sample 20% as train;
-- For cropland we sample 10% as train;
-- For water and forest, we sample 5% as train.
+##### Statistic
 
 ```{r}
 library(ggplot2)
@@ -612,7 +606,52 @@ grids_pure_count %>%
 
 Based on the table, the first three minor classes (`r grids_pure_count$name[1:3]`) have the similar number of pure grids. So we keep all grids from these classes, and then randomly select the average number (`r ceiling(mean(grids_pure_count$n[1:3]))`) of grids from other classes.
 
-##### [ARCHIVED] Get large amount of weak labels.
+##### Reselect
+```{r reselect}
+grids_pure_count$n[4:nrow(grids_pure_count)] <- ceiling(mean(grids_pure_count$n[1:3]))
+tiles_grids_selected <- do.call(rbind, 
+                                lapply(grids_pure_count$name, 
+                                       function(nm){
+    message(nm)
+    n_grids <- grids_pure_count %>% 
+      filter(name == nm) %>% 
+      pull(n)
+    set.seed(123)
+    tile_select <- tiles_labels %>% 
+      dplyr::select(tile, index, all_of(nm)) %>% 
+      filter(!is.na(!!rlang::sym(nm))) %>% 
+      filter((!!rlang::sym(nm)) >= 0.8) %>% 
+      sample_n(min(n_grids, nrow(.)))
+    data.frame(name = nm, 
+               tile = tile_select$tile, 
+               index = tile_select$index)
+}))
+```
+
+#### Split training and validation
+
+```{r split_pure}
+set.seed(1000)
+tiles_grids_train <- tiles_grids_selected %>% 
+  group_by(name) %>% sample_frac(0.7) %>% 
+  ungroup() %>% dplyr::select(-name) %>% 
+  unique() %>% mutate(usage = 'train') %>%
+  dplyr::select(tile, index, usage)
+tiles_grids_valid <- tiles_grids_selected %>% 
+  anti_join(tiles_grids_train, 
+            by = c('tile', 'index')) %>% 
+  group_by(name) %>% ungroup() %>% 
+  dplyr::select(-name) %>% 
+  unique() %>% mutate(usage = 'validate') %>%  
+  dplyr::select(tile, index, usage)
+catalog_train_val <- rbind(tiles_grids_train, 
+                               tiles_grids_valid)
+write.csv(catalog_train_val, 
+          'data/intermid/catalog_train_val_pure.csv',
+          row.names = F)
+```
+
+#### [ARCHIVED] Get large amount of weak labels.
 Based on the prior experiments, this method didn't do well. The train dataset is "under-representative" in terms of DL training (Validate loss curve is below the train loss significantly). This might be caused by either the super imbalance in both train and validate dataset, or the noises in the labels.
 
 ```{r old-method}
@@ -656,8 +695,8 @@ tiles_grids_selected <- do.call(rbind,
 }))
 ```
 
-
 #### Split training, validation, and test
+Select test dataset for final round.
 
 ```{r split}
 set.seed(1000)
@@ -705,15 +744,18 @@ id          name
 
 ```{r labels_img}
 library(glue)
+
+# Make the script consistent
+catalog_train_val_test <- catalog_train_val
 tiles <- st_read('data/intermid/tiles_grids.geojson',
                  quiet = T)
 lc_labels <- rast('data/intermid/lc_labels_exd_val.tif')
 
 plt_path <- '/Volumes/elephant/plt_nicfi'
 plt_nms <- list.files(plt_path, full.names = T)
-labels_path <- '/Volumes/elephant/labels'
+labels_path <- '/Volumes/elephant/labels_pure'
 
-mclapply(unique(catalog_train_val_test$tile), 
+lapply(unique(catalog_train_val_test$tile), 
          function(tile_nm){
   tiles_each <- catalog_train_val_test %>% 
     filter(tile == tile_nm)
@@ -748,7 +790,7 @@ mclapply(unique(catalog_train_val_test$tile),
     rm(tile_each, temp_each, label_each, index);gc()
   })
   rm(tiles_each, lc_labels_each, nm, temp, vals);gc()
-}, mc.cores = 12)
+})
 ```
 
 ### Sampling the label points [DEPRECATED]

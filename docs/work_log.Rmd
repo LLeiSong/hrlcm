@@ -1,0 +1,30 @@
+---
+title: "Work log"
+author: "Lei Song"
+date: "`r Sys.Date()`"
+output: 
+  rmdformats::readthedown:
+    highlight: pygments
+    toc_depth: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
+
+## Workflow 1
+I tried to generate ensemble labels based on multiple land cover products with high quality. Choose 3000 "pure" grids, 1000 special grids for river regions and cities, and 1000 extra random grids across the whole region. 
+
+The train process is smooth, which has good loss and overall accuracy. However, because of the wideness of the country, global spatial generalization reduce the classification accuracy dramatically for any specific tile.
+
+So this method is not ideal for now. But the workflow could be found in [here](ensemble_labels_machine.Rmd)
+
+## Workflow 2
+We decided to try another method, which use regional spatial generalization. We also plan to ensemble more prior knowledge such as TANSIS project.
+- Use zone 5, train a U-net with 1500 epochs with cross entropy
+- Use zone 5, train a Deeplab with 1500 epochs wit cross entropy
+- Compare these two models, try to use co-training.
+- Define the final version of modeling in one zone.
+- Contagious to other areas.
+
+The results shows that 
