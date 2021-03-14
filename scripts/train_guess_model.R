@@ -24,6 +24,8 @@ library(ggplot2)
 ## Get training
 load(file.path('data/north', 'training.rda'))
 training <- training %>% 
+    # wetland is really not accurate. so we give up this class.
+    filter(landcover != 5) %>% 
     arrange(landcover) %>% 
     mutate(landcover = as.factor(landcover))
 
@@ -58,11 +60,6 @@ vip(forest_vip, num_features = ncol(training) - 1,
 ## spatial resolution.
 
 ## Subset the features based on importance
-### Reload training
-load(file.path('data/north', 'training.rda'))
-training <- training %>% 
-    arrange(landcover) %>% 
-    mutate(landcover = as.factor(landcover))
 training <- training %>% 
     dplyr::select(-c(paste0('vv', c(3, 5, 6)),
                      paste0('vh', c(3, 5, 6))))
@@ -75,7 +72,7 @@ lc_test <- testing(training_split)
 
 ## Set folds for cross validation
 set.seed(234)
-training_folds <- vfold_cv(lc_train, v = 3)
+training_folds <- vfold_cv(lc_train, v = 5)
 
 ## Tune parameters of RF
 ### Define tune model
@@ -99,7 +96,7 @@ rf_grid <- grid_regular(
 )
 
 ### Tuning
-doParallel::registerDoParallel(10)
+doParallel::registerDoParallel(12)
 tune_res <- tune_grid(
     tune_wf,
     resamples = training_folds,
@@ -110,23 +107,17 @@ save(tune_res, file = 'data/north/tune_res.rda')
 
 ## Check the results
 tune_res %>%
-    collect_metrics()
-
-tune_res %>%
     collect_metrics() %>%
     filter(.metric == "accuracy") %>%
-    select(mean, min_n, mtry) %>%
-    pivot_longer(min_n:mtry,
-                 values_to = "value",
-                 names_to = "parameter"
-    ) %>%
-    ggplot(aes(value, mean, color = parameter)) +
-    geom_point(show.legend = FALSE) +
-    facet_wrap(~parameter, scales = "free_x") +
-    labs(x = NULL, y = "Accuracy")
-
+    mutate(min_n = factor(min_n)) %>%
+    ggplot(aes(mtry, mean, color = min_n)) +
+    geom_line() + geom_point() +
+    scale_color_brewer(palette="Dark2") +
+    labs(y = "Accuracy") +
+    theme_light()
+    
 ## Best parameters
-best_acc <- select_best(regular_res, "accuracy")
+best_acc <- select_best(tune_res, "roc_auc")
 final_rf <- finalize_model(
     forest_tune,
     best_acc
@@ -134,11 +125,12 @@ final_rf <- finalize_model(
 
 ### Testing
 final_wf <- workflow() %>%
-    add_recipe(forest_rec) %>%
-    add_model(final_rf)
+    add_model(final_rf) %>% 
+    add_formula(landcover ~ .)
 
 final_res <- final_wf %>%
     last_fit(training_split)
+save(final_res, file = 'data/north/final_res.rda')
 
 final_res %>%
     collect_metrics()
@@ -147,18 +139,32 @@ final_res %>%
 ##  Step 4: Train the model  ##
 ###############################
 ## Train the model using best parameters
-set.seed(203)
-rf_mod <- randomForest(
-    landcover ~ .,
-    data = training,
-    mtree = 1000,
-    mtry = 10,
-    importance = T)
-save(rf_mod, file = file.path('data/north', 'rf_mod.rda'))
+## NOTE: we didn't collect_prediction because
+## we just use the subset of the training to tune.
+
+### Clean working environment
+rm(lc_test, lc_train, training, training_folds,
+   training_split); gc()
+
+### Reload training
+load(file.path('data/north', 'training.rda'))
+training <- training %>%
+    filter(landcover != 5) %>%
+    arrange(landcover) %>% 
+    mutate(landcover = as.factor(landcover)) %>% 
+    dplyr::select(-c(paste0('vv', c(3, 5, 6)),
+                     paste0('vh', c(3, 5, 6))))
+
+### Train the final guess model
+guess_rf_md <- final_rf %>% 
+    set_engine("ranger", num.threads = 6) %>% 
+    fit(landcover ~ ., training)
+save(guess_rf_md, file = 'data/north/guess_rf_md.rda')
 
 ############################################
 ##  Step 5: Predict one tile for example  ##
 ############################################
+library(terra)
 ## Read image stack
 fnames <- list.files('/Volumes/elephant/pred_stack',
                      full.names = T)
@@ -172,7 +178,7 @@ imgs <- rast(img_path) %>%
                      'roads_dist')))
 
 ## Predict scores and classes
-scores <- predict(imgs, rf, type = "prob")
+scores <- predict(imgs, guess_rf_md, type = "prob")
 pred <- argmax(values(scores))
 classes <- scores[[1]]
 values(classes) <- pred
