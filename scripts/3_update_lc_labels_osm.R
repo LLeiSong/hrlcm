@@ -157,7 +157,8 @@ execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'wetlands_buff', 
                             output = here('data/osm/wetlands.tif')))
 
-rm(rivers, waterbodies, roads, ctd_buildings, buildings, wetlands); gc()
+rm(rivers, waterbodies, roads, 
+   ctd_buildings, buildings, wetlands); gc()
 
 ###############################
 ##  Step 4: Apply OSM masks  ##
