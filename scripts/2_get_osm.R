@@ -7,8 +7,10 @@
 #######################
 ##  Step 1: Setting  ##
 #######################
+message('Step1: Setting')
 
 ## Load libraries
+library(here)
 library(stringr)
 library(parallel)
 library(sf)
@@ -16,28 +18,32 @@ library(dplyr)
 library(tidyr)
 
 ## Define the destination folder
-dst_path <- 'data/north'
+dst_path <- here('data/north')
 
 ######################################
 ##  Step 2: Load and download data  ##
 ######################################
+message('Step 2: Load and download data')
+
 ## Get tiles
 select <- dplyr::select
-tiles_north <- st_read('data/geoms/tiles_nicfi_north.geojson')
+tiles_north <- st_read(here('data/geoms/tiles_nicfi_north.geojson'))
 
 ## Get OSM
 osm_link <- file.path('https://download.geofabrik.de/africa', 
                       'tanzania-latest-free.shp.zip')
-download.file(osm_link, 'data/tanzania_osm.zip')
-dir.create('data/temp', showWarnings = F)
-unzip('data/tanzania_osm.zip', exdir = 'data/temp')
+download.file(osm_link, here('data/tanzania_osm.zip'))
+dir.create(here('data/temp'), showWarnings = F)
+unzip(here('data/tanzania_osm.zip'), exdir = here('data/temp'))
 
 ###########################################
 ##  Step 3: Crop the data to study area  ##
 ###########################################
+message('Step 3: Crop the data to study area')
+
 ## Subset the vectors
 tiles_north <- tiles_north %>% st_union()
-fnames <- list.files('data/temp', pattern = '.shp', full.names = T)
+fnames <- list.files(here('data/temp'), pattern = '.shp', full.names = T)
 
 rivers <- st_read(fnames[str_detect(fnames, 'waterways', )]) %>% 
     st_intersection(tiles_north) %>% 
@@ -76,14 +82,14 @@ buildings <- do.call(rbind,
     st_collection_extract('POLYGON')
 
 ## Save out the processed vectors
-dir.create('data/osm')
-st_write(rivers, 'data/osm/rivers.geojson')
-st_write(waterbodies, 'data/osm/waterbodies.geojson')
-st_write(wetlands, 'data/osm/wetlands.geojson')
-st_write(roads, 'data/osm/roads.geojson')
-st_write(big_roads, 'data/osm/big_roads.geojson')
-st_write(buildings, 'data/osm/buildings.geojson')
+dir.create(here('data/osm'))
+st_write(rivers, here('data/osm/rivers.geojson'))
+st_write(waterbodies, here('data/osm/waterbodies.geojson'))
+st_write(wetlands, here('data/osm/wetlands.geojson'))
+st_write(roads, here('data/osm/roads.geojson'))
+st_write(big_roads, here('data/osm/big_roads.geojson'))
+st_write(buildings, here('data/osm/buildings.geojson'))
 
 ## Delete temporary files
-unlink("data/temp", recursive = TRUE)
-file.remove('data/tanzania_osm.zip')
+unlink(here("data/temp"), recursive = TRUE)
+file.remove(here('data/tanzania_osm.zip'))

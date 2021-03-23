@@ -7,7 +7,10 @@
 #######################
 ##  Step 1: Setting  ##
 #######################
+message('Step1: Setting')
+
 ## Load packages
+library(here)
 library(terra)
 library(parallel)
 library(sf)
@@ -19,11 +22,13 @@ library(rgrass7)
 ####################################
 ##  Step 2: Load related dataset  ##
 ####################################
+message('Step 2: Load related dataset')
+
 ## Get samples
-samples <- st_read('data/north/samples_all.geojson')
-tiles_north <- st_read('data/geoms/tiles_nicfi_north.geojson')
+samples <- st_read(here('data/north/samples_all.geojson'))
+tiles_north <- st_read(here('data/geoms/tiles_nicfi_north.geojson'))
 samples <- st_join(samples, tiles_north)
-save(samples, file = 'data/north/samples.rda')
+save(samples, file = here('data/north/samples.rda'))
 
 ## Read file names
 plt_path <- '/Volumes/elephant/plt_nicfi'
@@ -34,6 +39,8 @@ s1_nms <- list.files(s1_path, full.names = T)
 ####################################
 ##  Step 3: Prepare image stacks  ##
 ####################################
+message('Step 3: Prepare image stacks')
+
 ## Define the function to make image stacks
 get_img_wdist <- function(tile_nm, tiles_north,
                     rivers_all, roads_all, 
@@ -41,7 +48,7 @@ get_img_wdist <- function(tile_nm, tiles_north,
     message(tile_nm)
     
     # read Planet images
-    message('Planet basemap.')
+    message('--Planet basemap')
     plt_nms_tile <- grep(tile_nm, plt_nms, value = TRUE)
     plt_os <- rast(grep('2017-12_2018-05', 
                         plt_nms_tile, value = TRUE)) %>% 
@@ -71,7 +78,7 @@ get_img_wdist <- function(tile_nm, tiles_north,
     rm(plt_os, plt_gs); gc()
     
     # Read S1 images
-    message('Sentinel-1 images.')
+    message('--Sentinel-1 images')
     s1_nms_tile <- grep(tile_nm, s1_nms, value = TRUE)
     s1_vv <- rast(grep('VV', s1_nms_tile, value = TRUE))
     s1_vv <- resample(s1_vv, plts$os_band1)
@@ -81,7 +88,7 @@ get_img_wdist <- function(tile_nm, tiles_north,
     names(s1_vh) <- paste0('vh', 1:6)
     
     # Get distance layers
-    message('Distance layers')
+    message('--Distance layers')
     temp_path <- glue::glue('data/north/temp_{tile_nm}')
     dir.create(temp_path)
     
@@ -212,7 +219,7 @@ get_img <- function(tile_nm, tiles_north,
     message(tile_nm)
     
     # read Planet images
-    message('Planet basemap.')
+    message('--Planet basemap')
     plt_nms_tile <- grep(tile_nm, plt_nms, value = TRUE)
     plt_os <- rast(grep('2017-12_2018-05', 
                         plt_nms_tile, value = TRUE)) %>% 
@@ -242,7 +249,7 @@ get_img <- function(tile_nm, tiles_north,
     rm(plt_os, plt_gs); gc()
     
     # Read S1 images
-    message('Sentinel-1 images.')
+    message('--Sentinel-1 images')
     s1_nms_tile <- grep(tile_nm, s1_nms, value = TRUE)
     s1_vv <- rast(grep('VV', s1_nms_tile, value = TRUE))
     s1_vv <- resample(s1_vv, plts$os_band1)
@@ -259,7 +266,7 @@ get_img <- function(tile_nm, tiles_north,
 ## Make stacks
 dir.create('/Volumes/elephant/pred_stack')
 ## Get vectors
-fnames <- list.files('data/osm', full.names = T, pattern = '.geojson')
+fnames <- list.files(here('data/osm'), full.names = T, pattern = '.geojson')
 rivers_all <- st_read(fnames[str_detect(fnames, 'rivers', )])
 roads_all <- st_read(fnames[str_detect(fnames, '/roads', )])
 buildings_all <- st_read(fnames[str_detect(fnames, 'buildings', )])
@@ -280,6 +287,8 @@ mclapply(unique(samples$tile),
 ###########################################
 ##  Step 4: Extract values for training  ##
 ###########################################
+message('Step 4: Extract values for training')
+
 ## Get training
 training <- do.call(rbind, 
                     mclapply(unique(samples$tile), 
@@ -304,4 +313,4 @@ training <- do.call(rbind,
     rm(imgs, samples_this); gc()
     trainings_this
 }, mc.cores = 10))
-save(training, file = file.path('data/north', 'training.rda'))
+save(training, file = file.path(here('data/north'), 'training.rda'))

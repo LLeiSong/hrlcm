@@ -27,4 +27,10 @@ We decided to try another method, which use regional spatial generalization. We 
 - Define the final version of modeling in one zone.
 - Contagious to other areas.
 
-The results shows that 
+Give up this workflow
+
+## Workflow 3
+
+*More details later*.
+
+But the over-estimation of urban is generally because of the overlap between tiny houses and trees over the north-east region. Fortunately, the characteristics of urban is very outstanding. So we could use the size of the house to narrow the samples down to less confusing areas.

@@ -6,4 +6,5 @@
 .idea/
 docs/*.html
 data
+results
 !data/geoms

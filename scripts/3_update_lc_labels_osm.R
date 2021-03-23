@@ -7,7 +7,10 @@
 #######################
 ##  Step 1: Setting  ##
 #######################
+message('Step1: Setting')
+
 ## Load libraries
+library(here)
 library(terra)
 library(parallel)
 library(sf)
@@ -17,17 +20,19 @@ library(stringr)
 library(rgrass7)
 
 ## Define the destination folder
-dst_path <- 'data/north'
+dst_path <- here('data/north')
 
 ##################################
 ##  Step 2: Load and crop data  ##
 ##################################
+message('Step 2: Load and crop data')
+
 ## Get tiles
 select <- dplyr::select
-tiles_north <- st_read('data/geoms/tiles_nicfi_north.geojson')
+tiles_north <- st_read(here('data/geoms/tiles_nicfi_north.geojson'))
 
 ## Get the ensemble labels
-lc_labels <- rast('data/intermid/lc_labels.tif')
+lc_labels <- rast(here('data/intermid/lc_labels.tif'))
 tiles_north_vect <- vect(tiles_north)
 lc_labels_north <- mask(crop(lc_labels, 
                              tiles_north_vect), 
@@ -41,8 +46,10 @@ writeRaster(lc_labels_north,
 #################################
 ##  Step 3: Prepare OSM masks  ##
 #################################
+message('Step 3: Prepare OSM masks')
+
 ## Get file names
-fnames <- list.files('data/osm', full.names = T, 
+fnames <- list.files(here('data/osm'), full.names = T, 
                      pattern = '.geojson')
 
 ## set up
@@ -63,6 +70,8 @@ execGRASS("g.region", raster = "lc_types")
 
 ## OSM mask
 ### rivers
+message('--Rivers')
+
 use_sf()
 rivers <- st_read(fnames[str_detect(fnames, 'rivers', )])
 writeVECT(rivers, 'rivers', v.in.ogr_flags = 'overwrite')
@@ -76,9 +85,11 @@ execGRASS('r.buffer', flags = c("overwrite"),
                             distances = 30))
 execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'rivers_buff', 
-                            output = 'data/osm/rivers.tif'))
+                            output = here('data/osm/rivers.tif')))
 
 ### Waterbodies
+message('--Waterbodies')
+
 waterbodies <- st_read(fnames[str_detect(fnames, 'waterbodies', )])
 writeVECT(waterbodies, 'waterbodies', v.in.ogr_flags = 'overwrite')
 execGRASS('v.to.rast', flags = c("overwrite"),
@@ -91,9 +102,11 @@ execGRASS('r.buffer', flags = c("overwrite"),
                             distances = 30))
 execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'waterbodies_buff', 
-                            output = 'data/osm/waterbodies.tif'))
+                            output = here('data/osm/waterbodies.tif')))
 
 ### roads
+message('--Roads')
+
 roads <- st_read(fnames[str_detect(fnames, '/roads', )])
 writeVECT(roads, 'roads', v.in.ogr_flags = 'overwrite')
 execGRASS('v.to.rast', flags = c("overwrite"),
@@ -106,9 +119,11 @@ execGRASS('r.buffer', flags = c("overwrite"),
                             distances = 30))
 execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'roads_buff', 
-                            output = 'data/osm/roads.tif'))
+                            output = here('data/osm/roads.tif')))
 
 ### buildings for urban/built-up
+message('--Buildings')
+
 buildings <- st_read(fnames[str_detect(fnames, 'buildings', )])
 buildings <- st_cast(buildings, "POLYGON")
 ctd_buildings <- st_centroid(buildings)
@@ -123,9 +138,11 @@ execGRASS('v.to.rast', flags = c("d", "overwrite"),
                             use = 'val'))
 execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'buildings', 
-                            output = 'data/osm/buildings.tif'))
+                            output = here('data/osm/buildings.tif')))
 
 ### wetland
+message('--Wetlands')
+
 wetlands <- st_read(fnames[str_detect(fnames, 'wetlands', )])
 writeVECT(wetlands, 'wetlands', v.in.ogr_flags = 'overwrite')
 execGRASS('v.to.rast', flags = c("overwrite"),
@@ -138,15 +155,17 @@ execGRASS('r.buffer', flags = c("overwrite"),
                             distances = 30))
 execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'wetlands_buff', 
-                            output = 'data/osm/wetlands.tif'))
+                            output = here('data/osm/wetlands.tif')))
 
 rm(rivers, waterbodies, roads, ctd_buildings, buildings, wetlands); gc()
 
 ###############################
 ##  Step 4: Apply OSM masks  ##
 ###############################
+message('Step 4: Apply OSM masks')
+
 ## Read the mask
-fnames <- list.files('data/osm', pattern = '.tif', full.names = T)
+fnames <- list.files(here('data/osm'), pattern = '.tif', full.names = T)
 masks <- do.call(c, lapply(fnames, function(fname){
     rast(fname)
 }))
