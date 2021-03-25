@@ -5,9 +5,14 @@ This is a repo for land cover classification using ensemble labels and high reso
 
 ## Introduction
 
-## Acknowledgement
+## Reference work
+
 Because we have to make a lot of modification, it is hard to fork and change the repo directly. 
 So we hard copy the scripts and adapt them. Full credit should be given to the original authors.
 All the code within scripts are adapted from:
 - [agroimpacts/pytorch_planet](https://github.com/agroimpacts/pytorch_planet), and
 - [yassouali/pytorch_segmentation](https://github.com/yassouali/pytorch_segmentation)
+
+## Acknowledgement
+
+This package is part of project ["Combining Spatially-explicit Simulation of Animal Movement and Earth Observation to Reconcile Agriculture and Wildlife Conservation"](https://github.com/users/LLeiSong/projects/2). This project is funded by NASA FINESST program (award number: 80NSSC20K1640).
