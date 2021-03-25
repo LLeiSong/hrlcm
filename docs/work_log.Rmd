@@ -27,7 +27,7 @@ We decided to try another method, which use regional spatial generalization. We 
 - Define the final version of modeling in one zone.
 - Contagious to other areas.
 
-Give up this workflow
+Give up this workflow.
 
 ## Workflow 3
 
