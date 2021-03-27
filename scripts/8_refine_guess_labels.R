@@ -26,10 +26,10 @@ library(parallel)
 message('Step 2: Refine labels')
 
 # Define function to refine the labels
-## Step 0: Reduce the weight of predicted buildings.
-## Step 1: Add roads, waterbodies, and buildings. (No rivers)
-## Step 2: Split a whole tile into 512 * 512 (or 256 * 256).
-refine_label <- function(tile_id, src_dir, img_dir, 
+## Step 2-0: Reduce the weight of predicted buildings.
+## Step 2-1: Add roads, waterbodies, and buildings. (No rivers)
+## Step 2-2: Split a whole tile into 512 * 512 (or 256 * 256).
+refine_label <- function(tile_id, src_dir, 
                          labels_dir, tiles, roads, 
                          waterbodies, buildings, 
                          size_sub_tile = 512){
@@ -39,7 +39,8 @@ refine_label <- function(tile_id, src_dir, img_dir,
     
     # Reduce the weight of predicted buildings
     scores$.pred_8 <- scores$.pred_8 * 0.2
-    pred <- argmax(values(scores))
+    pred <- values(scores); pred[is.na(pred)] <- 0
+    pred <- argmax(pred)
     classes <- scores[[1]]
     values(classes) <- pred
     rm(scores, pred); rm()
@@ -54,7 +55,7 @@ refine_label <- function(tile_id, src_dir, img_dir,
     
     # Set up GRASS GIS
     message('------Add OSM layers')
-    gisBase <- '/Applications/GRASS-7.8.app/Contents/Resources'
+    gisBase <- '/Applications/GRASS-7.9.app/Contents/Resources'
     initGRASS(gisBase = gisBase,
               home = tempdir(),
               gisDbase = tempdir(),  
@@ -147,11 +148,13 @@ refine_label <- function(tile_id, src_dir, img_dir,
     rm(fill_roads, fill_buildings, fill_waterbodies)
     
     # Replace values
-    for (i in 1:length(fills)){
-        mask <- fills[[i]]
-        mask <- is.na(mask)
-        classes <- classes * mask
-        classes <- cover(classes, fills[[i]], values = 0)
+    if (length(fills) > 0){
+        for (i in 1:length(fills)){
+            mask <- fills[[i]]
+            mask <- is.na(mask)
+            classes <- classes * mask
+            classes <- cover(classes, fills[[i]], values = 0)
+        }
     }
     
     # Split into sub-tiles
@@ -183,7 +186,6 @@ refine_label <- function(tile_id, src_dir, img_dir,
 message('--Prepare necessary files')
 
 src_dir <- here('results/north/prediction')
-img_dir <- here('data/plts_nicfi')
 labels_dir <- here('results/north/guess_labels')
 if (!dir.exists(labels_dir)) dir.create(labels_dir)
 tiles <- st_read('data/geoms/tiles_nicfi_north.geojson',
@@ -199,12 +201,14 @@ buildings <- st_read(here('data/osm/buildings.geojson'),
                      quiet = T)
 
 ## Get tiles
+message('--Start refine labels')
 fnames <- list.files(here(src_dir), pattern = 'classed')
 tile_ids <- str_extract(fnames, '[0-9]+-[0-9]+')
+tile_ids <- tile_ids[52:length(tile_ids)]
 
 lapply(tile_ids, function(tile_id) {
     message(glue('----Tile id: {tile_id}'))
-    refine_label(tile_id, src_dir, img_dir, 
+    refine_label(tile_id, src_dir,  
                  labels_dir, tiles, roads, 
                  waterbodies, buildings)
 })

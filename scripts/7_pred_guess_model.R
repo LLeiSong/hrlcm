@@ -39,9 +39,10 @@ make_pred <- function(img_path,
                          'roads_dist')))
     
     ## Predict scores and classes
-    scores <- predict(imgs, guess_rf_md, type = "prob")
+    scores <- predict(imgs, guess_rf_md, type = "prob", na.rm = T)
     writeRaster(scores, here(glue('{dst_path}/scores_{id}.tif')))
-    pred <- argmax(values(scores))
+    pred <- values(scores); pred[is.na(pred)] <- 0
+    pred <- argmax(pred)
     classes <- scores[[1]]
     values(classes) <- pred
     writeRaster(classes, here(glue('{dst_path}/classed_{id}.tif')))
