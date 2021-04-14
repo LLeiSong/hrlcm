@@ -43,7 +43,7 @@ refine_label <- function(tile_id, src_dir,
     pred <- argmax(pred)
     classes <- scores[[1]]
     values(classes) <- pred
-    rm(scores, pred); rm()
+    rm(scores, pred); gc()
     # So here:
     # 1: cropland
     # 2: forest
