@@ -57,7 +57,8 @@ forest_vip <- rand_forest() %>%
 save(forest_vip, file = here('data/north/forest_vip.rda'))
 
 ## Plot
-vip(forest_vip, num_features = ncol(training) - 1,
+vip(forest_vip, 
+    num_features = forest_vip$fit$num.independent.variables,
     aesthetics = list(color = "transparent", 
                       fill = "red")) +
     theme_light()

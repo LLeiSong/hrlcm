@@ -4,6 +4,7 @@
 .Ruserdata
 .DS_Store
 .idea/
+venv/
 docs/*.html
 data
 results
