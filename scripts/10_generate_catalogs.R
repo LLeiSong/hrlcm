@@ -135,8 +135,11 @@ catalog_train <- tiles_train %>%
     ),
     img = file.path(
         train_path,
-        paste0(tile, "_", index, "_img.tif"))
-  )
+        paste0(tile, "_", index, "_img.tif")
+    ),
+    tile_id = paste(tile, index, sep = '_')
+  ) %>% 
+  dplyr::select(tile_id, tile, index, score, label, img)
 write.csv(catalog_train, 
           here('results/north/dl_catalog_train.csv'),
           row.names = F)
@@ -153,8 +156,11 @@ catalog_valid <- tiles_validate %>%
         ),
         img = file.path(
             valid_path,
-            paste0(tile, "_", index, "_img.tif"))
-    )
+            paste0(tile, "_", index, "_img.tif")
+        ),
+        tile_id = paste(tile, index, sep = '_')
+    ) %>% 
+  dplyr::select(tile_id, tile, index, score, label, img)
 write.csv(catalog_valid, 
           here('results/north/dl_catalog_valid.csv'),
           row.names = F)
