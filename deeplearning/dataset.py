@@ -169,12 +169,12 @@ class NFSEN1LC(Dataset):
 
                 # 0.5 possibility to resize
                 if random.randint(0, 1) and 'resize' in self.transform:
-                    img, label = reScale(img, label.astype(np.uint8),
-                                         randResizeCrop=True, diff=True, cenLocate=False)
+                    img, label = re_scale(img, label.astype(np.uint8),
+                                          rand_resize_crop=True, diff=True, cen_locate=False)
 
                 # 0.5 possibility to rotate
                 if random.randint(0, 1) and 'rotate' in self.transform:
-                    img, label = centerRotate(img, label, self.deRotate)
+                    img, label = center_rotate(img, label, self.rg_rotate)
 
             # numpy to torch
             label = torch.from_numpy(label).long()
