@@ -1,10 +1,6 @@
 import os
-import torch
-import random
-import numpy as np
 import pandas as pd
 import rasterio
-from augmentation import *
 from torch.utils.data import Dataset
 from rasterio.plot import reshape_as_image
 
@@ -19,28 +15,10 @@ lc_types = {1: 'cropland',
             7: 'bareland'}
 
 
-def min_max_norm(img, nodata):
-    """Data normalization with min/max method
-    Params:
-        img (numpy.ndarray): The targeted image for normalization
-        nodata (float): the value of background of image
-    Returns:
-        numpy.ndarray
-    """
-
-    img_tmp = np.where(img == nodata, np.nan, img)
-    img_max = np.nanmax(img_tmp)
-    img_min = np.nanmin(img_tmp)
-    img_norm = (img - img_min)/(img_max - img_min)
-
-    return img_norm
-
-
-def load_sat(path, norm=False):
+def load_sat(path):
     """Util function to load satellite image
     Args:
         path (str): the satellite image path
-        norm (bool): the flag to do normalization or not.
     Returns:
         numpy.ndarray: the array of image values
     """
@@ -48,9 +26,6 @@ def load_sat(path, norm=False):
     with rasterio.open(path) as src:
         # reshape the image for augmentation
         sat = reshape_as_image(src.read())
-        if norm:
-            nodata = src.nodata
-            sat = min_max_norm(sat, nodata=nodata)
     return sat
 
 
@@ -67,17 +42,16 @@ def load_label(path):
     return label
 
 
-def load_tile(tile_info, unlabeled=False, norm=False):
+def load_tile(tile_info, unlabeled=False):
     """Util function for reading data from single sample
     Args:
         tile_info (str): the tile index
         unlabeled (bool): the flag of this tile has label or not
-        norm (bool): the flag to do normalization or not.
     Returns:
         list: the list of tile (satellite image, label and tile index)
     """
     # Load satellite image
-    img = load_sat(tile_info["img"], norm)
+    img = load_sat(tile_info["img"])
 
     # load label
     if unlabeled:
@@ -97,8 +71,9 @@ class NFSEN1LC(Dataset):
                  lowest_score=9,
                  noise_ratio=0.2,
                  rg_rotate=(-90, 90),
-                 norm=False,
-                 transform=None):
+                 sync_transform=None,
+                 img_transform=None,
+                 label_transform=None):
         """Initialize the dataset
         Args:
             data_dir (str): the directory of all data
@@ -106,15 +81,9 @@ class NFSEN1LC(Dataset):
             lowest_score (int): the lowest value of label score, [8, 9, 10]
             noise_ratio (float): the ratio of noise in training
             rg_rotate (tuple or None): Range of degrees for rotation, e.g. (-90, 90)
-            norm (bool): the flag to do normalization or not.
-            transform (list or None): Data augmentation methods:
-                one or multiple elements from ['vflip','hflip','dflip', 'rotate','resize']
-                which represents:
-                1) 'vflip', vertical flip
-                2) 'hflip', horizontal flip
-                3) 'dflip', diagonal flip
-                4) 'rotate', rotation
-                5) 'resize', rescale image fitted into the specified data size.
+            sync_transform (transform or None): Synthesize Data augmentation methods
+            img_transform (transform or None): Image only augmentation methods
+            label_transform (transform or None): Label only augmentation methods
         """
 
         # Initialize
@@ -124,15 +93,15 @@ class NFSEN1LC(Dataset):
         self.lowest_score = lowest_score
         self.noise_ratio = noise_ratio
         self.rg_rotate = rg_rotate
-        self.norm = norm
-        self.transform = transform
+        self.sync_transform = sync_transform
+        self.img_transform = img_transform
+        self.label_transform = label_transform
         self.n_classes = len(lc_types)
         self.lc_types = lc_types
 
         # Check inputs
         assert usage in ['train', 'validate', 'predict']
         assert lowest_score in [8, 9, 10]
-        assert transform <= ['vflip', 'hflip', 'dflip', 'rotate', 'resize']
         assert os.path.exists(data_dir)
 
         # Read catalog
@@ -158,41 +127,22 @@ class NFSEN1LC(Dataset):
             tuple
         """
         tile_info = self.catalog.iloc[index]
-        if self.usage == 'train':
-            img, label = load_tile(tile_info, norm=self.norm)
-            if self.transform:
-                # 0.5 possibility to flip
-                trans_flip_ls = [m for m in self.transform if m not in ['rotate', 'resize']]
-                if random.randint(0, 1) and len(trans_flip_ls) > 1:
-                    trans_flip = random.sample(trans_flip_ls, 1)
-                    img, label = flip(img, label, trans_flip[0])
+        if self.usage in ['train', 'validate']:
+            img, label = load_tile(tile_info)
 
-                # 0.5 possibility to resize
-                if random.randint(0, 1) and 'resize' in self.transform:
-                    img, label = re_scale(img, label.astype(np.uint8),
-                                          rand_resize_crop=True, diff=True, cen_locate=False)
-
-                # 0.5 possibility to rotate
-                if random.randint(0, 1) and 'rotate' in self.transform:
-                    img, label = center_rotate(img, label, self.rg_rotate)
-
-            # numpy to torch
-            label = torch.from_numpy(label).long()
-            img = torch.from_numpy(img.transpose((2, 0, 1))).float()
-
-            return img, label
-
-        elif self.usage == 'validate':
-            img, label = load_tile(tile_info, norm=self.norm)
-
-            # numpy to torch
-            label = torch.from_numpy(label).long()
-            img = torch.from_numpy(img.transpose((2, 0, 1))).float()
+            # Transform
+            if self.sync_transform is not None:
+                img, label = self.sync_transform(img, label)
+            if self.img_transform is not None:
+                img = self.img_transform(img)
+            if self.label_transform is not None:
+                label = self.label_transform(label)
 
             return img, label
         else:
-            img = load_tile(tile_info, unlabeled=True, norm=self.norm)
-            img = torch.from_numpy(img.transpose((2, 0, 1))).float()
+            img = load_tile(tile_info, unlabeled=True)
+            if self.img_transform is not None:
+                img = self.img_transform(img)
 
             return img
 
