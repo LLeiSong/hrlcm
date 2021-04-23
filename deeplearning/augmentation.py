@@ -1,3 +1,8 @@
+"""
+This is a script of transform methods for dataset.
+Author: Lei Song, Boka Luo
+Maintainer: Lei Song (lsong@clarku.edu)
+"""
 from skimage import transform as trans
 import random
 import torch
