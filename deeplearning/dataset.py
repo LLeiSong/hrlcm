@@ -1,18 +1,9 @@
 import os
+from math import floor
 import pandas as pd
 import rasterio
 from torch.utils.data import Dataset
 from rasterio.plot import reshape_as_image
-
-
-# Land cover types
-lc_types = {1: 'cropland',
-            2: 'forest',
-            3: 'grassland',
-            4: 'shrubland',
-            5: 'water',
-            6: 'urban',
-            7: 'bareland'}
 
 
 def load_sat(path):
@@ -78,8 +69,8 @@ class NFSEN1LC(Dataset):
         Args:
             data_dir (str): the directory of all data
             usage (str): Usage of the dataset : "train", "validate" or "predict"
-            lowest_score (int): the lowest value of label score, [8, 9, 10]
-            noise_ratio (float): the ratio of noise in training
+            lowest_score (int): the lowest value of label score, [8, 9, 10], just for train.
+            noise_ratio (float): the ratio of noise in training, just for train.
             rg_rotate (tuple or None): Range of degrees for rotation, e.g. (-90, 90)
             sync_transform (transform or None): Synthesize Data augmentation methods
             img_transform (transform or None): Image only augmentation methods
@@ -90,14 +81,19 @@ class NFSEN1LC(Dataset):
         super(NFSEN1LC, self).__init__()
         self.data_dir = data_dir
         self.usage = usage
-        self.lowest_score = lowest_score
-        self.noise_ratio = noise_ratio
         self.rg_rotate = rg_rotate
         self.sync_transform = sync_transform
         self.img_transform = img_transform
         self.label_transform = label_transform
-        self.n_classes = len(lc_types)
-        self.lc_types = lc_types
+        # Land cover types
+        self.lc_types = {1: 'cropland',
+                         2: 'forest',
+                         3: 'grassland',
+                         4: 'shrubland',
+                         5: 'water',
+                         6: 'urban',
+                         7: 'bareland'}
+        self.n_classes = len(self.lc_types)
 
         # Check inputs
         assert usage in ['train', 'validate', 'predict']
@@ -112,12 +108,32 @@ class NFSEN1LC(Dataset):
         elif self.usage == 'predict':
             catalog_nm = 'dl_catalog_predict.csv'
         catalog = pd.read_csv(os.path.join(self.data_dir, catalog_nm))
-        self.catalog = catalog.loc[catalog['score'] >= self.lowest_score]
 
         # Shrink the catalog based on noise ratio
+        if self.usage == 'train':
+            # Initialize values
+            self.lowest_score = lowest_score
+            self.noise_ratio = noise_ratio
 
-        # Set noisy_or_not
-        self.noisy_or_not = []
+            # Subset catalog based on score
+            catalog = catalog.loc[catalog['score'] >= self.lowest_score]
+
+            if self.lowest_score < 10:
+                # Subset catalog based on noise_ratio
+                catalog_perfect = catalog.loc[catalog['score'] == 10]
+                catalog_rest = catalog.loc[catalog['score'] < 10]
+                num_perfect = len(catalog_perfect.index)
+                num_noisy = floor(num_perfect * self.noise_ratio / (1 - self.noise_ratio))
+                catalog_rest = catalog_rest.sample(n=num_noisy)
+                catalog_perfect = catalog_perfect.append(catalog_rest)
+                self.catalog = catalog_perfect
+            else:
+                self.catalog = catalog
+
+            # Set noisy_or_not
+            self.noisy_or_not = self.catalog['score'] != 10
+        else:
+            self.catalog = catalog
 
     def __getitem__(self, index):
         """Support dataset indexing and apply transformation
@@ -151,4 +167,4 @@ class NFSEN1LC(Dataset):
         Returns:
             int
         """
-        return self.catalog.shape[0]
+        return len(self.catalog.index)
