@@ -99,6 +99,7 @@ class NFSEN1LC(Dataset):
                          6: 'urban',
                          7: 'bareland'}
         self.n_classes = len(self.lc_types)
+        self.n_channels = 14  # hardcoded
 
         # Check inputs
         assert usage in ['train', 'validate', 'predict']
@@ -109,7 +110,7 @@ class NFSEN1LC(Dataset):
         if self.usage == 'train':
             catalog_nm = 'dl_catalog_train.csv'
         elif self.usage == 'validate':
-            catalog_nm = 'dl_catalog_train.csv'
+            catalog_nm = 'dl_catalog_valid.csv'
         elif self.usage == 'predict':
             catalog_nm = 'dl_catalog_predict.csv'
         catalog = pd.read_csv(os.path.join(self.data_dir, catalog_nm))

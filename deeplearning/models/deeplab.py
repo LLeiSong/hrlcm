@@ -34,7 +34,7 @@ from models.utils import resnet
 
 class DeepLab(nn.Module):
     def __init__(self, backbone='resnet', pretrained_backbone=True, output_stride=16, num_classes=21,
-                 sync_bn=True, freeze_bn=False, n_in=3):
+                 sync_bn=False, freeze_bn=False, n_in=3):
         super(DeepLab, self).__init__()
         if backbone == 'drn':
             output_stride = 8
