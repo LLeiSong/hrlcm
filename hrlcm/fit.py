@@ -15,17 +15,16 @@ def main():
     # define and parse arguments
     parser = argparse.ArgumentParser()
 
-    # Directory
-    parser.add_argument('--exp_name', type=str, default="args.pkl",
-                        help='path to config file (default: ./args.conf)')
-    parser.add_argument('--out_dir', type=str, default="models",
-                        help='path to output dir (default: ./models)')
-    parser.add_argument('--predict_dir', type=str, default="results",
-                        help='path to output dir (default: ./results)')
+    # config
+    parser.add_argument('--exp_name', type=str, default="experiment",
+                        help='experiment name that will be used in path names '
+                             'for logs and checkpoints (default: experiment)')
 
-    # data
+    # dataset
     parser.add_argument('--data_dir', type=str, default=None,
                         help='path to dataset')
+    parser.add_argument('--out_dir', type=str, default="models",
+                        help='path to output dir (default: ./models)')
     parser.add_argument('--lowest_score', type=int, default=9,
                         help='lowest score to subset train dataset (default: 9)')
     parser.add_argument('--noise_ratio', type=float, default=0.2,
@@ -105,7 +104,7 @@ def main():
     ])
 
     # Get train dataset
-    train_dataset = NFSEN1LC(data_dir='results/north',
+    train_dataset = NFSEN1LC(data_dir=args.data_dir,
                              usage='train',
                              lowest_score=args.lowest_score,
                              noise_ratio=args.noise_ratio,
@@ -115,36 +114,36 @@ def main():
                              label_transform=None)
     # Put into DataLoader
     train_loader = DataLoader(dataset=train_dataset,
-                              batch_size=16,
+                              batch_size=args.batch_size,
                               shuffle=True,
                               drop_last=True)
 
     # Get validate dataset
-    validate_dataset = NFSEN1LC(data_dir='results/north',
+    validate_dataset = NFSEN1LC(data_dir=args.data_dir,
                                 usage='validate',
                                 sync_transform=val_transform,
                                 img_transform=None,
                                 label_transform=None)
     # Put into DataLoader
     validate_loader = DataLoader(dataset=validate_dataset,
-                                 batch_size=16,
+                                 batch_size=args.batch_size,
                                  shuffle=False,
                                  drop_last=True)
 
     # Set up network
-    n_classes = train_dataset.n_classes
-    n_channels = train_dataset.n_channels
+    args.n_classes = train_dataset.n_classes
+    args.n_channels = train_dataset.n_channels
     if args.model == "deeplab":
-        model = DeepLab(num_classes=n_classes,
+        model = DeepLab(num_classes=args.n_classes,
                         backbone='resnet',
                         pretrained_backbone=False,
                         output_stride=args.out_stride,
                         sync_bn=False,
                         freeze_bn=False,
-                        n_in=n_channels)
+                        n_in=args.n_channels)
     else:
-        model = UNet(n_classes=n_classes,
-                     n_channels=n_channels)
+        model = UNet(n_classes=args.n_classes,
+                     n_channels=args.n_channels)
     if args.use_gpu:
         model = model.cuda()
 

@@ -166,7 +166,7 @@ class NFSEN1LC(Dataset):
             if self.img_transform is not None:
                 img = self.img_transform(img)
 
-            return img
+            return img, tile_info['tile_id']
 
     def __len__(self):
         """Get number of samples in the dataset
