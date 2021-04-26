@@ -7,6 +7,8 @@ import argparse
 from augmentation import *
 from dataset import *
 from torch.utils.data import DataLoader
+from torch.autograd import Variable
+import torch.nn.functional as F
 import pickle as pkl
 from models.deeplab import DeepLab
 from models.unet import UNet
@@ -27,8 +29,8 @@ def main():
     # Dataset
     parser.add_argument('--data_dir', type=str, default=None,
                         help='path to dataset')
-    parser.add_argument('--out_dir', type=str, default="models",
-                        help='path to output dir (default: ./models)')
+    parser.add_argument('--out_dir', type=str, default="prediction",
+                        help='path to output dir (default: ./prediction)')
 
     # Hyper-parameters of evaluation
     parser.add_argument('--batch_size', type=int, default=16,
@@ -52,24 +54,21 @@ def main():
     # Create output dir
     os.makedirs(args.out_dir, exist_ok=True)
 
+    # Set flags for GPU processing if available
+    if torch.cuda.is_available():
+        args.use_gpu = True
+        if torch.cuda.device_count() > 1:
+            raise NotImplementedError("multi-gpu prediction not implemented! "
+                                      + "try to run script as: "
+                                      + "CUDA_VISIBLE_DEVICES=0 predict.py")
+    else:
+        args.use_gpu = False
+
     # Load dataset
     # synchronize transform for validate dataset
     pred_transform = Compose([
-        SyncToTensor()
+        ImgToTensor()
     ])
-
-    # Get validate dataset
-    predict_dataset = NFSEN1LC(data_dir=args.data_dir,
-                               usage='predict',
-                               sync_transform=pred_transform,
-                               img_transform=None,
-                               label_transform=None)
-    # Put into DataLoader
-    predict_loader = DataLoader(dataset=predict_dataset,
-                                batch_size=args.batch_size,
-                                num_workers=args.workers,
-                                shuffle=False,
-                                drop_last=False)
 
     # set up network
     if train_args.model == "deeplab":
@@ -93,20 +92,79 @@ def main():
     model.eval()
     print("loaded checkpoint from step", step)
 
-    # predict samples
-    n = 0
-    for image, tile_id in tqdm(predict_loader, desc="[Pred]"):
-        # Move data to gpu if model is on gpu
-        if args.use_gpu:
-            image = image.cuda()
+    # Predict
+    catalog = pd.read_csv(os.path.join(args.data_dir, 'dl_catalog_predict.csv'))
+    for tile_id in catalog['tile_id']:
+        # Get validate dataset
+        predict_dataset = NFSEN1LC(data_dir=args.data_dir,
+                                   usage='predict',
+                                   sync_transform=None,
+                                   img_transform=pred_transform,
+                                   label_transform=None,
+                                   tile_id=tile_id)
+        # Put into DataLoader
+        predict_loader = DataLoader(dataset=predict_dataset,
+                                    batch_size=args.batch_size,
+                                    num_workers=args.workers,
+                                    shuffle=False,
+                                    drop_last=False)
 
-        # forward pass
-        with torch.no_grad():
-            prediction = model(image)
+        # Set and crate paths
+        score_path = os.path.join(args.out_dir, 'score')
+        class_path = os.path.join(args.out_dir, 'class')
+        if not os.path.isdir(score_path):
+            os.mkdir(score_path)
+        if not os.path.isdir(class_path):
+            os.mkdir(class_path)
 
-        # convert to 256x256 numpy arrays
-        prediction = prediction.cpu().numpy()
-        prediction = np.argmax(prediction, axis=1)
+        # File names
+        name_score = os.path.join(score_path, 'score_{}'.format(tile_id))
+        name_class = os.path.join(class_path, 'class_{}.tif'.format(tile_id))
 
-        # UNDER CONSTRUCTION
+        model.eval()
 
+        # Create dummy tile
+        meta = predict_dataset.meta
+        n_class = predict_dataset.n_classes
+        canvas = np.zeros((1, meta['height'], meta['width']),
+                          dtype=meta['dtype'])
+        canvas_score_ls = []
+
+        for img, index in tqdm(predict_loader, desc="[Pred]"):
+            img = Variable(img, requires_grad=False)
+
+            # GPU setting
+            if args.use_gpu:
+                img = img.cuda()
+
+            out = F.softmax(model(img), 1)
+            batch, n_class, width, height = out.size()
+            score_width = width
+            score_height = height
+
+            # for each batch
+            for i in range(batch):
+                index = (index[0][i], index[1][i])
+                out_predict = out.max(dim=1)[1][:, :, :].cpu().numpy()[i, :, :]
+                out_predict = np.expand_dims(out_predict, axis=0)
+                out_predict = out_predict.astype(np.int8)
+                canvas[:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = out_predict
+
+                # scores for each non-background class
+                for n in range(n_class - 1):
+                    out_score = out[:, n + 1, :, :].data[i][:, :].cpu().numpy() * 100
+                    out_score = np.expand_dims(out_score, axis=0).astype(np.int8)
+                    try:
+                        canvas_score_ls[n][:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = out_score
+                    except:
+                        canvas_score_single = np.zeros((1, meta['height'], meta['width']), dtype=meta['dtype'])
+                        canvas_score_single[:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = out_score
+                        canvas_score_ls.append(canvas_score_single)
+
+        # Save out
+        with rasterio.open(name_class, 'w', **meta) as dst:
+            dst.write(canvas)
+
+        for n in range(n_class - 1):
+            with rasterio.open('{}_class{}.tif'.format(name_score, n + 1), 'w', **meta) as dst:
+                dst.write(canvas_score_ls[n])

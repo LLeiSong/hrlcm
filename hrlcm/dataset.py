@@ -4,6 +4,7 @@ Author: Lei Song
 Maintainer: Lei Song (lsong@clarku.edu)
 """
 import os
+import itertools
 from math import floor
 import pandas as pd
 import rasterio
@@ -44,7 +45,7 @@ def load_tile(tile_info, unlabeled=False):
         tile_info (str): the tile index
         unlabeled (bool): the flag of this tile has label or not
     Returns:
-        list: the list of tile (satellite image, label and tile index)
+        list or numpy.ndarray: the list of tile (satellite image, label and tile index)
     """
     # Load satellite image
     img = load_sat(tile_info["img"])
@@ -55,6 +56,52 @@ def load_tile(tile_info, unlabeled=False):
     else:
         label = load_label(tile_info["label"])
         return img, label
+
+
+def get_meta(fname):
+    """
+    Get metadata of a prediction tile
+
+    Params:
+        fname (str):  File name of a image chip
+    Returns:
+        dictionary
+    """
+
+    with rasterio.open(fname, "r") as src:
+        meta = src.meta
+    meta.update({
+        'count': 1,
+        'nodata': -128,
+        'dtype': 'int8'
+    })
+
+    return meta
+
+
+def get_chips(img, dsize):
+    """
+    Generate small chips from input images and the corresponding index of each chip
+    The index marks the location of corresponding upper-left pixel of a chip.
+    Params:
+        img (numpy.ndarray): Image or image stack in format of (H,W,C) to be crop
+        dsize (int): Cropped chip size
+    Returns:
+        list of cropped chips and corresponding coordinates
+    """
+
+    h, w, _ = img.shape
+    x_ls = range(0, h, dsize)
+    y_ls = range(0, w, dsize)
+
+    index = list(itertools.product(x_ls, y_ls))
+
+    img_ls = []
+    for i in range(len(index)):
+        x, y = index[i]
+        img_ls.append(img[x:x + dsize, y:y + dsize, :])
+
+    return img_ls, index
 
 
 class NFSEN1LC(Dataset):
@@ -69,7 +116,8 @@ class NFSEN1LC(Dataset):
                  rg_rotate=(-90, 90),
                  sync_transform=None,
                  img_transform=None,
-                 label_transform=None):
+                 label_transform=None,
+                 tile_id='1207-996_12'):
         """Initialize the dataset
         Args:
             data_dir (str): the directory of all data
@@ -80,6 +128,7 @@ class NFSEN1LC(Dataset):
             sync_transform (transform or None): Synthesize Data augmentation methods
             img_transform (transform or None): Image only augmentation methods
             label_transform (transform or None): Label only augmentation methods
+            tile_id (str): the tile index for prediction image. Only for predict dataset.
         """
 
         # Initialize
@@ -139,7 +188,16 @@ class NFSEN1LC(Dataset):
             # Set noisy_or_not
             self.noisy_or_not = self.catalog['score'] != 10
         else:
-            self.catalog = catalog
+            self.chip_size = 512  # image size of train
+            self.tile_id = tile_id
+            catalog = catalog.loc[catalog['tile_id'] == self.tile_id]
+            if len(catalog.index) == 0:
+                pass
+            else:
+                self.catalog = catalog
+                img = load_tile(self.catalog, unlabeled=True)
+                self.meta = get_meta(self.catalog['img'])
+                self.img_ls, self.index_ls = get_chips(img, self.chip_size)
 
     def __getitem__(self, index):
         """Support dataset indexing and apply transformation
@@ -162,11 +220,12 @@ class NFSEN1LC(Dataset):
 
             return img, label
         else:
-            img = load_tile(tile_info, unlabeled=True)
+            img = self.img_ls[index]
             if self.img_transform is not None:
                 img = self.img_transform(img)
+            index = self.index_ls[index]
 
-            return img, tile_info['tile_id']
+            return img, index
 
     def __len__(self):
         """Get number of samples in the dataset

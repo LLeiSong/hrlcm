@@ -48,25 +48,6 @@ def get_AA(predict_labels, true_labels, n_classes):
     return AA
 
 
-class MetricTracker(object):
-    """Computes and stores the average and current value"""
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-
 class Precision_score(nn.Module):
 
     def __init__(self):
@@ -268,15 +249,14 @@ def main():
     # zero-sample classes are not excluded
     aa = get_AA(y_predicted, y_true, n_classes=train_args.n_classes)
 
-    info = {
-        "weightedPrec": prec,
-        "weightedRec": rec,
-        "weightedF1": f1,
-        "weightedF2": f2,
-        "HammingLoss": hm_loss,
-        "clsReport": report,
-        "conf_mat": conf_mat,
-        "AverageAcc": aa}
+    info = {"weightedPrec": prec,
+            "weightedRec": rec,
+            "weightedF1": f1,
+            "weightedF2": f2,
+            "HammingLoss": hm_loss,
+            "clsReport": report,
+            "conf_mat": conf_mat,
+            "AverageAcc": aa}
 
     print("Saving metrics...")
     pkl.dump(info, open(os.path.join(args.out_dir, "test_scores.pkl"), "wb"))
