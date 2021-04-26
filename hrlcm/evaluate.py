@@ -1,5 +1,6 @@
 """
 This is a script to evaluate the final model against validate dataset.
+Reference: https://github.com/schmitt-muc/SEN12MS/blob/master/classification/metrics.py
 Author: Lei Song
 Maintainer: Lei Song (lsong@clarku.edu)
 """

@@ -1,4 +1,9 @@
-# Modified based on https://github.com/lukasliebel/dfc2020_baseline/blob/master/code/metrics.py
+"""
+This is a script of fitting DL model.
+Reference: Modified based on https://github.com/lukasliebel/dfc2020_baseline/blob/master/code/metrics.py
+Author: Lei Song
+Maintainer: Lei Song (lsong@clarku.edu)
+"""
 
 import numpy as np
 from sklearn.metrics import confusion_matrix

@@ -1,3 +1,9 @@
+"""
+This is a script of multiple losses.
+Author: Lei Song, Boka Luo
+Maintainer: Lei Song (lsong@clarku.edu)
+"""
+
 import torch
 from torch import nn
 

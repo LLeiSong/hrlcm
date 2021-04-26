@@ -1,3 +1,10 @@
+"""
+This is a script of fitting DL model.
+Reference: https://github.com/lukasliebel/dfc2020_baseline/blob/master/code/train.py
+Author: Lei Song
+Maintainer: Lei Song (lsong@clarku.edu)
+"""
+
 import argparse
 from augmentation import *
 from dataset import *

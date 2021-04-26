@@ -1,3 +1,10 @@
+"""
+This is a script to trainer.
+Reference: https://github.com/lukasliebel/dfc2020_baseline/blob/master/code/train.py
+Author: Lei Song
+Maintainer: Lei Song (lsong@clarku.edu)
+"""
+
 from augmentation import *
 from dataset import *
 from tqdm import tqdm
