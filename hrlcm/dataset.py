@@ -4,6 +4,7 @@ Author: Lei Song
 Maintainer: Lei Song (lsong@clarku.edu)
 """
 import os
+import sys
 import itertools
 from math import floor
 import pandas as pd
@@ -42,7 +43,7 @@ def load_label(path):
 def load_tile(tile_info, unlabeled=False):
     """Util function for reading data from single sample
     Args:
-        tile_info (str): the tile index
+        tile_info (pandas.DataFrame): the tile info
         unlabeled (bool): the flag of this tile has label or not
     Returns:
         list or numpy.ndarray: the list of tile (satellite image, label and tile index)
@@ -162,6 +163,8 @@ class NFSEN1LC(Dataset):
             catalog_nm = 'dl_catalog_valid.csv'
         elif self.usage == 'predict':
             catalog_nm = 'dl_catalog_predict.csv'
+        else:
+            sys.exit('Not valid usage setting.')
         catalog = pd.read_csv(os.path.join(self.data_dir, catalog_nm))
 
         # Shrink the catalog based on noise ratio
@@ -192,7 +195,7 @@ class NFSEN1LC(Dataset):
             self.tile_id = tile_id
             catalog = catalog.loc[catalog['tile_id'] == self.tile_id]
             if len(catalog.index) == 0:
-                pass
+                sys.exit('No such tile_id to prediction.')
             else:
                 self.catalog = catalog
                 img = load_tile(self.catalog, unlabeled=True)
