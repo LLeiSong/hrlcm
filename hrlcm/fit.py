@@ -15,6 +15,7 @@ import pickle as pkl
 from models.deeplab import DeepLab
 from models.unet import UNet
 from train import Trainer
+from loss import BalancedCrossEntropyLoss
 
 
 def main():
@@ -96,6 +97,9 @@ def main():
     if not os.path.isdir(args.logs_dir):
         os.makedirs(args.logs_dir)
 
+    # Dir for mean and sd pickles
+    args.stats_dir = os.path.join(args.out_dir, 'norm_stats')
+
     # Load dataset
     # synchronize transform for train dataset
     sync_transform = Compose([
@@ -109,6 +113,17 @@ def main():
     val_transform = Compose([
         SyncToTensor()
     ])
+
+    # Image transform
+    # Load mean and sd for normalization
+    # with open(os.path.join(args.stats_dir,
+    #                        "means.pkl"), "rb") as input_file:
+    #     mean = tuple(pkl.load(input_file))
+    #
+    # with open(os.path.join(args.stats_dir,
+    #                        "stds.pkl"), "rb") as input_file:
+    #     std = tuple(pkl.load(input_file))
+    # img_transform = ImgNorm(mean, std)
 
     # Get train dataset
     train_dataset = NFSEN1LC(data_dir=args.data_dir,
@@ -155,7 +170,7 @@ def main():
         model = model.cuda()
 
     # Define loss function
-    loss_fn = nn.CrossEntropyLoss(ignore_index=255, reduction='mean')
+    loss_fn = BalancedCrossEntropyLoss
 
     # Define optimizer
     if args.optimizer_name == 'Adadelta':

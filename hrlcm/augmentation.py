@@ -243,3 +243,29 @@ class LabelToTensor(object):
         label = torch.from_numpy(label).long()
 
         return label
+
+
+class ImgNorm(object):
+    """Normalize image layers."""
+    def __init__(self, bands_mean, bands_std):
+        """Initialize the object.
+        Params:
+            bands_mean (numpy.ndarray): Concatenated variables or brightness value with a dimension of (H, W, C)
+            bands_std (numpy.ndarray or None): Ground truth with a dimension of (H,W)
+        """
+        self.mean = bands_mean
+        self.std = bands_std
+
+    def __call__(self, img):
+        """Define the call.
+        Params:
+            img (numpy.ndarray): Concatenated variables or brightness value with a dimension of (H, W, C)
+        Returns:
+            (numpy.ndarray) tuple of rescaled image, and label.
+        """
+        for t, m, s in zip(img, self.mean, self.std):
+            t.sub_(m).div_(s)
+        # img -= self.mean
+        # img /= self.std
+
+        return img

@@ -213,7 +213,7 @@ def main():
     predicted_probs = []
 
     with torch.no_grad():
-        for image, labels in enumerate(tqdm(validate_loader, desc="evaluate")):
+        for i, (image, labels) in enumerate(tqdm(validate_loader, desc="evaluate")):
             # move data to gpu if model is on gpu
             if use_cuda:
                 image = image.to(torch.device("cuda"))

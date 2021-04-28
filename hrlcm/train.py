@@ -22,7 +22,7 @@ class Trainer:
         # Training loop
         pbar = tqdm(total=len(train_loader), desc="[Train]")
         global_step = 0
-        for i, image, target in enumerate(train_loader):
+        for i, (image, target) in enumerate(train_loader):
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
                 image, target = image.cuda(), target.cuda()
@@ -68,7 +68,7 @@ class Trainer:
         pbar = tqdm(total=len(validate_loader), desc="[Val]")
         loss = 0
         conf_mat = metrics.ConfMatrix(validate_loader.dataset.n_classes)
-        for i, image, target in enumerate(validate_loader):
+        for i, (image, target) in enumerate(validate_loader):
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
                 image, target = image.cuda(), target.cuda()
