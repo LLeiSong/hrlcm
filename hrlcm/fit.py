@@ -79,7 +79,7 @@ def main():
 
     # Check inputs
     assert args.optimizer_name in ['Adadelta', 'Adam']
-    assert args.train_Mode in ['single', 'double']
+    assert args.train_mode in ['single', 'double']
     assert args.model in ['deeplab', 'unet']
 
     # Set directory for saving files

@@ -140,6 +140,11 @@ def loss_coteaching_plus(logits, logits2, labels, forget_rate, ind, noise_or_not
 
     pred1, pred2 = pred1.cpu().numpy(), pred2.cpu().numpy()
 
+    # TODO This part of disagree need to be updated
+    # The idea could to get the disagree part within a tile
+    # Then ignore the disagree part to calculate the loss
+    # Meanwhile, an assumption could be if the disagree part exceed
+    # a threshold, exchange idea.
     logical_disagree_id = np.zeros(labels.size(), dtype=bool)
     disagree_id = []
     for idx, p1 in enumerate(pred1):
@@ -181,7 +186,7 @@ def loss_coteaching_plus(logits, logits2, labels, forget_rate, ind, noise_or_not
 
 
 def kl_loss_compute(pred, soft_targets, reduce=True):
-    kl = F.kl_div(F.log_softmax(pred, dim=1), F.softmax(soft_targets, dim=1),reduce=False)
+    kl = F.kl_div(F.log_softmax(pred, dim=1), F.softmax(soft_targets, dim=1), reduce=False)
 
     if reduce:
         return torch.mean(torch.sum(kl, dim=1))

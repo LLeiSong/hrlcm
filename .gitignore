@@ -9,3 +9,4 @@ docs/*.html
 data
 results
 !data/geoms
+hrlcm/utils/get_mean_sd_norm.py

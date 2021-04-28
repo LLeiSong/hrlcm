@@ -125,7 +125,7 @@ class NFSEN1LC(Dataset):
             data_dir (str): the directory of all data
             usage (str): Usage of the dataset : "train", "validate" or "predict"
             lowest_score (int): the lowest value of label score, [8, 9, 10], just for train.
-            noise_ratio (float): the ratio of noise in training, just for train.
+            noise_ratio (float or None): the ratio of noise in training, just for train.
             rg_rotate (tuple or None): Range of degrees for rotation, e.g. (-90, 90)
             sync_transform (transform or None): Synthesize Data augmentation methods
             img_transform (transform or None): Image only augmentation methods
@@ -181,9 +181,10 @@ class NFSEN1LC(Dataset):
                 # Subset catalog based on noise_ratio
                 catalog_perfect = catalog.loc[catalog['score'] == 10]
                 catalog_rest = catalog.loc[catalog['score'] < 10]
-                num_perfect = len(catalog_perfect.index)
-                num_noisy = floor(num_perfect * self.noise_ratio / (1 - self.noise_ratio))
-                catalog_rest = catalog_rest.sample(n=num_noisy)
+                if self.noise_ratio is not None:
+                    num_perfect = len(catalog_perfect.index)
+                    num_noisy = floor(num_perfect * self.noise_ratio / (1 - self.noise_ratio))
+                    catalog_rest = catalog_rest.sample(n=num_noisy)
                 catalog_perfect = catalog_perfect.append(catalog_rest)
                 self.catalog = catalog_perfect
             else:
@@ -191,6 +192,8 @@ class NFSEN1LC(Dataset):
 
             # Set noisy_or_not
             self.noisy_or_not = self.catalog['score'] != 10
+        elif self.usage == 'validate':
+            self.catalog = catalog
         else:
             self.chip_size = 512  # image size of train
             self.tile_id = tile_id
