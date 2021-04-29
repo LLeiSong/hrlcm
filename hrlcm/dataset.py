@@ -41,11 +41,12 @@ def load_label(path):
     return label
 
 
-def load_tile(tile_info, unlabeled=False):
+def load_tile(tile_info, unlabeled=False, offset=1):
     """Util function for reading data from single sample
     Args:
         tile_info (pandas.DataFrame): the tile info
         unlabeled (bool): the flag of this tile has label or not
+        offset (int): the offset to load label in order to start with 0.
     Returns:
         list or numpy.ndarray: the list of tile (satellite image, label and tile index)
     """
@@ -57,6 +58,7 @@ def load_tile(tile_info, unlabeled=False):
         return img
     else:
         label = load_label(tile_info["label"])
+        label = label - offset
         return img, label
 
 

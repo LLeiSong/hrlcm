@@ -10,7 +10,6 @@ from augmentation import *
 from dataset import *
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-import torch.nn as nn
 import pickle as pkl
 from models.deeplab import DeepLab
 from models.unet import UNet
@@ -98,7 +97,13 @@ def main():
         os.makedirs(args.logs_dir)
 
     # Dir for mean and sd pickles
-    args.stats_dir = os.path.join(args.out_dir, 'norm_stats')
+    args.stats_dir = os.path.join(args.data_dir, 'norm_stats')
+
+    # Set flags for GPU processing if available
+    if torch.cuda.is_available():
+        args.use_gpu = True
+    else:
+        args.use_gpu = False
 
     # Load dataset
     # synchronize transform for train dataset
@@ -170,7 +175,7 @@ def main():
         model = model.cuda()
 
     # Define loss function
-    loss_fn = BalancedCrossEntropyLoss
+    loss_fn = BalancedCrossEntropyLoss()
 
     # Define optimizer
     if args.optimizer_name == 'Adadelta':
@@ -186,7 +191,7 @@ def main():
                                      lr=args.lr)
 
     # Set up tensorboard logging
-    writer = SummaryWriter(log_dir=os.path.join(args.logs_dir, args.exp_name))
+    writer = SummaryWriter(log_dir=args.logs_dir)
 
     # Save config
     pkl.dump(args, open(os.path.join(args.checkpoint_dir, "args.pkl"), "wb"))
@@ -196,7 +201,7 @@ def main():
         step = 0
         trainer = Trainer(args)
         for epoch in range(args.epoches):
-            print("=" * 20, "EPOCH", epoch + 1, "/", str(args.max_epochs), "=" * 20)
+            print("=" * 20, "EPOCH", epoch + 1, "/", str(args.epoches), "=" * 20)
             # Run training for one epoch
             model, step = trainer.train(model, train_loader, validate_loader, loss_fn,
                                         optimizer, writer, step=step)

@@ -21,7 +21,6 @@ class Trainer:
 
         # Training loop
         pbar = tqdm(total=len(train_loader), desc="[Train]")
-        global_step = 0
         for i, (image, target) in enumerate(train_loader):
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:

@@ -27,7 +27,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 # from modeling.sync_batchnorm.batchnorm import SynchronizedBatchNorm2d
 from models.utils.aspp import build_aspp
-from models.decoder import build_decoder
+from models.utils.decoder import build_decoder
 # from models.deeplab_utils.backbone import build_backbone
 from models.utils import resnet
 
