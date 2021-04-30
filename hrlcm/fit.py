@@ -71,8 +71,6 @@ def main():
                               number of batches/optimization steps')
     parser.add_argument('--batch_size', type=int, default=16,
                         help='batch size for prediction (default: 16)')
-    parser.add_argument('--workers', type=int, default=1,
-                        help='number of workers for data-loading (default: 4)')
     parser.add_argument('--epochs', type=int, default=100,
                         help='number of training epochs (default: 100)')
     parser.add_argument('--optimizer_name', type=str, choices=['Adadelta', 'Adam'],
@@ -234,7 +232,7 @@ def main():
             if epoch % args.save_freq == 0:
                 trainer.export_model(model, optimizer=optimizer, step=step)
 
-        # export final set of weights
+        # Export final set of weights
         trainer.export_model(model, optimizer, name="final")
 
     elif args.train_model == 'double':

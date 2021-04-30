@@ -15,6 +15,7 @@ from models.unet import UNet
 from tqdm import tqdm
 import torch.nn as nn
 import numpy as np
+from sync_batchnorm import convert_model
 from sklearn.metrics import f1_score, precision_score, recall_score, \
     fbeta_score, classification_report, hamming_loss, confusion_matrix
 
@@ -131,12 +132,14 @@ def main():
                         help='path to dataset')
     parser.add_argument('--out_dir', type=str, default="models",
                         help='path to output dir (default: ./models)')
+    parser.add_argument('--label_offset', type=int, default=1,
+                        help='offset value to minus from label in order to start from 0 (default: 1)')
 
     # Hyper-parameters of evaluation
     parser.add_argument('--batch_size', type=int, default=16,
                         help='mini-batch size (default: 16)')
-    parser.add_argument('--workers', type=int, default=1,
-                        help='num_workers for data loading in pytorch  (default: 1)')
+    parser.add_argument('--gpu_devices', type=str, default=None,
+                        help='the gpu devices to use (default: None) (format: 1, 2)')
 
     args = parser.parse_args()
     print("=" * 20, "PREDICTION CONFIG", "=" * 20)
@@ -166,6 +169,7 @@ def main():
     # Get validate dataset
     validate_dataset = NFSEN1LC(data_dir=args.data_dir,
                                 usage='validate',
+                                label_offset=args.label_offset,
                                 sync_transform=val_transform,
                                 img_transform=None,
                                 label_transform=None)
@@ -188,7 +192,17 @@ def main():
     else:
         model = UNet(n_classes=train_args.n_classes,
                      n_channels=train_args.n_inputs)
+
+    # Get devices
+    if args.gpu_devices:
+        args.gpu_devices = [int(each) for each in args.gpu_devices.split(',')]
+
     if args.use_gpu:
+        if args.gpu_devices:
+            torch.cuda.set_device(args.gpu_devices[0])
+            model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
+            if args.sync_norm:
+                model = convert_model(model)
         model = model.cuda()
 
     # Restore network weights

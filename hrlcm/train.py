@@ -94,7 +94,7 @@ class Trainer:
 
         # Close progressbar
         pbar.set_description("[Val] Loss: {:.4f}, AA: {:.2f}%, mIoU: {:.2f}%"
-                             .format(round(loss / len(validate_loader), 4),
+                             .format(round(loss_total / len(validate_loader), 4),
                                      round(conf_mat.get_aa() * 100, 4),
                                      round(conf_mat.get_mIoU() * 100, 4)))
         pbar.close()
