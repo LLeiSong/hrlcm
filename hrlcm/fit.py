@@ -203,8 +203,13 @@ def main():
         for epoch in range(args.epoches):
             print("=" * 20, "EPOCH", epoch + 1, "/", str(args.epoches), "=" * 20)
             # Run training for one epoch
-            model, step = trainer.train(model, train_loader, validate_loader, loss_fn,
+            model, step = trainer.train(model, train_loader, loss_fn,
                                         optimizer, writer, step=step)
+            # Run validation
+            trainer.validate(model, validate_loader, step, loss_fn, writer)
+
+            # Save checkpoint
+            trainer.export_model(model, optimizer=optimizer, step=step)
         # export final set of weights
         trainer.export_model(model, optimizer, name="final")
 

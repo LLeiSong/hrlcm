@@ -7,7 +7,7 @@ Maintainer: Lei Song (lsong@clarku.edu)
 
 from augmentation import *
 from dataset import *
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import metrics
 
 
@@ -15,12 +15,13 @@ class Trainer:
     def __init__(self, args):
         self.args = args
 
-    def train(self, model, train_loader, validate_loader, loss_fn, optimizer, writer, step):
+    def train(self, model, train_loader, loss_fn, optimizer, writer, step):
         # Set model to train mode
         model.train()
 
         # Training loop
         pbar = tqdm(total=len(train_loader), desc="[Train]")
+        loss_total = 0
         for i, (image, target) in enumerate(train_loader):
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
@@ -29,6 +30,7 @@ class Trainer:
             # Forward pass
             prediction = model(image)
             loss = loss_fn(prediction, target)
+            loss_total += loss.item()
 
             # Backward pass
             optimizer.zero_grad()
@@ -41,21 +43,25 @@ class Trainer:
             # Write current train loss to tensorboard at every step
             writer.add_scalar("train/loss", loss, global_step=global_step)
 
-            # Run validation
-            if global_step > 0 and global_step % self.args.val_freq == 0:
-                self.validate(model, validate_loader, global_step, loss_fn, writer)
-
-            # Save checkpoint
-            if global_step > 0 and global_step % self.args.save_freq == 0:
-                self.export_model(model, optimizer=optimizer, step=global_step)
+            # # Run validation
+            # if global_step > 0 and global_step % self.args.val_freq == 0:
+            #     self.validate(model, validate_loader, global_step, loss_fn, writer)
+            #
+            # # Save checkpoint
+            # if global_step > 0 and global_step % self.args.save_freq == 0:
+            #     self.export_model(model, optimizer=optimizer, step=global_step)
 
             # Update progressbar
             pbar.set_description("[Train] Loss: {:.4f}".format(
                 round(loss.item(), 4)))
             pbar.update()
 
-        # Close progressbar and flush to disk
+        # Close progressbar
+        pbar.set_description("[Train] Loss: {:.4f}".format(
+            round(loss_total / len(train_loader), 4)))
         pbar.close()
+
+        # Flush to disk
         writer.flush()
         return model, global_step
 
@@ -65,7 +71,7 @@ class Trainer:
 
         # Validate loop
         pbar = tqdm(total=len(validate_loader), desc="[Val]")
-        loss = 0
+        loss_total = 0
         conf_mat = metrics.ConfMatrix(validate_loader.dataset.n_classes)
         for i, (image, target) in enumerate(validate_loader):
             # Move data to gpu if model is on gpu
@@ -75,31 +81,34 @@ class Trainer:
             # Forward pass
             with torch.no_grad():
                 prediction = model(image)
-            loss += loss_fn(prediction, target).cpu().item()
+            loss = loss_fn(prediction, target)
+            loss_total += loss.cpu().item()
 
             # Calculate error metrics
             conf_mat.add_batch(target, prediction.max(1)[1])
 
             # Update progressbar
+            pbar.set_description("[Train] Loss: {:.4f}".format(
+                round(loss.item(), 4)))
             pbar.update()
 
         # Write validation metrics to tensorboard
         writer.add_scalar("validate/loss",
-                          loss / len(validate_loader), global_step=step)
+                          loss_total / len(validate_loader), global_step=step)
         writer.add_scalar("validate/AA", conf_mat.get_aa(),
                           global_step=step)
         writer.add_scalar("validate/mIoU", conf_mat.get_mIoU(),
                           global_step=step)
 
         # Close progressbar
-        pbar.set_description("[Val] AA: {:.2f}%".format(
-                conf_mat.get_aa() * 100))
+        pbar.set_description("[Val] Loss: {:.4f}, AA: {:.2f}%, mIoU: {:.2f}%"
+                             .format(round(loss / len(validate_loader), 4),
+                                     round(conf_mat.get_aa() * 100, 4),
+                                     round(conf_mat.get_mIoU() * 100, 4)))
         pbar.close()
 
         # Flush to disk
         writer.flush()
-        model.train()
-        return
 
     def export_model(self, model, optimizer=None, name=None, step=None):
         # Set output filename
