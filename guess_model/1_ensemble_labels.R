@@ -196,7 +196,7 @@ gfsad_new <- classify(gfsad, gfsad_rclmat,
 message('Step 4: Make labels')
 
 # Path
-dst_path <- here('data/intermid/lc_labels')
+dst_path <- here('data/interim/lc_labels')
 if (!dir.exists(dst_path)) dir.create(dst_path)
 
 # Get the existing types
@@ -298,7 +298,7 @@ labels_sum <- do.call(rbind,
 labels_sum
 
 # Save out
-dst_path <- here('data/intermid')
+dst_path <- here('data/interim')
 if (!dir.exists(dst_path)) dir.create(dst_path)
 write.csv(labels_sum, 
           file.path(dst_path,
@@ -310,7 +310,7 @@ write.csv(labels_sum,
 #############################################
 message('Step 6: Save out the consensus labels')
 
-dst_path <- here('data/intermid/lc_labels')
+dst_path <- here('data/interim/lc_labels')
 labels <- do.call(c, lapply(1:nrow(lc_types), function(n){
     lc <- lc_types %>% slice(n)
     message(lc$name)

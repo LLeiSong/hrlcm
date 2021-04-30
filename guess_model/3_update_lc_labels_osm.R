@@ -32,7 +32,7 @@ select <- dplyr::select
 tiles_north <- st_read(here('data/geoms/tiles_nicfi_north.geojson'))
 
 ## Get the ensemble labels
-lc_labels <- rast(here('data/intermid/lc_labels.tif'))
+lc_labels <- rast(here('data/interim/lc_labels.tif'))
 tiles_north_vect <- vect(tiles_north)
 lc_labels_north <- mask(crop(lc_labels, 
                              tiles_north_vect), 

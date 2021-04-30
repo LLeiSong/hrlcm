@@ -120,6 +120,7 @@ st_write(tiles_train,
 message('Step 4: Generate catalogs')
 
 # Set path
+# Replace these path based on your own needs
 train_path <- here('results/north/dl_train')
 valid_path <- here('results/north/dl_valid')
 
