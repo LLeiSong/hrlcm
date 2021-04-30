@@ -58,7 +58,8 @@ def load_tile(tile_info, unlabeled=False, offset=1):
         return img
     else:
         label = load_label(tile_info["label"])
-        label = label - offset
+        if offset > 0:
+            label = label - offset
         return img, label
 
 
@@ -117,6 +118,7 @@ class NFSEN1LC(Dataset):
                  usage='train',
                  lowest_score=9,
                  noise_ratio=0.2,
+                 label_offset=1,
                  sync_transform=None,
                  img_transform=None,
                  label_transform=None,
@@ -127,6 +129,7 @@ class NFSEN1LC(Dataset):
             usage (str): Usage of the dataset : "train", "validate" or "predict"
             lowest_score (int): the lowest value of label score, [8, 9, 10], just for train.
             noise_ratio (float or None): the ratio of noise in training, just for train.
+            label_offset (int): the offset of label to minus in order to fit into DL model.
             sync_transform (transform or None): Synthesize Data augmentation methods
             img_transform (transform or None): Image only augmentation methods
             label_transform (transform or None): Label only augmentation methods
@@ -137,6 +140,7 @@ class NFSEN1LC(Dataset):
         super(NFSEN1LC, self).__init__()
         self.data_dir = data_dir
         self.usage = usage
+        self.label_offset = label_offset
         self.sync_transform = sync_transform
         self.img_transform = img_transform
         self.label_transform = label_transform
@@ -214,7 +218,7 @@ class NFSEN1LC(Dataset):
         """
         tile_info = self.catalog.iloc[index]
         if self.usage in ['train', 'validate']:
-            img, label = load_tile(tile_info)
+            img, label = load_tile(tile_info, offset=self.label_offset)
 
             # Transform
             if self.sync_transform is not None:

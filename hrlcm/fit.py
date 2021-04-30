@@ -37,6 +37,8 @@ def main():
                         help='lowest score to subset train dataset (default: 9)')
     parser.add_argument('--noise_ratio', type=float, default=0.2,
                         help='ratio of noise to subset train dataset (default: 0.2)')
+    parser.add_argument('--label_offset', type=int, default=1,
+                        help='offset value to minus from label in order to start from 0 (default: 1)')
     parser.add_argument('--rg_rotate', type=str, default='-90, 90',
                         help='ratio of noise to subset train dataset (default: -90, 90)')
     parser.add_argument('--trans_prob', type=float, default=0.5,
@@ -143,6 +145,7 @@ def main():
                              usage='train',
                              lowest_score=args.lowest_score,
                              noise_ratio=args.noise_ratio,
+                             label_offset=args.label_offset,
                              sync_transform=sync_transform,
                              img_transform=None,
                              label_transform=None)
@@ -155,6 +158,7 @@ def main():
     # Get validate dataset
     validate_dataset = NFSEN1LC(data_dir=args.data_dir,
                                 usage='validate',
+                                label_offset=args.label_offset,
                                 sync_transform=val_transform,
                                 img_transform=None,
                                 label_transform=None)
@@ -162,7 +166,7 @@ def main():
     validate_loader = DataLoader(dataset=validate_dataset,
                                  batch_size=args.batch_size,
                                  shuffle=False,
-                                 drop_last=True)
+                                 drop_last=False)
 
     # Set up network
     args.n_classes = train_dataset.n_classes
