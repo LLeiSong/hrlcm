@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 import pickle as pkl
 from models.deeplab import DeepLab
 from models.unet import UNet
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import torch.nn as nn
 import numpy as np
 from sync_batchnorm import convert_model

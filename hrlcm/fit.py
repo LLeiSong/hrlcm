@@ -8,6 +8,7 @@ Maintainer: Lei Song (lsong@clarku.edu)
 import argparse
 from augmentation import *
 from dataset import *
+from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import pickle as pkl
@@ -220,8 +221,8 @@ def main():
     if args.train_mode == 'single':
         step = 0
         trainer = Trainer(args)
+        pbar = tqdm(total=args.epochs, desc="[Epoch]")
         for epoch in range(args.epoches):
-            print("=" * 20, "EPOCH", epoch + 1, "/", str(args.epoches), "=" * 20)
             # Run training for one epoch
             model, step = trainer.train(model, train_loader, loss_fn,
                                         optimizer, writer, step=step)
@@ -232,8 +233,14 @@ def main():
             if epoch % args.save_freq == 0:
                 trainer.export_model(model, optimizer=optimizer, step=step)
 
+            # Update pbar
+            pbar.update()
+
         # Export final set of weights
         trainer.export_model(model, optimizer, name="final")
+
+        # Close pbar
+        pbar.close()
 
     elif args.train_model == 'double':
         pass
