@@ -54,12 +54,9 @@ def main():
                         help='initial learning rate')
     parser.add_argument('--decay', type=float, default=1e-5,
                         help='decay rate')
-    parser.add_argument('--val_freq', type=int, default=1000,
-                        help='validation will be run every val_freq \
-                        batches/optimization steps during training')
-    parser.add_argument('--save_freq', type=int, default=1000,
+    parser.add_argument('--save_freq', type=int, default=10,
                         help='training state will be saved every save_freq \
-                        batches/optimization steps during training')
+                        batches during training')
     parser.add_argument('--log_freq', type=int, default=100,
                         help='tensorboard logs will be written every log_freq \
                               number of batches/optimization steps')
@@ -209,7 +206,9 @@ def main():
             trainer.validate(model, validate_loader, step, loss_fn, writer)
 
             # Save checkpoint
-            trainer.export_model(model, optimizer=optimizer, step=step)
+            if epoch % args.save_freq == 0:
+                trainer.export_model(model, optimizer=optimizer, step=step)
+
         # export final set of weights
         trainer.export_model(model, optimizer, name="final")
 

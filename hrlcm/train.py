@@ -43,14 +43,6 @@ class Trainer:
             # Write current train loss to tensorboard at every step
             writer.add_scalar("train/loss", loss, global_step=global_step)
 
-            # # Run validation
-            # if global_step > 0 and global_step % self.args.val_freq == 0:
-            #     self.validate(model, validate_loader, global_step, loss_fn, writer)
-            #
-            # # Save checkpoint
-            # if global_step > 0 and global_step % self.args.save_freq == 0:
-            #     self.export_model(model, optimizer=optimizer, step=global_step)
-
             # Update progressbar
             pbar.set_description("[Train] Loss: {:.4f}".format(
                 round(loss.item(), 4)))
