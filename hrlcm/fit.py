@@ -15,6 +15,7 @@ from models.deeplab import DeepLab
 from models.unet import UNet
 from train import Trainer
 from loss import BalancedCrossEntropyLoss
+from sync_batchnorm import convert_model
 
 
 def main():
@@ -51,7 +52,9 @@ def main():
     parser.add_argument('--out_stride', type=int, default=8,
                         help='out stride size for deeplab (default: 8)')
     parser.add_argument('--gpu_devices', type=str, default=None,
-                        help='the gpu devices to use (default: None) (format: 1, 2')
+                        help='the gpu devices to use (default: None) (format: 1, 2)')
+    parser.add_argument('--sync_norm', type=bool, default=False,
+                        help='the flag to use synchronized-BatchNorm (default: False)')
 
     # Training hyper-parameters
     parser.add_argument('--lr', type=float, default=0.001,
@@ -185,6 +188,8 @@ def main():
         if args.gpu_devices:
             torch.cuda.set_device(args.gpu_devices[0])
             model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
+            if args.sync_norm:
+                model = convert_model(model)
         model = model.cuda()
 
     # Define loss function

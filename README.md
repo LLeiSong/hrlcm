@@ -15,6 +15,7 @@ All the code within scripts are adapted from:
 - [agroimpacts/pytorch_planet](https://github.com/agroimpacts/pytorch_planet), 
 - [lukasliebel/dfc2020_baseline](https://github.com/lukasliebel/dfc2020_baseline.git), and
 - [schmitt-muc/SEN12MS](https://github.com/schmitt-muc/SEN12MS.git)
+- [Synchronized BatchNorm](https://github.com/vacancy/Synchronized-BatchNorm-PyTorch)
 
 **loss functions**
 - [bhanML/Co-teaching](https://github.com/bhanML/Co-teaching.git)
