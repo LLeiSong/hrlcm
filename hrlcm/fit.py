@@ -38,6 +38,8 @@ def main():
                         help='ratio of noise to subset train dataset (default: 0.2)')
     parser.add_argument('--rg_rotate', type=str, default='-90, 90',
                         help='ratio of noise to subset train dataset (default: -90, 90)')
+    parser.add_argument('--trans_prob', type=float, default=0.5,
+                        help='probability to do data transformation (default:0.5)')
 
     # Network
     parser.add_argument('--model', type=str, choices=['unet', 'deeplab'],
@@ -48,6 +50,8 @@ def main():
                         help='training mode: single model or co-teaching (default: single)')
     parser.add_argument('--out_stride', type=int, default=8,
                         help='out stride size for deeplab (default: 8)')
+    parser.add_argument('--gpu_devices', type=str, default=None,
+                        help='the gpu devices to use (default: None) (format: 1, 2')
 
     # Training hyper-parameters
     parser.add_argument('--lr', type=float, default=0.001,
@@ -103,11 +107,15 @@ def main():
         args.use_gpu = False
 
     # Load dataset
+    # Define rotate degrees
+    args.rg_rotate = tuple(float(each) for each in args.rg_rotate.split(','))
+
     # synchronize transform for train dataset
     sync_transform = Compose([
-        RandomScale(),
-        RandomFlip(),
-        RandomCenterRotate(),
+        RandomScale(prob=args.trans_prob),
+        RandomFlip(prob=args.trans_prob),
+        RandomCenterRotate(degree=args.rg_rotate,
+                           prob=args.trans_prob),
         SyncToTensor()
     ])
 
@@ -132,7 +140,6 @@ def main():
                              usage='train',
                              lowest_score=args.lowest_score,
                              noise_ratio=args.noise_ratio,
-                             rg_rotate=tuple(float(each) for each in args.rg_rotate.split(',')),
                              sync_transform=sync_transform,
                              img_transform=None,
                              label_transform=None)
@@ -168,7 +175,16 @@ def main():
     else:
         model = UNet(n_classes=args.n_classes,
                      n_channels=args.n_channels)
+
+    # Get devices
+    if args.gpu_devices:
+        args.gpu_devices = [int(each) for each in args.gpu_devices.split(',')]
+
+    # Set model
     if args.use_gpu:
+        if args.gpu_devices:
+            torch.cuda.set_device(args.gpu_devices[0])
+            model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
         model = model.cuda()
 
     # Define loss function

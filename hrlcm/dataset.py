@@ -117,7 +117,6 @@ class NFSEN1LC(Dataset):
                  usage='train',
                  lowest_score=9,
                  noise_ratio=0.2,
-                 rg_rotate=(-90, 90),
                  sync_transform=None,
                  img_transform=None,
                  label_transform=None,
@@ -128,7 +127,6 @@ class NFSEN1LC(Dataset):
             usage (str): Usage of the dataset : "train", "validate" or "predict"
             lowest_score (int): the lowest value of label score, [8, 9, 10], just for train.
             noise_ratio (float or None): the ratio of noise in training, just for train.
-            rg_rotate (tuple or None): Range of degrees for rotation, e.g. (-90, 90)
             sync_transform (transform or None): Synthesize Data augmentation methods
             img_transform (transform or None): Image only augmentation methods
             label_transform (transform or None): Label only augmentation methods
@@ -139,7 +137,6 @@ class NFSEN1LC(Dataset):
         super(NFSEN1LC, self).__init__()
         self.data_dir = data_dir
         self.usage = usage
-        self.rg_rotate = rg_rotate
         self.sync_transform = sync_transform
         self.img_transform = img_transform
         self.label_transform = label_transform
