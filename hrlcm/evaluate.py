@@ -55,7 +55,8 @@ class Precision_score(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, predict_labels, true_labels):
+    @staticmethod
+    def forward(predict_labels, true_labels):
         weighted_prec = precision_score(true_labels, predict_labels, average='weighted')
 
         return weighted_prec
@@ -66,7 +67,8 @@ class Recall_score(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, predict_labels, true_labels):
+    @staticmethod
+    def forward(predict_labels, true_labels):
         weighted_rec = recall_score(true_labels, predict_labels, average='weighted')
 
         return weighted_rec
@@ -77,7 +79,8 @@ class F1_score(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, predict_labels, true_labels):
+    @staticmethod
+    def forward(predict_labels, true_labels):
         weighted_f1 = f1_score(true_labels, predict_labels, average="weighted")
 
         return weighted_f1
@@ -88,7 +91,8 @@ class F2_score(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, predict_labels, true_labels):
+    @staticmethod
+    def forward(predict_labels, true_labels):
         weighted_f2 = fbeta_score(true_labels, predict_labels, beta=2, average="weighted")
 
         return weighted_f2
@@ -99,7 +103,8 @@ class Hamming_loss(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, predict_labels, true_labels):
+    @staticmethod
+    def forward(predict_labels, true_labels):
         return hamming_loss(true_labels, predict_labels)
 
 
@@ -154,8 +159,8 @@ def main():
         print('{0:20}  {1}'.format(arg, getattr(train_args, arg)))
     print()
 
-    # Cuda
-    use_cuda = torch.cuda.is_available()
+    # Set flags for GPU processing if available
+    args.use_gpu = torch.cuda.is_available()
 
     # Create output dir
     os.makedirs(args.out_dir, exist_ok=True)
@@ -229,7 +234,7 @@ def main():
     with torch.no_grad():
         for i, (image, labels) in enumerate(tqdm(validate_loader, desc="evaluate")):
             # move data to gpu if model is on gpu
-            if use_cuda:
+            if args.use_gpu:
                 image = image.to(torch.device("cuda"))
 
             # forward pass

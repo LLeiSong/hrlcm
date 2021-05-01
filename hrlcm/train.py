@@ -16,6 +16,16 @@ class Trainer:
         self.args = args
 
     def train(self, model, train_loader, loss_fn, optimizer, writer, step):
+        """Train a single model
+
+        :param model: the model to train
+        :param train_loader: train Dataloader
+        :param loss_fn: loss function
+        :param optimizer: optimizer for training
+        :param writer: defined writer for statistics
+        :param step: global step so far
+        :return: updated model and global step
+        """
         # Set model to train mode
         model.train()
 
@@ -57,7 +67,30 @@ class Trainer:
         writer.flush()
         return model, global_step
 
+    def co_train(self, model1, model2, train_loader, loss_fn, optimizer, writer, step):
+        """Co-train using two models
+
+        :param model1: model 1
+        :param model2: model 2
+        :param train_loader: train Dataloader
+        :param loss_fn: loss function
+        :param optimizer: optimizer for training
+        :param writer: defined writer for statistics
+        :param step: global step so far
+        :return: updated model1, updated model2 and global step
+        """
+        pass
+
     def validate(self, model, validate_loader, step, loss_fn, writer):
+        """Validate for single model
+
+        :param model: trained model
+        :param validate_loader: validate Dataloader
+        :param step: global step
+        :param loss_fn: loss function
+        :param writer: defined writer for statistics
+        :return: None
+        """
         # Set model to evaluation mode
         model.eval()
 
@@ -101,6 +134,19 @@ class Trainer:
 
         # Flush to disk
         writer.flush()
+
+    def co_validate(self, model1, model2, validate_loader, step, loss_fn, writer):
+        """Validate for co-trained two models
+
+        :param model1: model 1
+        :param model2: model 2
+        :param validate_loader: validate Dataloader
+        :param step: global step
+        :param loss_fn: loss function
+        :param writer: defined writer for statistics
+        :return: None
+        """
+        pass
 
     def export_model(self, model, optimizer=None, name=None, step=None):
         # Set output filename

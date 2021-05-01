@@ -13,7 +13,8 @@ import torch.nn.functional as F
 import pickle as pkl
 from models.deeplab import DeepLab
 from models.unet import UNet
-from tqdm import tqdm
+from tqdm.auto import tqdm
+from sync_batchnorm import convert_model
 
 
 def main():
@@ -36,8 +37,8 @@ def main():
     # Hyper-parameters of evaluation
     parser.add_argument('--batch_size', type=int, default=16,
                         help='mini-batch size (default: 16)')
-    parser.add_argument('--workers', type=int, default=1,
-                        help='num_workers for data loading in pytorch  (default: 1)')
+    parser.add_argument('--gpu_devices', type=str, default=None,
+                        help='the gpu devices to use (default: None) (format: 1, 2)')
 
     args = parser.parse_args()
     print("=" * 20, "PREDICTION CONFIG", "=" * 20)
@@ -56,20 +57,7 @@ def main():
     os.makedirs(args.out_dir, exist_ok=True)
 
     # Set flags for GPU processing if available
-    if torch.cuda.is_available():
-        args.use_gpu = True
-        if torch.cuda.device_count() > 1:
-            raise NotImplementedError("multi-gpu prediction not implemented! "
-                                      + "try to run script as: "
-                                      + "CUDA_VISIBLE_DEVICES=0 predict.py")
-    else:
-        args.use_gpu = False
-
-    # Load dataset
-    # synchronize transform for validate dataset
-    pred_transform = Compose([
-        ImgToTensor()
-    ])
+    args.use_gpu = torch.cuda.is_available()
 
     # set up network
     if train_args.model == "deeplab":
@@ -83,7 +71,16 @@ def main():
     else:
         model = UNet(n_classes=train_args.n_classes,
                      n_channels=train_args.n_inputs)
+    # Get devices
+    if args.gpu_devices:
+        args.gpu_devices = [int(each) for each in args.gpu_devices.split(',')]
+
     if args.use_gpu:
+        if args.gpu_devices:
+            torch.cuda.set_device(args.gpu_devices[0])
+            model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
+            if args.sync_norm:
+                model = convert_model(model)
         model = model.cuda()
 
     # Restore network weights
@@ -91,9 +88,14 @@ def main():
     step = state["step"]
     model.load_state_dict(state["model_state_dict"])
     model.eval()
-    print("loaded checkpoint from step", step)
+    print("Loaded checkpoint from step", step)
 
     # Predict
+    # synchronize transform for predict dataset
+    pred_transform = Compose([
+        ImgToTensor()
+    ])
+
     catalog = pd.read_csv(os.path.join(args.data_dir, 'dl_catalog_predict.csv'))
     for tile_id in catalog['tile_id']:
         # Get validate dataset
@@ -156,10 +158,12 @@ def main():
                     out_score = out[:, n + 1, :, :].data[i][:, :].cpu().numpy() * 100
                     out_score = np.expand_dims(out_score, axis=0).astype(np.int8)
                     try:
-                        canvas_score_ls[n][:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = out_score
+                        canvas_score_ls[n][:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = \
+                            out_score
                     except:
                         canvas_score_single = np.zeros((1, meta['height'], meta['width']), dtype=meta['dtype'])
-                        canvas_score_single[:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = out_score
+                        canvas_score_single[:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = \
+                            out_score
                         canvas_score_ls.append(canvas_score_single)
 
         # Save out
