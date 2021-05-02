@@ -113,7 +113,7 @@ class Trainer:
             conf_mat.add_batch(target, prediction.max(1)[1])
 
             # Update progressbar
-            pbar.set_description("[Train] Loss: {:.4f}".format(
+            pbar.set_description("[Val] Loss: {:.4f}".format(
                 round(loss.item(), 4)))
             pbar.update()
 

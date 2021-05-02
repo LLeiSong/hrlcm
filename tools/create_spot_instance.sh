@@ -1,7 +1,11 @@
 #!/usr/bin/env sh
+# Authors: Lyndon Estes, Boka Luo, Lei Song
 ## create a spot instance from AMI
 ## Customize for a macOS
-## UNDER CONSTRUCTION: The script is not very flexible to use for now.
+## Before run this script, do:
+## 1. brew install awscli, then aws configure to configure aws credential.
+## 2. brew install jq
+## 3. brew install coreutils. to use gdata
 
 # Get input parameters
 AMIID=$1

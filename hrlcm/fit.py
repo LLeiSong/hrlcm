@@ -70,8 +70,10 @@ def main():
     parser.add_argument('--log_freq', type=int, default=100,
                         help='tensorboard logs will be written every log_freq \
                               number of batches/optimization steps')
-    parser.add_argument('--batch_size', type=int, default=16,
-                        help='batch size for prediction (default: 16)')
+    parser.add_argument('--train_batch_size', type=int, default=16,
+                        help='batch size for training (default: 16)')
+    parser.add_argument('--val_batch_size', type=int, default=32,
+                        help='batch size for validation (default: 16)')
     parser.add_argument('--epochs', type=int, default=100,
                         help='number of training epochs (default: 100)')
     parser.add_argument('--optimizer_name', type=str, choices=['Adadelta', 'Adam'],
@@ -105,10 +107,7 @@ def main():
     args.stats_dir = os.path.join(args.data_dir, 'norm_stats')
 
     # Set flags for GPU processing if available
-    if torch.cuda.is_available():
-        args.use_gpu = True
-    else:
-        args.use_gpu = False
+    args.use_gpu = torch.cuda.is_available()
 
     # Load dataset
     # Define rotate degrees
@@ -150,7 +149,7 @@ def main():
                              label_transform=None)
     # Put into DataLoader
     train_loader = DataLoader(dataset=train_dataset,
-                              batch_size=args.batch_size,
+                              batch_size=args.train_batch_size,
                               shuffle=True,
                               drop_last=True)
 
@@ -163,7 +162,7 @@ def main():
                                 label_transform=None)
     # Put into DataLoader
     validate_loader = DataLoader(dataset=validate_dataset,
-                                 batch_size=args.batch_size,
+                                 batch_size=args.val_batch_size,
                                  shuffle=False,
                                  drop_last=False)
 
@@ -222,7 +221,7 @@ def main():
         step = 0
         trainer = Trainer(args)
         pbar = tqdm(total=args.epochs, desc="[Epoch]")
-        for epoch in range(args.epoches):
+        for epoch in range(args.epochs):
             # Run training for one epoch
             model, step = trainer.train(model, train_loader, loss_fn,
                                         optimizer, writer, step=step)

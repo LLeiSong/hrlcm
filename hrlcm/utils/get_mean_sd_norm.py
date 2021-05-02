@@ -19,6 +19,8 @@ class args_dummy:
         self.out_dir = 'results/dl'
         self.lowest_score = 10
         self.noise_ratio = 0
+        self.trans_prob = 0.5
+        self.label_offset = 1
         self.rg_rotate = '-90, 90'
         self.model = 'unet'
         self.train_mode = 'single'
@@ -27,8 +29,8 @@ class args_dummy:
         self.decay = 1e-5
         self.save_freq = 20
         self.log_feq = 20
-        self.batch_size = 16
-        self.workers = 1
+        self.train_batch_size = 16
+        self.val_batch_size = 16
         self.epochs = 100
         self.optimizer_name = 'Adam'
         self.resume = None
@@ -48,10 +50,10 @@ sync_transform = Compose([
     SyncToTensor()
 ])
 train_set = NFSEN1LC(data_dir=args.data_dir,
-                     usage='validate',
+                     usage='train',
                      lowest_score=args.lowest_score,
                      noise_ratio=args.noise_ratio,
-                     rg_rotate=tuple(float(each) for each in args.rg_rotate.split(',')),
+                     label_offset=args.label_offset,
                      sync_transform=sync_transform,
                      img_transform=None,
                      label_transform=None)
