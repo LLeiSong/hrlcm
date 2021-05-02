@@ -31,6 +31,7 @@ class args_dummy:
         self.log_feq = 20
         self.train_batch_size = 16
         self.val_batch_size = 16
+        self.num_workers = 16
         self.epochs = 100
         self.optimizer_name = 'Adam'
         self.resume = None

@@ -44,6 +44,8 @@ def main():
                         help='ratio of noise to subset train dataset (default: -90, 90)')
     parser.add_argument('--trans_prob', type=float, default=0.5,
                         help='probability to do data transformation (default:0.5)')
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='number of worker(s) to load dataset (default: 0)')
 
     # Network
     parser.add_argument('--model', type=str, choices=['unet', 'deeplab'],
@@ -70,7 +72,7 @@ def main():
     parser.add_argument('--log_freq', type=int, default=100,
                         help='tensorboard logs will be written every log_freq \
                               number of batches/optimization steps')
-    parser.add_argument('--train_batch_size', type=int, default=16,
+    parser.add_argument('--train_batch_size', type=int, default=32,
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=32,
                         help='batch size for validation (default: 16)')
@@ -151,6 +153,8 @@ def main():
     train_loader = DataLoader(dataset=train_dataset,
                               batch_size=args.train_batch_size,
                               shuffle=True,
+                              num_workers=args.num_workers,
+                              pin_memory=True,
                               drop_last=True)
 
     # Get validate dataset
@@ -164,6 +168,8 @@ def main():
     validate_loader = DataLoader(dataset=validate_dataset,
                                  batch_size=args.val_batch_size,
                                  shuffle=False,
+                                 num_workers=args.num_workers,
+                                 pin_memory=True,
                                  drop_last=False)
 
     # Set up network

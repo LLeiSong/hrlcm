@@ -139,6 +139,8 @@ def main():
                         help='path to output dir (default: ./models)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='number of worker(s) to load dataset (default: 0)')
 
     # Hyper-parameters of evaluation
     parser.add_argument('--batch_size', type=int, default=16,
@@ -181,7 +183,7 @@ def main():
     # Put into DataLoader
     validate_loader = DataLoader(dataset=validate_dataset,
                                  batch_size=args.batch_size,
-                                 num_workers=args.workers,
+                                 num_workers=args.num_workers,
                                  shuffle=False,
                                  drop_last=False)
 
