@@ -121,8 +121,8 @@ message('Step 4: Generate catalogs')
 
 # Set path
 # Replace these path based on your own needs
-train_path <- here('results/north/dl_train')
-valid_path <- here('results/north/dl_valid')
+train_path <- 'dl_train'
+valid_path <- 'dl_valid'
 
 # Train catalog
 message('--Catalog of training')
@@ -172,6 +172,8 @@ write.csv(catalog_valid,
 message('Step 5: Reorganize images')
 
 # Set paths
+train_path <- here('results/north/dl_train')
+valid_path <- here('results/north/dl_valid')
 img_from <- '/Volumes/elephant/pred_stack'
 label_from <- here('results/north/guess_labels')
 if (!dir.exists(train_path)) dir.create(train_path)
