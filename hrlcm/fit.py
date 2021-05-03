@@ -131,14 +131,14 @@ def main():
 
     # Image transform
     # Load mean and sd for normalization
-    # with open(os.path.join(args.stats_dir,
-    #                        "means.pkl"), "rb") as input_file:
-    #     mean = tuple(pkl.load(input_file))
-    #
-    # with open(os.path.join(args.stats_dir,
-    #                        "stds.pkl"), "rb") as input_file:
-    #     std = tuple(pkl.load(input_file))
-    # img_transform = ImgNorm(mean, std)
+    with open(os.path.join(args.stats_dir,
+                           "means.pkl"), "rb") as input_file:
+        mean = tuple(pkl.load(input_file))
+
+    with open(os.path.join(args.stats_dir,
+                           "stds.pkl"), "rb") as input_file:
+        std = tuple(pkl.load(input_file))
+    img_transform = ImgNorm(mean, std)
 
     # Get train dataset
     train_dataset = NFSEN1LC(data_dir=args.data_dir,
@@ -146,7 +146,7 @@ def main():
                              lowest_score=args.lowest_score,
                              noise_ratio=args.noise_ratio,
                              label_offset=args.label_offset,
-                             sync_transform=sync_transform,
+                             sync_transform=img_transform,
                              img_transform=None,
                              label_transform=None)
     # Put into DataLoader
@@ -162,7 +162,7 @@ def main():
                                 usage='validate',
                                 label_offset=args.label_offset,
                                 sync_transform=val_transform,
-                                img_transform=None,
+                                img_transform=img_transform,
                                 label_transform=None)
     # Put into DataLoader
     validate_loader = DataLoader(dataset=validate_dataset,
