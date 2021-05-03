@@ -65,7 +65,10 @@ def main():
     parser.add_argument('--lr', type=float, default=0.001,
                         help='initial learning rate')
     parser.add_argument('--decay', type=float, default=1e-5,
-                        help='decay rate')
+                        help='weight decay rate')
+    parser.add_argument('--optimizer_name', type=str, choices=['Adadelta', 'Adam', 'AdamW', 'Adamax'],
+                        default="Adam",
+                        help='optimizer (default: Adam)')
     parser.add_argument('--save_freq', type=int, default=10,
                         help='training state will be saved every save_freq \
                         batches during training')
@@ -78,9 +81,6 @@ def main():
                         help='batch size for validation (default: 16)')
     parser.add_argument('--epochs', type=int, default=100,
                         help='number of training epochs (default: 100)')
-    parser.add_argument('--optimizer_name', type=str, choices=['Adadelta', 'Adam'],
-                        default="Adam",
-                        help='optimizer (default: Adam)')
     parser.add_argument('--resume', '-r', type=str, default=None,
                         help='path to the pretrained weights file', )
 
@@ -125,7 +125,7 @@ def main():
     ])
 
     # synchronize transform for validate dataset
-    val_transform = Compose([
+    sync_transform_val = Compose([
         SyncToTensor()
     ])
 
@@ -146,8 +146,8 @@ def main():
                              lowest_score=args.lowest_score,
                              noise_ratio=args.noise_ratio,
                              label_offset=args.label_offset,
-                             sync_transform=img_transform,
-                             img_transform=None,
+                             sync_transform=sync_transform,
+                             img_transform=img_transform,
                              label_transform=None)
     # Put into DataLoader
     train_loader = DataLoader(dataset=train_dataset,
@@ -161,7 +161,7 @@ def main():
     validate_dataset = NFSEN1LC(data_dir=args.data_dir,
                                 usage='validate',
                                 label_offset=args.label_offset,
-                                sync_transform=val_transform,
+                                sync_transform=sync_transform_val,
                                 img_transform=img_transform,
                                 label_transform=None)
     # Put into DataLoader
@@ -211,6 +211,14 @@ def main():
     elif args.optimizer_name == 'Adam':
         optimizer = torch.optim.Adam(model.parameters(),
                                      lr=args.lr)
+    elif args.optimizer_name == 'AdamW':
+        optimizer = torch.optim.AdamW(model.parameters(),
+                                      lr=args.lr,
+                                      weight_decay=args.decay)
+    elif args.optimizer_name == 'Adamax':
+        optimizer = torch.optim.Adamax(model.parameters(),
+                                       lr=args.lr,
+                                       weight_decay=args.decay)
     else:
         print('Not supported optimizer, use Adam instead.')
         optimizer = torch.optim.Adam(model.parameters(),
