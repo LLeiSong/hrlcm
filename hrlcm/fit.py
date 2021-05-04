@@ -16,7 +16,6 @@ from models.deeplab import DeepLab
 from models.unet import UNet
 from train import Trainer
 from loss import BalancedCrossEntropyLoss
-from sync_batchnorm import convert_model
 
 
 def main():
@@ -58,15 +57,18 @@ def main():
                         help='out stride size for deeplab (default: 8)')
     parser.add_argument('--gpu_devices', type=str, default=None,
                         help='the gpu devices to use (default: None) (format: 1, 2)')
-    parser.add_argument('--sync_norm', type=bool, default=False,
-                        help='the flag to use synchronized-BatchNorm (default: False)')
 
     # Training hyper-parameters
-    parser.add_argument('--lr', type=float, default=0.001,
+    parser.add_argument('--base_lr', type=float, default=0.0001,
                         help='initial learning rate')
-    parser.add_argument('--decay', type=float, default=1e-5,
-                        help='weight decay rate')
-    parser.add_argument('--optimizer_name', type=str, choices=['Adadelta', 'Adam', 'AdamW', 'Adamax'],
+    parser.add_argument('--max_lr', type=float, default=0.01,
+                        help='initial learning rate')
+    parser.add_argument('--decay', type=float, default=0.95,
+                        help='learning rate decay')
+    parser.add_argument('--decay_epoch', type=int, default=1,
+                        help='learning rate will be updated every decay_epoch epochs')
+    parser.add_argument('--optimizer_name', type=str,
+                        choices=['Adadelta', 'Adam', 'AdamW', 'Adamax'],
                         default="Adam",
                         help='optimizer (default: Adam)')
     parser.add_argument('--save_freq', type=int, default=10,
@@ -196,33 +198,31 @@ def main():
         if args.gpu_devices:
             torch.cuda.set_device(args.gpu_devices[0])
             model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
-            if args.sync_norm:
-                model = convert_model(model)
         model = model.cuda()
 
     # Define loss function
     loss_fn = BalancedCrossEntropyLoss()
 
     # Define optimizer
-    if args.optimizer_name == 'Adadelta':
+    if args.optimizer_name.lower() == 'adadelta':
         optimizer = torch.optim.Adadelta(model.parameters(),
-                                         lr=args.lr,
-                                         weight_decay=args.decay)
-    elif args.optimizer_name == 'Adam':
+                                         lr=args.lr)
+    elif args.optimizer_name.lower() == 'adam':
         optimizer = torch.optim.Adam(model.parameters(),
-                                     lr=args.lr)
-    elif args.optimizer_name == 'AdamW':
+                                     lr=args.lr,
+                                     amsgrad=True)
+    elif args.optimizer_name.lower() == 'adamw':
         optimizer = torch.optim.AdamW(model.parameters(),
                                       lr=args.lr,
-                                      weight_decay=args.decay)
-    elif args.optimizer_name == 'Adamax':
+                                      amsgrad=True)
+    elif args.optimizer_name.lower() == 'adamax':
         optimizer = torch.optim.Adamax(model.parameters(),
-                                       lr=args.lr,
-                                       weight_decay=args.decay)
+                                       lr=args.lr)
     else:
         print('Not supported optimizer, use Adam instead.')
         optimizer = torch.optim.Adam(model.parameters(),
-                                     lr=args.lr)
+                                     lr=args.lr,
+                                     amsgrad=True)
 
     # Set up tensorboard logging
     writer = SummaryWriter(log_dir=args.logs_dir)
@@ -233,6 +233,7 @@ def main():
     # Train network
     if args.train_mode == 'single':
         step = 0
+        lr = args.lr
         trainer = Trainer(args)
         pbar = tqdm(total=args.epochs, desc="[Epoch]")
         for epoch in range(args.epochs):
@@ -241,6 +242,12 @@ def main():
                                         optimizer, writer, step=step)
             # Run validation
             trainer.validate(model, validate_loader, step, loss_fn, writer)
+
+            # Update learning rate
+            if epoch > 1 and epoch % args.decay_epoch == 0:
+                lr *= args.decay
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = lr
 
             # Save checkpoint
             if epoch % args.save_freq == 0:
