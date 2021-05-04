@@ -59,14 +59,12 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     # Training hyper-parameters
-    parser.add_argument('--base_lr', type=float, default=0.0001,
+    parser.add_argument('--base_lr', type=float, default=0.001,
                         help='initial learning rate')
     parser.add_argument('--max_lr', type=float, default=0.01,
                         help='initial learning rate')
-    parser.add_argument('--decay', type=float, default=0.95,
-                        help='learning rate decay')
-    parser.add_argument('--decay_epoch', type=int, default=1,
-                        help='learning rate will be updated every decay_epoch epochs')
+    parser.add_argument('--clr_gamma', type=float, default=0.9999,
+                        help='gamma for cyclic learning rate scheduler')
     parser.add_argument('--optimizer_name', type=str,
                         choices=['Adadelta', 'Adam', 'AdamW', 'Adamax'],
                         default="Adam",
@@ -206,23 +204,33 @@ def main():
     # Define optimizer
     if args.optimizer_name.lower() == 'adadelta':
         optimizer = torch.optim.Adadelta(model.parameters(),
-                                         lr=args.lr)
+                                         lr=args.max_lr)
     elif args.optimizer_name.lower() == 'adam':
         optimizer = torch.optim.Adam(model.parameters(),
-                                     lr=args.lr,
+                                     lr=args.max_lr,
                                      amsgrad=True)
     elif args.optimizer_name.lower() == 'adamw':
         optimizer = torch.optim.AdamW(model.parameters(),
-                                      lr=args.lr,
+                                      lr=args.max_lr,
                                       amsgrad=True)
     elif args.optimizer_name.lower() == 'adamax':
         optimizer = torch.optim.Adamax(model.parameters(),
-                                       lr=args.lr)
+                                       lr=args.max_lr)
     else:
         print('Not supported optimizer, use Adam instead.')
         optimizer = torch.optim.Adam(model.parameters(),
-                                     lr=args.lr,
+                                     lr=args.max_lr,
                                      amsgrad=True)
+
+    # Define scheduler
+    scheduler = torch.optim.lr_scheduler.CyclicLR(
+        optimizer, mode='exp_range',
+        step_size_up=4 * len(train_loader),
+        base_lr=args.base_lr,
+        max_lr=args.max_lr,
+        gamma=args.clr_gamma,
+        cycle_momentum=False
+    )
 
     # Set up tensorboard logging
     writer = SummaryWriter(log_dir=args.logs_dir)
@@ -233,7 +241,6 @@ def main():
     # Train network
     if args.train_mode == 'single':
         step = 0
-        lr = args.lr
         trainer = Trainer(args)
         pbar = tqdm(total=args.epochs, desc="[Epoch]")
         for epoch in range(args.epochs):
@@ -244,10 +251,7 @@ def main():
             trainer.validate(model, validate_loader, step, loss_fn, writer)
 
             # Update learning rate
-            if epoch > 1 and epoch % args.decay_epoch == 0:
-                lr *= args.decay
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = lr
+            scheduler.step()
 
             # Save checkpoint
             if epoch % args.save_freq == 0:
