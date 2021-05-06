@@ -24,7 +24,6 @@ class Compose(object):
 
 
 def uni_shape(img, label, dsize, tl_x=0, tl_y=0):
-
     """
     Unify dimension of images and labels to specified data size
     Params:
@@ -50,6 +49,7 @@ def uni_shape(img, label, dsize, tl_x=0, tl_y=0):
 
 class RandomCenterRotate(object):
     """Synthesize new image chips by rotating the input chip around its center randomly."""
+
     def __init__(self, degree=(-90, 90), prob=0.5):
         """Initialize.
         Params:
@@ -89,6 +89,7 @@ class RandomCenterRotate(object):
 
 class RandomFlip(object):
     """Synthesize new image chips by vertical or horizontal or diagonal flipping randomly."""
+
     def __init__(self, prob=0.5):
         """Initialize.
         Params:
@@ -132,6 +133,7 @@ class RandomFlip(object):
 
 class RandomScale(object):
     """Synthesize new image chips by rescaling the input chip."""
+
     def __init__(self, scale=(0.5, 1.5), rand_resize_crop=False, diff=False, cen_locate=True, prob=0.5):
         """Initialize.
         Params:
@@ -201,6 +203,7 @@ class RandomScale(object):
 
 class SyncToTensor(object):
     """Convert numpy to tensor."""
+
     def __call__(self, img, label):
         """Define the call.
         Params:
@@ -217,6 +220,7 @@ class SyncToTensor(object):
 
 class ImgToTensor(object):
     """Convert numpy to tensor."""
+
     def __call__(self, img):
         """Define the call.
         Params:
@@ -232,6 +236,7 @@ class ImgToTensor(object):
 
 class LabelToTensor(object):
     """Convert numpy to tensor."""
+
     def __call__(self, label):
         """Define the call.
         Params:
@@ -247,6 +252,7 @@ class LabelToTensor(object):
 
 class ImgNorm(object):
     """Normalize image layers."""
+
     def __init__(self, bands_mean, bands_std):
         """Initialize the object.
         Params:

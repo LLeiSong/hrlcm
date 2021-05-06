@@ -17,8 +17,10 @@ class args_dummy:
         self.exp_name = 'unet_test'
         self.data_dir = 'results/north'
         self.out_dir = 'results/dl'
-        self.lowest_score = 10
-        self.noise_ratio = 0
+        self.lowest_score = 8
+        self.noise_ratio = None
+        self.trans_prob = 0.5
+        self.label_offset = 1
         self.rg_rotate = '-90, 90'
         self.model = 'unet'
         self.train_mode = 'single'
@@ -27,8 +29,9 @@ class args_dummy:
         self.decay = 1e-5
         self.save_freq = 20
         self.log_feq = 20
-        self.batch_size = 16
-        self.workers = 1
+        self.train_batch_size = 16
+        self.val_batch_size = 16
+        self.num_workers = 16
         self.epochs = 100
         self.optimizer_name = 'Adam'
         self.resume = None
@@ -38,9 +41,9 @@ class args_dummy:
 
 # Initialize dummy args
 args = args_dummy()
-stats_dir = os.path.join(args.data_dir, 'norm_stats')
-if not os.path.isdir(stats_dir):
-    os.makedirs(stats_dir)
+args.stats_dir = os.path.join(args.data_dir, 'norm_stats')
+if not os.path.isdir(args.stats_dir):
+    os.makedirs(args.stats_dir)
 
 # Calculate mean and sd
 # Load dataset
@@ -51,39 +54,55 @@ train_set = NFSEN1LC(data_dir=args.data_dir,
                      usage='validate',
                      lowest_score=args.lowest_score,
                      noise_ratio=args.noise_ratio,
-                     rg_rotate=tuple(float(each) for each in args.rg_rotate.split(',')),
+                     label_offset=args.label_offset,
+                     sync_transform=sync_transform,
+                     img_transform=None,
+                     label_transform=None)
+
+valid_set = NFSEN1LC(data_dir=args.data_dir,
+                     usage='validate',
+                     lowest_score=args.lowest_score,
+                     noise_ratio=args.noise_ratio,
+                     label_offset=args.label_offset,
                      sync_transform=sync_transform,
                      img_transform=None,
                      label_transform=None)
 
 # Fast way with enough RAM
-loader = DataLoader(train_set, batch_size=len(train_set))
-data = next(iter(loader))
-data[0].mean(), data[0].std()
+# loader = DataLoader(train_set, batch_size=len(train_set))
+# data = next(iter(loader))
+# data[0].mean(), data[0].std()
 
 # Hard way without enough RAM
-loader = DataLoader(train_set, batch_size=10,
+loader = DataLoader(train_set, batch_size=1,
                     shuffle=False, num_workers=0)
+loader_val = DataLoader(valid_set, batch_size=1,
+                        shuffle=False, num_workers=0)
 
-# Mean
+# Initialize
 mean = torch.zeros(14)
 std = torch.zeros(14)
 num_pixel = 512 * 512
-num_img = len(train_set)
+num_img = len(train_set) + len(valid_set)
 
-# SD
+# Mean
 for data, _ in loader:
+    mean += data.squeeze(0).sum((1, 2)) / num_pixel
+for data, _ in loader_val:
     mean += data.squeeze(0).sum((1, 2)) / num_pixel
 mean /= num_img
 print(mean)
 pkl.dump(mean.detach().cpu().tolist(),
-         open(os.path.join(stats_dir, "means.pkl"), "wb"))
+         open(os.path.join(args.stats_dir, "means.pkl"), "wb"))
 
+# SD
 mean = mean.unsqueeze(1).unsqueeze(2)
 for data, _ in loader:
+    std += ((data.squeeze(0) - mean) ** 2).sum((1, 2)) / num_pixel
+for data, _ in loader_val:
     std += ((data.squeeze(0) - mean) ** 2).sum((1, 2)) / num_pixel
 std /= num_img
 std = std.sqrt()
 print(std)
 pkl.dump(std.detach().cpu().tolist(),
-         open(os.path.join(stats_dir, "stds.pkl"), "wb"))
+         open(os.path.join(args.stats_dir, "stds.pkl"), "wb"))

@@ -33,6 +33,8 @@ def main():
                         help='path to dataset')
     parser.add_argument('--out_dir', type=str, default="prediction",
                         help='path to output dir (default: ./prediction)')
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='number of worker(s) to load dataset (default: 0)')
 
     # Hyper-parameters of evaluation
     parser.add_argument('--batch_size', type=int, default=16,
@@ -108,7 +110,7 @@ def main():
         # Put into DataLoader
         predict_loader = DataLoader(dataset=predict_dataset,
                                     batch_size=args.batch_size,
-                                    num_workers=args.workers,
+                                    num_workers=args.num_workers,
                                     shuffle=False,
                                     drop_last=False)
 

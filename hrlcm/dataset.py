@@ -204,6 +204,7 @@ class NFSEN1LC(Dataset):
             if len(catalog.index) == 0:
                 sys.exit('No such tile_id to prediction.')
             else:
+                catalog['img'] = os.path.join(self.data_dir, catalog['img'])
                 self.catalog = catalog
                 img = load_tile(self.catalog, unlabeled=True)
                 self.meta = get_meta(self.catalog['img'])
@@ -217,6 +218,8 @@ class NFSEN1LC(Dataset):
             tuple
         """
         tile_info = self.catalog.iloc[index]
+        tile_info["img"] = os.path.join(self.data_dir, tile_info["img"])
+        tile_info['label'] = os.path.join(self.data_dir, tile_info["label"])
         if self.usage in ['train', 'validate']:
             img, label = load_tile(tile_info, offset=self.label_offset)
 

@@ -44,6 +44,8 @@ def main():
                         help='ratio of noise to subset train dataset (default: -90, 90)')
     parser.add_argument('--trans_prob', type=float, default=0.5,
                         help='probability to do data transformation (default:0.5)')
+    parser.add_argument('--num_workers', type=int, default=0,
+                        help='number of worker(s) to load dataset (default: 0)')
 
     # Network
     parser.add_argument('--model', type=str, choices=['unet', 'deeplab'],
@@ -63,20 +65,22 @@ def main():
     parser.add_argument('--lr', type=float, default=0.001,
                         help='initial learning rate')
     parser.add_argument('--decay', type=float, default=1e-5,
-                        help='decay rate')
+                        help='weight decay rate')
+    parser.add_argument('--optimizer_name', type=str, choices=['Adadelta', 'Adam', 'AdamW', 'Adamax'],
+                        default="Adam",
+                        help='optimizer (default: Adam)')
     parser.add_argument('--save_freq', type=int, default=10,
                         help='training state will be saved every save_freq \
                         batches during training')
     parser.add_argument('--log_freq', type=int, default=100,
                         help='tensorboard logs will be written every log_freq \
                               number of batches/optimization steps')
-    parser.add_argument('--batch_size', type=int, default=16,
-                        help='batch size for prediction (default: 16)')
+    parser.add_argument('--train_batch_size', type=int, default=32,
+                        help='batch size for training (default: 16)')
+    parser.add_argument('--val_batch_size', type=int, default=32,
+                        help='batch size for validation (default: 16)')
     parser.add_argument('--epochs', type=int, default=100,
                         help='number of training epochs (default: 100)')
-    parser.add_argument('--optimizer_name', type=str, choices=['Adadelta', 'Adam'],
-                        default="Adam",
-                        help='optimizer (default: Adam)')
     parser.add_argument('--resume', '-r', type=str, default=None,
                         help='path to the pretrained weights file', )
 
@@ -105,10 +109,7 @@ def main():
     args.stats_dir = os.path.join(args.data_dir, 'norm_stats')
 
     # Set flags for GPU processing if available
-    if torch.cuda.is_available():
-        args.use_gpu = True
-    else:
-        args.use_gpu = False
+    args.use_gpu = torch.cuda.is_available()
 
     # Load dataset
     # Define rotate degrees
@@ -124,20 +125,20 @@ def main():
     ])
 
     # synchronize transform for validate dataset
-    val_transform = Compose([
+    sync_transform_val = Compose([
         SyncToTensor()
     ])
 
     # Image transform
     # Load mean and sd for normalization
-    # with open(os.path.join(args.stats_dir,
-    #                        "means.pkl"), "rb") as input_file:
-    #     mean = tuple(pkl.load(input_file))
-    #
-    # with open(os.path.join(args.stats_dir,
-    #                        "stds.pkl"), "rb") as input_file:
-    #     std = tuple(pkl.load(input_file))
-    # img_transform = ImgNorm(mean, std)
+    with open(os.path.join(args.stats_dir,
+                           "means.pkl"), "rb") as input_file:
+        mean = tuple(pkl.load(input_file))
+
+    with open(os.path.join(args.stats_dir,
+                           "stds.pkl"), "rb") as input_file:
+        std = tuple(pkl.load(input_file))
+    img_transform = ImgNorm(mean, std)
 
     # Get train dataset
     train_dataset = NFSEN1LC(data_dir=args.data_dir,
@@ -146,25 +147,29 @@ def main():
                              noise_ratio=args.noise_ratio,
                              label_offset=args.label_offset,
                              sync_transform=sync_transform,
-                             img_transform=None,
+                             img_transform=img_transform,
                              label_transform=None)
     # Put into DataLoader
     train_loader = DataLoader(dataset=train_dataset,
-                              batch_size=args.batch_size,
+                              batch_size=args.train_batch_size,
                               shuffle=True,
+                              num_workers=args.num_workers,
+                              pin_memory=True,
                               drop_last=True)
 
     # Get validate dataset
     validate_dataset = NFSEN1LC(data_dir=args.data_dir,
                                 usage='validate',
                                 label_offset=args.label_offset,
-                                sync_transform=val_transform,
-                                img_transform=None,
+                                sync_transform=sync_transform_val,
+                                img_transform=img_transform,
                                 label_transform=None)
     # Put into DataLoader
     validate_loader = DataLoader(dataset=validate_dataset,
-                                 batch_size=args.batch_size,
+                                 batch_size=args.val_batch_size,
                                  shuffle=False,
+                                 num_workers=args.num_workers,
+                                 pin_memory=True,
                                  drop_last=False)
 
     # Set up network
@@ -206,6 +211,14 @@ def main():
     elif args.optimizer_name == 'Adam':
         optimizer = torch.optim.Adam(model.parameters(),
                                      lr=args.lr)
+    elif args.optimizer_name == 'AdamW':
+        optimizer = torch.optim.AdamW(model.parameters(),
+                                      lr=args.lr,
+                                      weight_decay=args.decay)
+    elif args.optimizer_name == 'Adamax':
+        optimizer = torch.optim.Adamax(model.parameters(),
+                                       lr=args.lr,
+                                       weight_decay=args.decay)
     else:
         print('Not supported optimizer, use Adam instead.')
         optimizer = torch.optim.Adam(model.parameters(),
@@ -222,7 +235,7 @@ def main():
         step = 0
         trainer = Trainer(args)
         pbar = tqdm(total=args.epochs, desc="[Epoch]")
-        for epoch in range(args.epoches):
+        for epoch in range(args.epochs):
             # Run training for one epoch
             model, step = trainer.train(model, train_loader, loss_fn,
                                         optimizer, writer, step=step)
