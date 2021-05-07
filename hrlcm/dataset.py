@@ -169,7 +169,7 @@ class NFSEN1LC(Dataset):
             catalog_nm = 'dl_catalog_predict.csv'
         else:
             sys.exit('Not valid usage setting.')
-        catalog = pd.read_csv(os.path.join(self.data_dir, catalog_nm))
+        catalog_full = pd.read_csv(os.path.join(self.data_dir, catalog_nm))
 
         # Shrink the catalog based on noise ratio
         if self.usage == 'train':
@@ -178,7 +178,7 @@ class NFSEN1LC(Dataset):
             self.noise_ratio = noise_ratio
 
             # Subset catalog based on score
-            catalog = catalog.loc[catalog['score'] >= self.lowest_score]
+            catalog = catalog_full.loc[catalog_full['score'] >= self.lowest_score]
 
             if self.lowest_score < 10:
                 # Subset catalog based on noise_ratio
@@ -196,15 +196,15 @@ class NFSEN1LC(Dataset):
             # Set noisy_or_not
             self.noisy_or_not = self.catalog['score'] != 10
         elif self.usage == 'validate':
-            self.catalog = catalog
+            self.catalog = catalog_full
         else:
             self.chip_size = 512  # image size of train
             self.tile_id = tile_id
-            catalog = catalog.loc[catalog['tile_id'] == self.tile_id]
+            catalog = catalog_full.loc[catalog_full['tile_id'] == self.tile_id]
             if len(catalog.index) == 0:
                 sys.exit('No such tile_id to prediction.')
             else:
-                catalog['img'] = os.path.join(self.data_dir, catalog['img'])
+                catalog = catalog.replace(catalog['img'], os.path.join(self.data_dir, catalog['img']))
                 self.catalog = catalog
                 img = load_tile(self.catalog, unlabeled=True)
                 self.meta = get_meta(self.catalog['img'])
@@ -218,8 +218,10 @@ class NFSEN1LC(Dataset):
             tuple
         """
         tile_info = self.catalog.iloc[index]
-        tile_info["img"] = os.path.join(self.data_dir, tile_info["img"])
-        tile_info['label'] = os.path.join(self.data_dir, tile_info["label"])
+        tile_info = tile_info.replace(tile_info['img'],
+                                      os.path.join(self.data_dir, tile_info["img"]))
+        tile_info = tile_info.replace(tile_info['label'],
+                                      os.path.join(self.data_dir, tile_info["label"]))
         if self.usage in ['train', 'validate']:
             img, label = load_tile(tile_info, offset=self.label_offset)
 

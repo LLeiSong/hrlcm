@@ -116,5 +116,5 @@ NEWIID=$(aws ec2 describe-instances \
 
 echo $NEWIID
 
-# ./tools/create_spot_instance.sh ami-0643df3b347740189 g4dn.8xlarge \
-# sg-0a8bbc91697d6a76b tzlcm persistent 2021-05-04T23:00:00 lsong-keypair 180
+# ./tools/create_spot_instance.sh ami-0833ca42c91eb4a58 g4dn.12xlarge \
+# sg-0a8bbc91697d6a76b tzlcms persistent 2021-05-15T23:00:00 lsong-keypair 200

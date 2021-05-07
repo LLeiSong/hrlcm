@@ -80,6 +80,22 @@ The most essential work are arguably to clone project and set jupyter notebook:
   jupyter notebook
   ```
   replace the private IP with the public IP to open it in browser. If you can log in without issues, then it is ready to go.
+  
+#### Tensorboard
+
+If download log file to local machine, then it is easy to check the training loss curves.
+
+`tensorboard --logdir='./tensorboard_dirs' --port=16007`
+
+Do the following steps to use the tensorboard on a remote server (reference: https://blog.yyliu.net/remote-tensorboard/):
+
+1. You need to start SSH with transfer the remote server’s port to your local PC:
+
+    (on your local PC) `ssh -L 16007:127.0.0.1:16007 username@server_ip`
+
+2. Then you may start the tensorboard on the remote server with the specific port we want to transfer:
+
+    (on the remote server) `tensorboard --logdir='./tensorboard_dirs' --port=16007`
 
 ### Google Colab
 In general, we mean to use Google Colab to run the model. For this case, it is more convenient to read the data locally and pickle them. Then directly load the pickles into Google Colab and just use the GPU environment to run the models.
@@ -102,6 +118,7 @@ The general loss is higher than classic cross entropy loss. But it do help to re
 #### JoCoR
 
 
+
 ## Experiments
 
 ### Single model
@@ -111,6 +128,22 @@ Before any tests related to strategies to deal with noisy labels, we will build 
 
 - Learning rate and learning rate scheduler
 - Batch size
+- Optimizer
+- Model (Unet or Deeplab)
 - Transform methods (if necessary)
+
+#### Tuning plans
+
+- Unet
+
+  - Batch size = 32 (Maximum value fit into `g4dn.12xlarge`)
+  - Initial learning rate = [0.1, 0.01, 0.001]
+  
+    - 0.1 is too large
+    - 0.01 and 0.001 works similarly.
+  
+  - Optimizer: we plan to try some more recent optimizer such as AdaBound, AdamP, AdamW, etc. Because SGD could make model have higher generalization while Adam can train the model faster. So if we could use an optimizer that has both advantages, it would be ideal. Since our research is not about the improvement of DL algorithm, so we just pick up the most right one at the moment.
+  
+  - Scheduler: 0 - 50 use 0.01, 50 - 150 use a decayed cyclic scheduler (0.01 - 0.001), last 50: 0.001 with a tiny cycle range.
 
 ### Double model

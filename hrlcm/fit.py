@@ -223,14 +223,11 @@ def main():
                                      amsgrad=True)
 
     # Define scheduler
-    scheduler = torch.optim.lr_scheduler.CyclicLR(
-        optimizer, mode='exp_range',
-        step_size_up=4 * len(train_loader),
-        base_lr=args.base_lr,
-        max_lr=args.max_lr,
-        gamma=args.clr_gamma,
-        cycle_momentum=False
-    )
+    lr_scheduler_1 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0.001)
+    lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.05,
+                                                       step_size_up=1, step_size_down=3,
+                                                       gamma=0.96, cycle_momentum=False,
+                                                       mode='exp_range')
 
     # Set up tensorboard logging
     writer = SummaryWriter(log_dir=args.logs_dir)
@@ -251,13 +248,18 @@ def main():
             trainer.validate(model, validate_loader, step, loss_fn, writer)
 
             # Update learning rate
-            scheduler.step()
+            if epoch <= lr_scheduler_1.T_max:
+                lr_scheduler_1.step()
+            else:
+                lr_scheduler_2.step()
 
             # Save checkpoint
             if epoch % args.save_freq == 0:
                 trainer.export_model(model, optimizer=optimizer, step=step)
 
             # Update pbar
+            pbar.set_description("[Epoch] lr: {:.4f}".format(
+                round(optimizer.param_groups[0]["lr"], 4)))
             pbar.update()
 
         # Export final set of weights
