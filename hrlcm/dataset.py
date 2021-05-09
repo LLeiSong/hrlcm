@@ -207,7 +207,7 @@ class NFSEN1LC(Dataset):
                 sys.exit('Duplicate catalog for tile {}.'.format(self.tile_id))
             else:
                 catalog['img'][0] = os.path.join(self.data_dir, catalog['img'][0])
-                self.catalog = catalog
+                self.catalog = catalog.iloc[0]
                 img = load_tile(self.catalog, unlabeled=True)
                 self.meta = get_meta(self.catalog['img'])
                 self.img_ls, self.index_ls = get_chips(img, self.chip_size)
@@ -219,12 +219,12 @@ class NFSEN1LC(Dataset):
         Returns:
             tuple
         """
-        tile_info = self.catalog.iloc[index]
-        tile_info = tile_info.replace(tile_info['img'],
-                                      os.path.join(self.data_dir, tile_info["img"]))
-        tile_info = tile_info.replace(tile_info['label'],
-                                      os.path.join(self.data_dir, tile_info["label"]))
         if self.usage in ['train', 'validate']:
+            tile_info = self.catalog.iloc[index]
+            tile_info = tile_info.replace(tile_info['img'],
+                                          os.path.join(self.data_dir, tile_info["img"]))
+            tile_info = tile_info.replace(tile_info['label'],
+                                          os.path.join(self.data_dir, tile_info["label"]))
             img, label = load_tile(tile_info, offset=self.label_offset)
 
             # Transform
@@ -249,4 +249,9 @@ class NFSEN1LC(Dataset):
         Returns:
             int
         """
-        return len(self.catalog.index)
+        if self.usage == 'predict':
+            return len(self.index_ls)
+        elif self.usage in ['train', 'validate']:
+            return len(self.catalog.index)
+        else:
+            return 0

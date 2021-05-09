@@ -23,6 +23,16 @@ class Compose(object):
         return img, label
 
 
+class ComposeImg(object):
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, img):
+        for t in self.transforms:
+            img = t(img)
+        return img
+
+
 def uni_shape(img, label, dsize, tl_x=0, tl_y=0):
     """
     Unify dimension of images and labels to specified data size
@@ -225,7 +235,6 @@ class ImgToTensor(object):
         """Define the call.
         Params:
             img (numpy.ndarray): Concatenated variables or brightness value with a dimension of (H, W, C)
-            label (numpy.ndarray or None): Ground truth with a dimension of (H,W)
         Returns:
             (numpy.ndarray, numpy.ndarray or None) tuple of rescaled image, and label.
         """
@@ -240,7 +249,6 @@ class LabelToTensor(object):
     def __call__(self, label):
         """Define the call.
         Params:
-            img (numpy.ndarray): Concatenated variables or brightness value with a dimension of (H, W, C)
             label (numpy.ndarray or None): Ground truth with a dimension of (H,W)
         Returns:
             (numpy.ndarray, numpy.ndarray or None) tuple of rescaled image, and label.

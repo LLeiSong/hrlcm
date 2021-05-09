@@ -14,7 +14,6 @@ import pickle as pkl
 from models.deeplab import DeepLab
 from models.unet import UNet
 from tqdm.auto import tqdm
-from sync_batchnorm import convert_model
 
 
 def main():
@@ -49,7 +48,7 @@ def main():
     print()
 
     # Load config of training
-    train_args = pkl.load(open(args.config_file, "rb"))
+    train_args = pkl.load(open(args.args_path, "rb"))
     print("=" * 20, "TRAIN CONFIG", "=" * 20)
     for arg in vars(train_args):
         print('{0:20}  {1}'.format(arg, getattr(train_args, arg)))
@@ -69,10 +68,10 @@ def main():
                         output_stride=train_args.out_stride,
                         sync_bn=False,
                         freeze_bn=False,
-                        n_in=train_args.n_inputs)
+                        n_in=train_args.n_channels)
     else:
         model = UNet(n_classes=train_args.n_classes,
-                     n_channels=train_args.n_inputs)
+                     n_channels=train_args.n_channels)
     # Get devices
     if args.gpu_devices:
         args.gpu_devices = [int(each) for each in args.gpu_devices.split(',')]
@@ -81,26 +80,32 @@ def main():
         if args.gpu_devices:
             torch.cuda.set_device(args.gpu_devices[0])
             model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
-            if args.sync_norm:
-                model = convert_model(model)
         model = model.cuda()
 
     # Restore network weights
     state = torch.load(args.checkpoint_file)
-    step = state["step"]
     model.load_state_dict(state["model_state_dict"])
     model.eval()
-    print("Loaded checkpoint from step", step)
+    print("Loaded checkpoint from {}".format(args.checkpoint_file))
 
     # Predict
-    # synchronize transform for predict dataset
-    pred_transform = Compose([
-        ImgToTensor()
+    # Image transform
+    # Load mean and sd for normalization
+    with open(os.path.join(args.stats_dir,
+                           "means.pkl"), "rb") as input_file:
+        mean = tuple(pkl.load(input_file))
+
+    with open(os.path.join(args.stats_dir,
+                           "stds.pkl"), "rb") as input_file:
+        std = tuple(pkl.load(input_file))
+    pred_transform = ComposeImg([
+        ImgToTensor(),
+        ImgNorm(mean, std)
     ])
 
     catalog = pd.read_csv(os.path.join(args.data_dir, 'dl_catalog_predict.csv'))
     for tile_id in catalog['tile_id']:
-        # Get validate dataset
+        # Get predict dataset
         predict_dataset = NFSEN1LC(data_dir=args.data_dir,
                                    usage='predict',
                                    sync_transform=None,
@@ -135,43 +140,40 @@ def main():
                           dtype=meta['dtype'])
         canvas_score_ls = []
 
-        for img, index in tqdm(predict_loader, desc="[Pred]"):
-            img = Variable(img, requires_grad=False)
+        with torch.no_grad():
+            for m, (img, index_full) in enumerate(tqdm(predict_loader, desc="Predict")):
+                # GPU setting
+                if args.use_gpu:
+                    img = img.cuda()
 
-            # GPU setting
-            if args.use_gpu:
-                img = img.cuda()
+                out = F.softmax(model(img), 1)
+                batch, n_class, width, height = out.size()
+                sw = width  # score width
+                sh = height  # score height
 
-            out = F.softmax(model(img), 1)
-            batch, n_class, width, height = out.size()
-            score_width = width
-            score_height = height
+                # for each batch
+                for i in range(batch):
+                    index = (index_full[0][i], index_full[1][i])
+                    out_predict = out.max(dim=1)[1][:, :, :].cpu().numpy()[i, :, :]
+                    out_predict = np.expand_dims(out_predict, axis=0)
+                    out_predict = out_predict.astype(np.int8)
+                    canvas[:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_predict
 
-            # for each batch
-            for i in range(batch):
-                index = (index[0][i], index[1][i])
-                out_predict = out.max(dim=1)[1][:, :, :].cpu().numpy()[i, :, :]
-                out_predict = np.expand_dims(out_predict, axis=0)
-                out_predict = out_predict.astype(np.int8)
-                canvas[:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = out_predict
-
-                # scores for each non-background class
-                for n in range(n_class - 1):
-                    out_score = out[:, n + 1, :, :].data[i][:, :].cpu().numpy() * 100
-                    out_score = np.expand_dims(out_score, axis=0).astype(np.int8)
-                    try:
-                        canvas_score_ls[n][:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = \
-                            out_score
-                    except:
-                        canvas_score_single = np.zeros((1, meta['height'], meta['width']), dtype=meta['dtype'])
-                        canvas_score_single[:, index[0]: index[0] + score_width, index[1]: index[1] + score_height] = \
-                            out_score
-                        canvas_score_ls.append(canvas_score_single)
+                    # scores for each non-background class
+                    for n in range(n_class - 1):
+                        out_score = out[:, n + 1, :, :].data[i][:, :].cpu().numpy() * 100
+                        out_score = np.expand_dims(out_score, axis=0).astype(np.int8)
+                        try:
+                            canvas_score_ls[n][:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_score
+                        except:
+                            canvas_score_single = np.zeros((1, meta['height'], meta['width']), dtype=meta['dtype'])
+                            canvas_score_single[:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_score
+                            canvas_score_ls.append(canvas_score_single)
 
         # Save out
         with rasterio.open(name_class, 'w', **meta) as dst:
             dst.write(canvas)
 
         for n in range(n_class - 1):
-            with rasterio.open('{}_class{}.tif'.format(name_score, n + 1), 'w', **meta) as dst:
+            with rasterio.open('{}_class{}.tif'.format(name_score, n), 'w', **meta) as dst:
                 dst.write(canvas_score_ls[n])
