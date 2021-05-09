@@ -8,6 +8,7 @@ Maintainer: Lei Song (lsong@clarku.edu)
 import argparse
 from augmentation import *
 from dataset import *
+from metrics import ConfMatrix
 from torch.utils.data import DataLoader
 import pickle as pkl
 from models.deeplab import DeepLab
@@ -15,39 +16,8 @@ from models.unet import UNet
 from tqdm.auto import tqdm
 import torch.nn as nn
 import numpy as np
-from sync_batchnorm import convert_model
 from sklearn.metrics import f1_score, precision_score, recall_score, \
-    fbeta_score, classification_report, hamming_loss, confusion_matrix
-
-
-def conf_mat_nor(predict_labels, true_labels, n_classes):
-    """ return the normalized confusion matrix (respect to y_true)
-        input labels are in one-hot encoding, n_class = number of label classes
-        This function only applied to single-label
-    """
-
-    assert (np.sum(true_labels, axis=1) == 1).all()
-    assert (np.sum(predict_labels, axis=1) == 1).all()
-
-    true_idx = np.where(true_labels == 1)[1]
-    pred_idx = np.where(predict_labels == 1)[1]
-
-    con = confusion_matrix(true_idx, pred_idx, labels=np.arange(n_classes))
-    b = con.sum(axis=1)[:, None]
-    con_nor = np.divide(con, b, where=(b != 0))
-
-    return con_nor
-
-
-def get_AA(predict_labels, true_labels, n_classes):
-    """ only applied to single-label
-        zero sample classes are not excluded in the calculation
-        would be 0 in the calculation
-    """
-    con_nor = conf_mat_nor(predict_labels, true_labels, n_classes)
-    AA = np.diagonal(con_nor).sum() / n_classes
-
-    return AA
+    fbeta_score, classification_report, hamming_loss
 
 
 class Precision_score(nn.Module):
@@ -149,13 +119,13 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     args = parser.parse_args()
-    print("=" * 20, "PREDICTION CONFIG", "=" * 20)
+    print("=" * 20, "EVALUATION CONFIG", "=" * 20)
     for arg in vars(args):
         print('{0:20}  {1}'.format(arg, getattr(args, arg)))
     print()
 
     # Load config of training
-    train_args = pkl.load(open(args.config_file, "rb"))
+    train_args = pkl.load(open(args.args_path, "rb"))
     print("=" * 20, "TRAIN CONFIG", "=" * 20)
     for arg in vars(train_args):
         print('{0:20}  {1}'.format(arg, getattr(train_args, arg)))
@@ -173,12 +143,23 @@ def main():
         SyncToTensor()
     ])
 
+    # Image transform
+    # Load mean and sd for normalization
+    with open(os.path.join(args.stats_dir,
+                           "means.pkl"), "rb") as input_file:
+        mean = tuple(pkl.load(input_file))
+
+    with open(os.path.join(args.stats_dir,
+                           "stds.pkl"), "rb") as input_file:
+        std = tuple(pkl.load(input_file))
+    img_transform = ImgNorm(mean, std)
+
     # Get validate dataset
     validate_dataset = NFSEN1LC(data_dir=args.data_dir,
                                 usage='validate',
                                 label_offset=args.label_offset,
                                 sync_transform=val_transform,
-                                img_transform=None,
+                                img_transform=img_transform,
                                 label_transform=None)
     # Put into DataLoader
     validate_loader = DataLoader(dataset=validate_dataset,
@@ -195,10 +176,10 @@ def main():
                         output_stride=train_args.out_stride,
                         sync_bn=False,
                         freeze_bn=False,
-                        n_in=train_args.n_inputs)
+                        n_in=train_args.n_channels)
     else:
         model = UNet(n_classes=train_args.n_classes,
-                     n_channels=train_args.n_inputs)
+                     n_channels=train_args.n_channels)
 
     # Get devices
     if args.gpu_devices:
@@ -208,16 +189,13 @@ def main():
         if args.gpu_devices:
             torch.cuda.set_device(args.gpu_devices[0])
             model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
-            if args.sync_norm:
-                model = convert_model(model)
         model = model.cuda()
 
     # Restore network weights
     state = torch.load(args.checkpoint_file)
-    step = state["step"]
     model.load_state_dict(state["model_state_dict"])
     model.eval()
-    print("loaded checkpoint from step", step)
+    print("Loaded checkpoint from {}".format(args.checkpoint_file))
 
     # predict samples
     # define metrics
@@ -232,17 +210,20 @@ def main():
     # Prediction
     y_true = []
     predicted_probs = []
-
+    conf_mat = ConfMatrix(validate_loader.dataset.n_classes)
     with torch.no_grad():
-        for i, (image, labels) in enumerate(tqdm(validate_loader, desc="evaluate")):
-            # move data to gpu if model is on gpu
+        for i, (image, labels) in enumerate(tqdm(validate_loader, desc="Evaluate")):
+            # Move data to gpu if model is on gpu
             if args.use_gpu:
                 image = image.to(torch.device("cuda"))
 
-            # forward pass
+            # Forward pass
             logits = model(image)
 
-            # convert logits to probabilities
+            # Update confusion matrix
+            conf_mat.add_batch(labels, logits.max(1)[1])
+
+            # Convert logits to probabilities
             sm = torch.nn.Softmax(dim=1)
             probs = sm(logits).cpu().numpy()
 
@@ -253,12 +234,8 @@ def main():
     predicted_probs = np.asarray(predicted_probs)
 
     # Convert predicted probabilities into one-hot labels
-    loc = np.argmax(predicted_probs, axis=-1)
-    y_predicted = np.zeros_like(predicted_probs).astype(np.float32)
-    for i in range(len(loc)):
-        y_predicted[i, loc[i]] = 1
-
-    y_true = np.asarray(y_true)
+    y_predicted = np.argmax(predicted_probs, axis=1).flatten()
+    y_true = np.asarray(y_true).flatten()
 
     # Evaluation with metrics
     f1 = f1_score_(y_predicted, y_true)
@@ -267,9 +244,7 @@ def main():
     rec = recal_score_(y_predicted, y_true)
     hm_loss = hamming_loss_(y_predicted, y_true)
     report = classification_report_(y_predicted, y_true)
-    conf_mat = conf_mat_nor(y_predicted, y_true, n_classes=train_args.n_classes)
-    # zero-sample classes are not excluded
-    aa = get_AA(y_predicted, y_true, n_classes=train_args.n_classes)
+    aa = conf_mat.get_aa()
 
     info = {"weightedPrec": prec,
             "weightedRec": rec,
@@ -277,11 +252,13 @@ def main():
             "weightedF2": f2,
             "HammingLoss": hm_loss,
             "clsReport": report,
-            "conf_mat": conf_mat,
+            "conf_mat": conf_mat.norm_on_lines(),
             "AverageAcc": aa}
 
-    print("Saving metrics...")
-    pkl.dump(info, open(os.path.join(args.out_dir, "test_scores.pkl"), "wb"))
+    print("Save out metrics")
+    pkl.dump(info,open(os.path.join(
+                 args.out_dir,"{}_evaluation.pkl"
+                     .format(train_args.exp_name)), "wb"))
 
 
 if __name__ == "__main__":
