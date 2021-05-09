@@ -160,8 +160,8 @@ def main():
                     canvas[:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_predict
 
                     # scores for each non-background class
-                    for n in range(n_class - 1):
-                        out_score = out[:, n + 1, :, :].data[i][:, :].cpu().numpy() * 100
+                    for n in range(n_class):
+                        out_score = out[:, n, :, :].data[i][:, :].cpu().numpy() * 100
                         out_score = np.expand_dims(out_score, axis=0).astype(np.int8)
                         try:
                             canvas_score_ls[n][:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_score
@@ -174,6 +174,6 @@ def main():
         with rasterio.open(name_class, 'w', **meta) as dst:
             dst.write(canvas)
 
-        for n in range(n_class - 1):
+        for n in range(n_class):
             with rasterio.open('{}_class{}.tif'.format(name_score, n), 'w', **meta) as dst:
                 dst.write(canvas_score_ls[n])
