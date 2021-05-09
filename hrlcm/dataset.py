@@ -202,9 +202,11 @@ class NFSEN1LC(Dataset):
             self.tile_id = tile_id
             catalog = catalog_full.loc[catalog_full['tile_id'] == self.tile_id]
             if len(catalog.index) == 0:
-                sys.exit('No such tile_id to prediction.')
+                sys.exit('No such {} to prediction.'.format(self.tile_id))
+            elif len(catalog.index) != 1:
+                sys.exit('Duplicate catalog for tile {}.'.format(self.tile_id))
             else:
-                catalog = catalog.replace(catalog['img'], os.path.join(self.data_dir, catalog['img']))
+                catalog['img'][0] = os.path.join(self.data_dir, catalog['img'][0])
                 self.catalog = catalog
                 img = load_tile(self.catalog, unlabeled=True)
                 self.meta = get_meta(self.catalog['img'])
