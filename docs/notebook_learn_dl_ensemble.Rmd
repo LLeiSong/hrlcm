@@ -108,7 +108,13 @@ In general, we mean to use Google Colab to run the model. For this case, it is m
 - Deeplab3plus with ResNet as backbone. This architecture can consider the global context and have skip connections to ensure the complex structure still could get coverage. This model is super useful for the final train with manually corrected labels.
 
 ### Strategies to deal with noisy labels
+
+#### Add noisy labels to fine tune
+
+After the initial 200 epochs with perfect labels, adding more noisy labels to "adapt" the model. 
+
 #### Label smoothing
+
 The general loss is higher than classic cross entropy loss. But it do help to reduce the gaps between train and validate. So it might be a promising method to use for our case. There is one general parameter "smooth rate". Based on the experiments, a higher smooth rate could help to reduce the gap between train and validate more. 0.5 is a safe choice.
 
 #### Co-teaching and co-teaching-plus
@@ -132,7 +138,7 @@ Before any tests related to strategies to deal with noisy labels, we will build 
 - Model (Unet or Deeplab)
 - Transform methods (if necessary)
 
-#### Tuning plans
+#### Baseline
 
 - Unet
 
@@ -140,10 +146,13 @@ Before any tests related to strategies to deal with noisy labels, we will build 
   - Initial learning rate = [0.1, 0.01, 0.001]
   
     - 0.1 is too large
-    - 0.01 and 0.001 works similarly.
+    - 0.01 and 0.001 works similarly, but 0.001 works slightly better for multiple optimizer.
   
-  - Optimizer: we plan to try some more recent optimizer such as AdaBound, AdamP, AdamW, etc. Because SGD could make model have higher generalization while Adam can train the model faster. So if we could use an optimizer that has both advantages, it would be ideal. Since our research is not about the improvement of DL algorithm, so we just pick up the most right one at the moment.
+  - Optimizer: we plan to try some more recent optimizer such as AdaBound, AdamP, etc. Because SGD could make model have higher generalization while Adam can train the model faster. So if we could use an optimizer that has both advantages, it would be ideal. AdaBound is such kind of optimizer. Since our research is not about the improvement of DL algorithm, so we just pick up the most right one at the moment.
   
-  - Scheduler: 0 - 50 use 0.01, 50 - 150 use a decayed cyclic scheduler (0.01 - 0.001), last 50: 0.001 with a tiny cycle range.
+    - AdaBound does obviously better than Adam or AdamW at least in the first 20 epochs.
+    - AdamP performs similar to AdaBound, that are much better than other traditional ones. But validate loss is a lit higher than AdaBound.
+  
+  - Scheduler: we decided to use a compose scheduler to have dynamic learning rate. Even though Adam-based optimizer uses dynamic learning rate already, but experiments prove that using both dynamic learning rate and Adam together could have better performance. So we chose to use 0.001 for the first 30 epochs, to use a decayed cyclic scheduler (0.0008 - 0.0012) for epoch 30 - 120, and use another decayed cyclic scheduler (0.0004 - 0.0006) for last 80 epochs.
 
 ### Double model
