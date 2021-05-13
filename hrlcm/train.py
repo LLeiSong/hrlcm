@@ -209,7 +209,68 @@ class Trainer:
         :param writer: defined writer for statistics
         :return: None
         """
-        pass
+        # Set model to evaluation mode
+        model1.eval()
+        model2.eval()
+
+        # Validate loop
+        pbar = tqdm(total=len(validate_loader), desc="[Val]")
+        loss1_total = 0
+        loss2_total = 0
+        conf_mat1 = metrics.ConfMatrix(validate_loader.dataset.n_classes)
+        conf_mat2 = metrics.ConfMatrix(validate_loader.dataset.n_classes)
+        for i, (image, target) in enumerate(validate_loader):
+            # Move data to gpu if model is on gpu
+            if self.args.use_gpu:
+                image, target = image.cuda(), target.cuda()
+
+            # Forward pass
+            with torch.no_grad():
+                logits1 = model1(image)
+                logits2 = model2(image)
+
+            loss1 = loss_fn(logits1, target)
+            loss1_total += loss1.cpu().item()
+            loss2 = loss_fn(logits2, target)
+            loss2_total += loss2.cpu().item()
+
+            # Calculate error metrics
+            conf_mat1.add_batch(target, logits1.max(1)[1])
+            conf_mat2.add_batch(target, logits2.max(1)[1])
+
+            # Update progressbar
+            pbar.set_description("[Val] Loss1: {:.4f}, Loss2: {:.4f}".format(
+                round(loss1.item(), 4), round(loss2.item(), 4)))
+            pbar.update()
+
+        # Write validation metrics to tensorboard
+        writer.add_scalar("validate/loss1",
+                          loss1_total / len(validate_loader), global_step=step)
+        writer.add_scalar("validate/AA1", conf_mat1.get_aa(),
+                          global_step=step)
+        writer.add_scalar("validate/mIoU1", conf_mat1.get_mIoU(),
+                          global_step=step)
+        writer.add_scalar("validate/loss2",
+                          loss2_total / len(validate_loader), global_step=step)
+        writer.add_scalar("validate/AA2", conf_mat2.get_aa(),
+                          global_step=step)
+        writer.add_scalar("validate/mIoU2", conf_mat2.get_mIoU(),
+                          global_step=step)
+
+        # Close progressbar
+        pbar.set_description("[Val] Loss1: {:.4f}, AA1: {:.2f}%, mIoU1: {:.2f}%, Loss2: {:.4f}, AA2: {:.2f}%, "
+                             "mIoU2: {:.2f}% "
+                             .format(round(loss1_total / len(validate_loader), 4),
+                                     round(conf_mat1.get_aa() * 100, 4),
+                                     round(conf_mat1.get_mIoU() * 100, 4),
+                                     round(loss2_total / len(validate_loader), 4),
+                                     round(conf_mat2.get_aa() * 100, 4),
+                                     round(conf_mat2.get_mIoU() * 100, 4)
+                                     ))
+        pbar.close()
+
+        # Flush to disk
+        writer.flush()
 
     def export_model(self, model, optimizer=None, name=None, step=None):
         # Set output filename
