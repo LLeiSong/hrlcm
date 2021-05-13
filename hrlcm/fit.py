@@ -15,7 +15,8 @@ import pickle as pkl
 from models.deeplab import DeepLab
 from models.unet import UNet
 from train import Trainer
-from loss import BalancedCrossEntropyLoss
+import torch_optimizer as optim
+from loss import BalancedCrossEntropyLoss, loss_coteaching
 
 
 def main():
@@ -33,10 +34,10 @@ def main():
                         help='path to dataset')
     parser.add_argument('--out_dir', type=str, default="models",
                         help='path to output dir (default: ./models)')
-    parser.add_argument('--lowest_score', type=int, default=9,
-                        help='lowest score to subset train dataset (default: 9)')
-    parser.add_argument('--noise_ratio', type=float, default=0.2,
-                        help='ratio of noise to subset train dataset (default: 0.2)')
+    parser.add_argument('--lowest_score', type=int, default=10,
+                        help='lowest score to subset train dataset (default: 10)')
+    parser.add_argument('--noise_ratio', type=float, default=None,
+                        help='ratio of noise to subset train dataset (default: None)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
     parser.add_argument('--rg_rotate', type=str, default='-90, 90',
@@ -60,15 +61,15 @@ def main():
 
     # Training hyper-parameters
     parser.add_argument('--base_lr', type=float, default=0.001,
-                        help='initial learning rate')
+                        help='initial learning rate or a constant learning rate.')
     parser.add_argument('--max_lr', type=float, default=0.01,
-                        help='initial learning rate')
-    parser.add_argument('--clr_gamma', type=float, default=0.9999,
-                        help='gamma for cyclic learning rate scheduler')
+                        help='maximum learning rate.')
+    parser.add_argument('--final_lr', type=float, default=0.01,
+                        help='final learning rate for AdaBound or AmsBound')
     parser.add_argument('--optimizer_name', type=str,
-                        choices=['Adadelta', 'Adam', 'AdamW', 'Adamax'],
-                        default="Adam",
-                        help='optimizer (default: Adam)')
+                        choices=['AdaBound', 'AmsBound', 'AdamP'],
+                        default="AmsBound",
+                        help='optimizer (default: AmsBound)')
     parser.add_argument('--save_freq', type=int, default=10,
                         help='training state will be saved every save_freq \
                         batches during training')
@@ -175,59 +176,7 @@ def main():
     # Set up network
     args.n_classes = train_dataset.n_classes
     args.n_channels = train_dataset.n_channels
-    if args.model == "deeplab":
-        model = DeepLab(num_classes=args.n_classes,
-                        backbone='resnet',
-                        pretrained_backbone=False,
-                        output_stride=args.out_stride,
-                        sync_bn=False,
-                        freeze_bn=False,
-                        n_in=args.n_channels)
-    else:
-        model = UNet(n_classes=args.n_classes,
-                     n_channels=args.n_channels)
-
-    # Get devices
-    if args.gpu_devices:
-        args.gpu_devices = [int(each) for each in args.gpu_devices.split(',')]
-
-    # Set model
-    if args.use_gpu:
-        if args.gpu_devices:
-            torch.cuda.set_device(args.gpu_devices[0])
-            model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
-        model = model.cuda()
-
-    # Define loss function
-    loss_fn = BalancedCrossEntropyLoss()
-
-    # Define optimizer
-    if args.optimizer_name.lower() == 'adadelta':
-        optimizer = torch.optim.Adadelta(model.parameters(),
-                                         lr=args.max_lr)
-    elif args.optimizer_name.lower() == 'adam':
-        optimizer = torch.optim.Adam(model.parameters(),
-                                     lr=args.max_lr,
-                                     amsgrad=True)
-    elif args.optimizer_name.lower() == 'adamw':
-        optimizer = torch.optim.AdamW(model.parameters(),
-                                      lr=args.max_lr,
-                                      amsgrad=True)
-    elif args.optimizer_name.lower() == 'adamax':
-        optimizer = torch.optim.Adamax(model.parameters(),
-                                       lr=args.max_lr)
-    else:
-        print('Not supported optimizer, use Adam instead.')
-        optimizer = torch.optim.Adam(model.parameters(),
-                                     lr=args.max_lr,
-                                     amsgrad=True)
-
-    # Define scheduler
-    lr_scheduler_1 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0.001)
-    lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.001, max_lr=0.05,
-                                                       step_size_up=1, step_size_down=3,
-                                                       gamma=0.96, cycle_momentum=False,
-                                                       mode='exp_range')
+    args.noise_or_not = train_dataset.noisy_or_not
 
     # Set up tensorboard logging
     writer = SummaryWriter(log_dir=args.logs_dir)
@@ -237,6 +186,52 @@ def main():
 
     # Train network
     if args.train_mode == 'single':
+        # Define model
+        if args.model == "deeplab":
+            model = DeepLab(num_classes=args.n_classes,
+                            backbone='resnet',
+                            pretrained_backbone=False,
+                            output_stride=args.out_stride,
+                            freeze_bn=False,
+                            n_in=args.n_channels)
+        else:
+            model = UNet(n_classes=args.n_classes,
+                         n_channels=args.n_channels)
+
+        # Get devices
+        if args.gpu_devices:
+            args.gpu_devices = [int(each) for each in args.gpu_devices.split(',')]
+
+        # Set model
+        if args.use_gpu:
+            if args.gpu_devices:
+                torch.cuda.set_device(args.gpu_devices[0])
+                model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
+            model = model.cuda()
+
+        # Define loss function
+        loss_fn = BalancedCrossEntropyLoss()
+
+        # Define optimizer
+        if args.optimizer_name.lower() == 'AdaBound':
+            optimizer = optim.AdaBound(model.parameters(),
+                                       lr=args.base_lr,
+                                       final_lr=args.final_lr)
+        elif args.optimizer_name.lower() == 'AmsBound':
+            optimizer = optim.AdaBound(model.parameters(),
+                                       lr=args.base_lr,
+                                       final_lr=args.final_lr,
+                                       amsbound=True)
+        elif args.optimizer_name.lower() == 'AdamP':
+            optimizer = optim.AdamP(model.parameters(),
+                                    nesterov=True,
+                                    lr=args.base_lr)
+        else:
+            print('Not supported optimizer, use AdaBound instead.')
+            optimizer = optim.AdaBound(model.parameters(),
+                                       lr=args.base_lr,
+                                       final_lr=args.final_lr)
+        # Start train
         step = 0
         trainer = Trainer(args)
         pbar = tqdm(total=args.epochs, desc="[Epoch]")
@@ -248,8 +243,21 @@ def main():
             trainer.validate(model, validate_loader, step, loss_fn, writer)
 
             # Update learning rate
-            if epoch <= lr_scheduler_1.T_max:
+            if epoch <= 30:
+                if epoch == 30:
+                    lr_scheduler_1 = torch.optim.lr_scheduler.CyclicLR(
+                        optimizer, base_lr=0.0008, max_lr=0.0012,
+                        step_size_up=1, step_size_down=3,
+                        gamma=0.97, cycle_momentum=False,
+                        mode='exp_range')
+            elif 30 < epoch <= 120:
                 lr_scheduler_1.step()
+                if epoch == 120:
+                    lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(
+                        optimizer, base_lr=0.0004, max_lr=0.0006,
+                        step_size_up=1, step_size_down=5,
+                        gamma=0.94, cycle_momentum=False,
+                        mode='exp_range')
             else:
                 lr_scheduler_2.step()
 
@@ -269,7 +277,140 @@ def main():
         pbar.close()
 
     elif args.train_model == 'double':
-        pass
+        # Define model
+        if args.model == "deeplab":
+            model1 = DeepLab(num_classes=args.n_classes,
+                             backbone='resnet',
+                             pretrained_backbone=False,
+                             output_stride=args.out_stride,
+                             freeze_bn=False,
+                             n_in=args.n_channels)
+            model2 = DeepLab(num_classes=args.n_classes,
+                             backbone='resnet',
+                             pretrained_backbone=False,
+                             output_stride=args.out_stride,
+                             freeze_bn=False,
+                             n_in=args.n_channels)
+        else:
+            model1 = UNet(n_classes=args.n_classes,
+                          n_channels=args.n_channels)
+            model2 = UNet(n_classes=args.n_classes,
+                          n_channels=args.n_channels)
+
+        # Get devices
+        if args.gpu_devices:
+            args.gpu_devices = [int(each) for each in args.gpu_devices.split(',')]
+
+        # Set model
+        if args.use_gpu:
+            if args.gpu_devices:
+                torch.cuda.set_device(args.gpu_devices[0])
+                model1 = torch.nn.DataParallel(model1, device_ids=args.gpu_devices)
+                model2 = torch.nn.DataParallel(model2, device_ids=args.gpu_devices)
+            model1 = model1.cuda()
+            model2 = model2.cuda()
+
+        # Define loss function
+        loss_fn = loss_coteaching
+
+        # Define optimizer
+        if args.optimizer_name.lower() == 'AdaBound':
+            optimizer1 = optim.AdaBound(model1.parameters(),
+                                        lr=args.base_lr,
+                                        final_lr=args.final_lr)
+            optimizer2 = optim.AdaBound(model2.parameters(),
+                                        lr=args.base_lr,
+                                        final_lr=args.final_lr)
+        elif args.optimizer_name.lower() == 'AmsBound':
+            optimizer1 = optim.AdaBound(model1.parameters(),
+                                        lr=args.base_lr,
+                                        final_lr=args.final_lr,
+                                        amsbound=True)
+            optimizer2 = optim.AdaBound(model2.parameters(),
+                                        lr=args.base_lr,
+                                        final_lr=args.final_lr,
+                                        amsbound=True)
+        elif args.optimizer_name.lower() == 'AdamP':
+            optimizer1 = optim.AdamP(model1.parameters(),
+                                     nesterov=True,
+                                     lr=args.base_lr)
+            optimizer2 = optim.AdamP(model2.parameters(),
+                                     nesterov=True,
+                                     lr=args.base_lr)
+        else:
+            print('Not supported optimizer, use AdaBound instead.')
+            optimizer1 = optim.AdaBound(model1.parameters(),
+                                        lr=args.base_lr,
+                                        final_lr=args.final_lr)
+            optimizer2 = optim.AdaBound(model2.parameters(),
+                                        lr=args.base_lr,
+                                        final_lr=args.final_lr)
+
+        # define drop rate schedule
+        forget_rate = args.noise_ratio
+        args.exponent = 2
+        args.num_gradual = 30
+        rate_schedule = np.ones(args.epochs) * forget_rate
+        rate_schedule[:args.num_gradual] = np.linspace(0, forget_rate ** args.exponent, args.num_gradual)
+        # Start train
+        step = 0
+        trainer = Trainer(args)
+        pbar = tqdm(total=args.epochs, desc="[Epoch]")
+        for epoch in range(args.epochs):
+            # Run training for one epoch
+            model, step = trainer.co_train(model1, model2, train_loader, loss_fn,
+                                           optimizer1, optimizer2, args.noise_or_not,
+                                           writer, rate_schedule[epoch], step)
+            # Run validation
+            trainer.co_validate(model1, model2, validate_loader, step, loss_fn, writer)
+
+            # Update learning rate
+            if epoch <= 30:
+                if epoch == 30:
+                    lr_scheduler_11 = torch.optim.lr_scheduler.CyclicLR(
+                        optimizer1, base_lr=0.0008, max_lr=0.0012,
+                        step_size_up=1, step_size_down=3,
+                        gamma=0.97, cycle_momentum=False,
+                        mode='exp_range')
+                    lr_scheduler_12 = torch.optim.lr_scheduler.CyclicLR(
+                        optimizer2, base_lr=0.0008, max_lr=0.0012,
+                        step_size_up=1, step_size_down=3,
+                        gamma=0.97, cycle_momentum=False,
+                        mode='exp_range')
+            elif 30 < epoch <= 120:
+                lr_scheduler_11.step()
+                lr_scheduler_12.step()
+                if epoch == 120:
+                    lr_scheduler_21 = torch.optim.lr_scheduler.CyclicLR(
+                        optimizer1, base_lr=0.0004, max_lr=0.0006,
+                        step_size_up=1, step_size_down=5,
+                        gamma=0.94, cycle_momentum=False,
+                        mode='exp_range')
+                    lr_scheduler_22 = torch.optim.lr_scheduler.CyclicLR(
+                        optimizer2, base_lr=0.0004, max_lr=0.0006,
+                        step_size_up=1, step_size_down=5,
+                        gamma=0.94, cycle_momentum=False,
+                        mode='exp_range')
+            else:
+                lr_scheduler_21.step()
+                lr_scheduler_22.step()
+
+            # Save checkpoint
+            if epoch % args.save_freq == 0:
+                trainer.export_model(model1, optimizer=optimizer1, step=step, name='model1')
+                trainer.export_model(model2, optimizer=optimizer2, step=step, name='model2')
+
+            # Update pbar
+            pbar.set_description("[Epoch] lr: {:.4f}".format(
+                round(optimizer1.param_groups[0]["lr"], 4)))
+            pbar.update()
+
+        # Export final set of weights
+        trainer.export_model(model1, optimizer1, name="model1_final")
+        trainer.export_model(model2, optimizer2, name="model2_final")
+
+        # Close pbar
+        pbar.close()
     else:
         raise NotImplementedError
 
