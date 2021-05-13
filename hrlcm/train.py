@@ -9,6 +9,7 @@ from augmentation import *
 from dataset import *
 from tqdm.auto import tqdm
 import metrics
+from loss import loss_coteaching
 
 
 class Trainer:
@@ -32,7 +33,7 @@ class Trainer:
         # Training loop
         pbar = tqdm(total=len(train_loader), desc="[Train]")
         loss_total = 0
-        for i, (image, target) in enumerate(train_loader):
+        for i, (image, target, _) in enumerate(train_loader):
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
                 image, target = image.cuda(), target.cuda()
@@ -67,19 +68,81 @@ class Trainer:
         writer.flush()
         return model, global_step
 
-    def co_train(self, model1, model2, train_loader, loss_fn, optimizer, writer, step):
+    def co_train(self, model1, model2, train_loader, loss_fn,
+                 optimizer1, optimizer2, noise_or_not, writer, forget_rate, step):
         """Co-train using two models
 
+        :param loss_fn:
+        :param noise_or_not:
+        :param forget_rate:
+        :param optimizer2:
+        :param optimizer1:
         :param model1: model 1
         :param model2: model 2
         :param train_loader: train Dataloader
-        :param loss_fn: loss function
-        :param optimizer: optimizer for training
         :param writer: defined writer for statistics
         :param step: global step so far
         :return: updated model1, updated model2 and global step
         """
-        pass
+        # Set model to train mode
+        model1.train()
+        model2.train()
+
+        # Training loop
+        pbar = tqdm(total=len(train_loader), desc="[Train]")
+        loss1_total = 0
+        loss2_total = 0
+        pure_ratio1_list = []
+        pure_ratio2_list = []
+        for i, (image, target, indexes) in enumerate(train_loader):
+            ind = indexes.cpu().numpy().transpose()
+            # Move data to gpu if model is on gpu
+            if self.args.use_gpu:
+                image, target = image.cuda(), target.cuda()
+
+            # Forward pass
+            logits1 = model1(image)
+            logits2 = model2(image)
+            loss1, loss2, pure_ratio1, pure_ratio2 = loss_fn(
+                logits1, logits2, target, forget_rate, ind, noise_or_not)
+            loss1_total += loss1.item()
+            loss2_total += loss2.item()
+            pure_ratio1_list.append(100 * pure_ratio1)
+            pure_ratio2_list.append(100 * pure_ratio2)
+
+            # Backward pass
+            optimizer1.zero_grad()
+            loss1.backward()
+            optimizer1.step()
+            optimizer2.zero_grad()
+            loss2.backward()
+            optimizer2.step()
+
+            # Recalculate step for log progress, validate, and save checkpoint
+            global_step = i + step
+
+            # Write current train loss to tensorboard at every step
+            writer.add_scalar("train/loss1", loss1, global_step=global_step)
+            writer.add_scalar("train/loss2", loss2, global_step=global_step)
+            writer.add_scalar("train/pure_ratio1", np.sum(pure_ratio1_list)/len(pure_ratio1_list),
+                              global_step=global_step)
+            writer.add_scalar("train/pure_ratio2", np.sum(pure_ratio2_list) / len(pure_ratio2_list),
+                              global_step=global_step)
+
+            # Update progressbar
+            pbar.set_description("[Train] Loss1: {:.4f}, Loss2: {:.4f}".format(
+                round(loss1.item(), 4), round(loss2.item(), 4)))
+            pbar.update()
+
+        # Close progressbar
+        pbar.set_description("[Train] Loss1: {:.4f}, Loss2: {:.4f}".format(
+            round(loss1_total / len(train_loader), 4),
+            round(loss2_total / len(train_loader), 4)))
+        pbar.close()
+
+        # Flush to disk
+        writer.flush()
+        return model1, model2, pure_ratio1_list, pure_ratio2_list, global_step
 
     def validate(self, model, validate_loader, step, loss_fn, writer):
         """Validate for single model

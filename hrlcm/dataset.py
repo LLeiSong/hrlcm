@@ -195,6 +195,7 @@ class NFSEN1LC(Dataset):
 
             # Set noisy_or_not
             self.noisy_or_not = self.catalog['score'] != 10
+            self.noisy_or_not = self.noisy_or_not.to_numpy()
         elif self.usage == 'validate':
             self.catalog = catalog_full
         else:
@@ -235,7 +236,10 @@ class NFSEN1LC(Dataset):
             if self.label_transform is not None:
                 label = self.label_transform(label)
 
-            return img, label
+            if self.usage == 'train':
+                return img, label, index
+            else:
+                return img, label
         else:
             img = self.img_ls[index]
             if self.img_transform is not None:

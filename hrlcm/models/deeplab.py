@@ -25,29 +25,21 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from modeling.sync_batchnorm.batchnorm import SynchronizedBatchNorm2d
 from models.utils.aspp import build_aspp
 from models.utils.decoder import build_decoder
-# from models.deeplab_utils.backbone import build_backbone
 from models.utils import resnet
 
 
 class DeepLab(nn.Module):
-    def __init__(self, backbone='resnet', pretrained_backbone=True, output_stride=16, num_classes=21,
-                 sync_bn=False, freeze_bn=False, n_in=3):
+    def __init__(self, backbone='resnet', pretrained_backbone=True,
+                 output_stride=16, num_classes=21, freeze_bn=False, n_in=3):
         super(DeepLab, self).__init__()
         if backbone == 'drn':
             output_stride = 8
 
-        # TODO disabled for the moment
-        if sync_bn is True:
-            # BatchNorm = SynchronizedBatchNorm2d
-            raise NotImplementedError
-        else:
-            BatchNorm = nn.BatchNorm2d
-
-        # self.backbone = build_backbone(backbone, output_stride, BatchNorm, pretrained=pretrained_backbone, n_in=n_in)
-        self.backbone = resnet.ResNet101(output_stride, BatchNorm, pretrained=pretrained_backbone, n_in=n_in)
+        BatchNorm = nn.BatchNorm2d
+        self.backbone = resnet.ResNet101(output_stride, BatchNorm,
+                                         pretrained=pretrained_backbone, n_in=n_in)
         self.aspp = build_aspp(backbone, output_stride, BatchNorm)
         self.decoder = build_decoder(num_classes, backbone, BatchNorm)
 
@@ -63,10 +55,6 @@ class DeepLab(nn.Module):
 
     def freeze_bn(self):
         for m in self.modules():
-            # TODO
-            # if isinstance(m, SynchronizedBatchNorm2d):
-            #     m.eval()
-            # elif isinstance(m, nn.BatchNorm2d):
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
 
@@ -80,8 +68,6 @@ class DeepLab(nn.Module):
                             if p.requires_grad:
                                 yield p
                 else:
-                    # TODO
-                    # if isinstance(m[1], nn.Conv2d) or isinstance(m[1], SynchronizedBatchNorm2d) \
                     if isinstance(m[1], nn.Conv2d) \
                             or isinstance(m[1], nn.BatchNorm2d):
                         for p in m[1].parameters():
@@ -98,8 +84,6 @@ class DeepLab(nn.Module):
                             if p.requires_grad:
                                 yield p
                 else:
-                    # TODO
-                    # if isinstance(m[1], nn.Conv2d) or isinstance(m[1], SynchronizedBatchNorm2d) \
                     if isinstance(m[1], nn.Conv2d) \
                             or isinstance(m[1], nn.BatchNorm2d):
                         for p in m[1].parameters():
@@ -108,7 +92,7 @@ class DeepLab(nn.Module):
 
 
 if __name__ == "__main__":
-    model = DeepLab(backbone='resnet', pretrained_backbone=False, output_stride=16, sync_bn=False)
+    model = DeepLab(backbone='resnet', pretrained_backbone=False, output_stride=16)
     model.eval()
     input = torch.rand(1, 3, 513, 513)
     output = model(input)
