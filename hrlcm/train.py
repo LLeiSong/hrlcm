@@ -9,7 +9,6 @@ from augmentation import *
 from dataset import *
 from tqdm.auto import tqdm
 import metrics
-from loss import loss_coteaching
 
 
 class Trainer:
@@ -31,7 +30,7 @@ class Trainer:
         model.train()
 
         # Training loop
-        pbar = tqdm(total=len(train_loader), desc="[Train]")
+        pbar = tqdm(total=len(train_loader), desc="[Train]", ncols='100%')
         loss_total = 0
         for i, (image, target, _) in enumerate(train_loader):
             # Move data to gpu if model is on gpu
@@ -52,97 +51,21 @@ class Trainer:
             global_step = i + step
 
             # Write current train loss to tensorboard at every step
-            writer.add_scalar("train/loss", loss, global_step=global_step)
+            writer.add_scalar("Train/loss", loss, global_step=global_step)
 
             # Update progressbar
-            pbar.set_description("[Train] Loss: {:.4f}".format(
-                round(loss.item(), 4)))
+            pbar.set_description("[Train] Loss: {:.3f}".format(
+                round(loss.item(), 3)))
             pbar.update()
 
         # Close progressbar
-        pbar.set_description("[Train] Loss: {:.4f}".format(
-            round(loss_total / len(train_loader), 4)))
+        pbar.set_description("[Train] Loss: {:.3f}".format(
+            round(loss_total / len(train_loader), 3)))
         pbar.close()
 
         # Flush to disk
         writer.flush()
         return model, global_step
-
-    def co_train(self, model1, model2, train_loader, loss_fn,
-                 optimizer1, optimizer2, noise_or_not, writer, forget_rate, step):
-        """Co-train using two models
-
-        :param loss_fn:
-        :param noise_or_not:
-        :param forget_rate:
-        :param optimizer2:
-        :param optimizer1:
-        :param model1: model 1
-        :param model2: model 2
-        :param train_loader: train Dataloader
-        :param writer: defined writer for statistics
-        :param step: global step so far
-        :return: updated model1, updated model2 and global step
-        """
-        # Set model to train mode
-        model1.train()
-        model2.train()
-
-        # Training loop
-        pbar = tqdm(total=len(train_loader), desc="[Train]")
-        loss1_total = 0
-        loss2_total = 0
-        pure_ratio1_list = []
-        pure_ratio2_list = []
-        for i, (image, target, indexes) in enumerate(train_loader):
-            ind = indexes.cpu().numpy().transpose()
-            # Move data to gpu if model is on gpu
-            if self.args.use_gpu:
-                image, target = image.cuda(), target.cuda()
-
-            # Forward pass
-            logits1 = model1(image)
-            logits2 = model2(image)
-            loss1, loss2, pure_ratio1, pure_ratio2 = loss_fn(
-                logits1, logits2, target, forget_rate, ind, noise_or_not)
-            loss1_total += loss1.item()
-            loss2_total += loss2.item()
-            pure_ratio1_list.append(100 * pure_ratio1)
-            pure_ratio2_list.append(100 * pure_ratio2)
-
-            # Backward pass
-            optimizer1.zero_grad()
-            loss1.backward()
-            optimizer1.step()
-            optimizer2.zero_grad()
-            loss2.backward()
-            optimizer2.step()
-
-            # Recalculate step for log progress, validate, and save checkpoint
-            global_step = i + step
-
-            # Write current train loss to tensorboard at every step
-            writer.add_scalar("train/loss1", loss1, global_step=global_step)
-            writer.add_scalar("train/loss2", loss2, global_step=global_step)
-            writer.add_scalar("train/pure_ratio1", np.sum(pure_ratio1_list)/len(pure_ratio1_list),
-                              global_step=global_step)
-            writer.add_scalar("train/pure_ratio2", np.sum(pure_ratio2_list) / len(pure_ratio2_list),
-                              global_step=global_step)
-
-            # Update progressbar
-            pbar.set_description("[Train] Loss1: {:.4f}, Loss2: {:.4f}".format(
-                round(loss1.item(), 4), round(loss2.item(), 4)))
-            pbar.update()
-
-        # Close progressbar
-        pbar.set_description("[Train] Loss1: {:.4f}, Loss2: {:.4f}".format(
-            round(loss1_total / len(train_loader), 4),
-            round(loss2_total / len(train_loader), 4)))
-        pbar.close()
-
-        # Flush to disk
-        writer.flush()
-        return model1, model2, pure_ratio1_list, pure_ratio2_list, global_step
 
     def validate(self, model, validate_loader, step, loss_fn, writer):
         """Validate for single model
@@ -158,7 +81,7 @@ class Trainer:
         model.eval()
 
         # Validate loop
-        pbar = tqdm(total=len(validate_loader), desc="[Val]")
+        pbar = tqdm(total=len(validate_loader), desc="[Val]", ncols='100%')
         loss_total = 0
         conf_mat = metrics.ConfMatrix(validate_loader.dataset.n_classes)
         for i, (image, target) in enumerate(validate_loader):
@@ -176,27 +99,176 @@ class Trainer:
             conf_mat.add_batch(target, prediction.max(1)[1])
 
             # Update progressbar
-            pbar.set_description("[Val] Loss: {:.4f}".format(
-                round(loss.item(), 4)))
+            pbar.set_description("[Val] Loss: {:.3f}".format(
+                round(loss.item(), 3)))
             pbar.update()
 
         # Write validation metrics to tensorboard
-        writer.add_scalar("validate/loss",
+        writer.add_scalar("Validate/loss",
                           loss_total / len(validate_loader), global_step=step)
-        writer.add_scalar("validate/AA", conf_mat.get_aa(),
+        writer.add_scalar("Validate/AA", conf_mat.get_aa(),
                           global_step=step)
-        writer.add_scalar("validate/mIoU", conf_mat.get_mIoU(),
+        writer.add_scalar("Validate/mIoU", conf_mat.get_mIoU(),
                           global_step=step)
+        # Add single class accuracy
+        confmatrix = np.diagonal(conf_mat.norm_on_lines())
+        writer.add_scalar("Validate/Cropland", confmatrix[0], global_step=step)
+        writer.add_scalar("Validate/Forest", confmatrix[1], global_step=step)
+        writer.add_scalar("Validate/Grassland", confmatrix[2], global_step=step)
+        writer.add_scalar("Validate/Shrubland", confmatrix[3], global_step=step)
+        writer.add_scalar("Validate/Water", confmatrix[4], global_step=step)
+        writer.add_scalar("Validate/Urban", confmatrix[5], global_step=step)
+        writer.add_scalar("Validate/Bareland", confmatrix[6], global_step=step)
 
         # Close progressbar
-        pbar.set_description("[Val] Loss: {:.4f}, AA: {:.2f}%, mIoU: {:.2f}%"
-                             .format(round(loss_total / len(validate_loader), 4),
-                                     round(conf_mat.get_aa() * 100, 4),
-                                     round(conf_mat.get_mIoU() * 100, 4)))
+        pbar.set_description("[Val] Loss: {:.3f}, AA: {:.3f}%, mIoU: {:.3f}%"
+                             .format(round(loss_total / len(validate_loader), 3),
+                                     round(conf_mat.get_aa() * 100, 3),
+                                     round(conf_mat.get_mIoU() * 100, 3)))
         pbar.close()
 
         # Flush to disk
         writer.flush()
+
+    def co_train(self, model1, model2, train_loader, loss_fn,
+                 optimizer1, optimizer2, noisy_or_not_full, writer, forget_rate, step,
+                 mode='argue', golden_classes=None):
+        """Co-train using two models
+
+        :param loss_fn: loss function
+        :param noisy_or_not_full: list of flags of noisy or not
+        :param forget_rate: forget rate for loss function
+        :param optimizer2: optimizer for model 1 or co-optimizer
+        :param optimizer1: optimizer for model 2 or None
+        :param model1: model 1
+        :param model2: model 2
+        :param train_loader: train Dataloader
+        :param writer: defined writer for statistics
+        :param step: global step so far
+        :param golden_classes: Golden classes to consider, e.g. minority classes.
+            It might not always helpful, so use it wisely.
+        :param mode: if use disagreement or not.
+        :return: updated model1, updated model2 and global step
+        """
+        # Set model to train mode
+        model1.train()
+        model2.train()
+
+        # Training loop
+        pbar = tqdm(total=len(train_loader), desc="[Train]")
+        loss1_total = 0
+        loss2_total = 0
+        for i, (image, target, indexes) in enumerate(train_loader):
+            # Subset noisy_or_not list
+            noisy_or_not = noisy_or_not_full[indexes.cpu().numpy().transpose()]
+            # Move data to gpu if model is on gpu
+            if self.args.use_gpu:
+                image, target = image.cuda(), target.cuda()
+
+            # Forward pass
+            logits1 = model1(image)
+            logits2 = model2(image)
+            loss1, loss2 = loss_fn(logits1, logits2, target,
+                                   forget_rate, noisy_or_not,
+                                   mode, golden_classes)
+            loss1_total += loss1.item()
+            loss2_total += loss2.item()
+
+            # Backward pass
+            optimizer1.zero_grad()
+            loss1.backward()
+            optimizer1.step()
+            optimizer2.zero_grad()
+            loss2.backward()
+            optimizer2.step()
+
+            # Recalculate step for log progress, validate, and save checkpoint
+            global_step = i + step
+
+            # Write current train loss to tensorboard at every step
+            writer.add_scalar("Train/loss1", loss1, global_step=global_step)
+            writer.add_scalar("Train/loss2", loss2, global_step=global_step)
+
+            # Update progressbar
+            pbar.set_description("[Train] Loss1: {:.2f}, Loss2: {:.2f}".format(
+                round(loss1.item(), 2), round(loss2.item(), 2)))
+            pbar.update()
+
+        # Close progressbar
+        pbar.set_description("[Train] Loss1: {:.2f}, Loss2: {:.2f}".format(
+            round(loss1_total / len(train_loader), 2),
+            round(loss2_total / len(train_loader), 2)))
+        pbar.close()
+
+        # Flush to disk
+        writer.flush()
+        return model1, model2, global_step
+
+    def co_train_jocor(self, model1, model2, train_loader, loss_fn,
+                       optimizer, writer, forget_rate, step,
+                       co_lambda=0.7, golden_classes=None):
+        """Co-train using two models
+
+        :param loss_fn: loss function
+        :param forget_rate: forget rate for loss
+        :param optimizer: co-optimizer
+        :param model1: model 1
+        :param model2: model 2
+        :param train_loader: train Dataloader
+        :param writer: defined writer for statistics
+        :param step: global step so far
+        :param co_lambda: the lambda value for co_jor.
+        :param golden_classes: Golden classes to consider, e.g. minority classes.
+            It might not always helpful, so use it wisely.
+        :return: updated model1, updated model2 and global step
+        """
+        # Set model to train mode
+        model1.train()
+        model2.train()
+
+        # Training loop
+        pbar = tqdm(total=len(train_loader), desc="[Train]", ncols='100%')
+        loss_total = 0
+        for i, (image, target, indexes) in enumerate(train_loader):
+            # Move data to gpu if model is on gpu
+            if self.args.use_gpu:
+                image, target = image.cuda(), target.cuda()
+
+            # Forward pass
+            logits1 = model1(image)
+            logits2 = model2(image)
+            loss = loss_fn(logits1, logits2, target,
+                           forget_rate, co_lambda,
+                           golden_classes)
+            loss_total += loss.item()
+
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Recalculate step for log progress, validate, and save checkpoint
+            global_step = i + step
+
+            # To keep consistent of loss curves, still update loss for both models
+            # Write current train loss to tensorboard at every step
+            writer.add_scalar("Train/loss1", loss, global_step=global_step)
+            writer.add_scalar("Train/loss2", loss, global_step=global_step)
+
+            # Update progressbar
+            pbar.set_description("[Train] Loss1: {:.2f}, Loss2: {:.2f}".format(
+                round(loss.item(), 2), round(loss.item(), 2)))
+            pbar.update()
+
+        # Close progressbar
+        pbar.set_description("[Train] Loss1: {:.2f}, Loss2: {:.2f}".format(
+            round(loss_total / len(train_loader), 2),
+            round(loss_total / len(train_loader), 2)))
+        pbar.close()
+
+        # Flush to disk
+        writer.flush()
+        return model1, model2, global_step
 
     def co_validate(self, model1, model2, validate_loader, step, loss_fn, writer):
         """Validate for co-trained two models
@@ -205,7 +277,7 @@ class Trainer:
         :param model2: model 2
         :param validate_loader: validate Dataloader
         :param step: global step
-        :param loss_fn: loss function
+        :param loss_fn: loss function for validation
         :param writer: defined writer for statistics
         :return: None
         """
@@ -214,7 +286,7 @@ class Trainer:
         model2.eval()
 
         # Validate loop
-        pbar = tqdm(total=len(validate_loader), desc="[Val]")
+        pbar = tqdm(total=len(validate_loader), desc="[Val]", ncols='100%')
         loss1_total = 0
         loss2_total = 0
         conf_mat1 = metrics.ConfMatrix(validate_loader.dataset.n_classes)
@@ -239,8 +311,8 @@ class Trainer:
             conf_mat2.add_batch(target, logits2.max(1)[1])
 
             # Update progressbar
-            pbar.set_description("[Val] Loss1: {:.4f}, Loss2: {:.4f}".format(
-                round(loss1.item(), 4), round(loss2.item(), 4)))
+            pbar.set_description("[Val] Loss1: {:.2f}, Loss2: {:.2f}".format(
+                round(loss1.item(), 2), round(loss2.item(), 2)))
             pbar.update()
 
         # Write validation metrics to tensorboard
@@ -256,16 +328,33 @@ class Trainer:
                           global_step=step)
         writer.add_scalar("validate/mIoU2", conf_mat2.get_mIoU(),
                           global_step=step)
+        # Add single class accuracy
+        confmatrix1 = np.diagonal(conf_mat1.norm_on_lines())
+        confmatrix2 = np.diagonal(conf_mat2.norm_on_lines())
+        writer.add_scalar("Validate/Cropland1", confmatrix1[0], global_step=step)
+        writer.add_scalar("Validate/Forest1", confmatrix1[1], global_step=step)
+        writer.add_scalar("Validate/Grassland1", confmatrix1[2], global_step=step)
+        writer.add_scalar("Validate/Shrubland1", confmatrix1[3], global_step=step)
+        writer.add_scalar("Validate/Water1", confmatrix1[4], global_step=step)
+        writer.add_scalar("Validate/Urban1", confmatrix1[5], global_step=step)
+        writer.add_scalar("Validate/Bareland1", confmatrix1[6], global_step=step)
+        writer.add_scalar("Validate/Cropland2", confmatrix2[0], global_step=step)
+        writer.add_scalar("Validate/Forest2", confmatrix2[1], global_step=step)
+        writer.add_scalar("Validate/Grassland2", confmatrix2[2], global_step=step)
+        writer.add_scalar("Validate/Shrubland2", confmatrix2[3], global_step=step)
+        writer.add_scalar("Validate/Water2", confmatrix2[4], global_step=step)
+        writer.add_scalar("Validate/Urban2", confmatrix2[5], global_step=step)
+        writer.add_scalar("Validate/Bareland2", confmatrix2[6], global_step=step)
 
         # Close progressbar
-        pbar.set_description("[Val] Loss1: {:.4f}, AA1: {:.2f}%, mIoU1: {:.2f}%, Loss2: {:.4f}, AA2: {:.2f}%, "
+        pbar.set_description("[Val] Loss1: {:.2f}, AA1: {:.2f}%, mIoU1: {:.2f}%, Loss2: {:.2f}, AA2: {:.2f}%, "
                              "mIoU2: {:.2f}% "
-                             .format(round(loss1_total / len(validate_loader), 4),
-                                     round(conf_mat1.get_aa() * 100, 4),
-                                     round(conf_mat1.get_mIoU() * 100, 4),
-                                     round(loss2_total / len(validate_loader), 4),
-                                     round(conf_mat2.get_aa() * 100, 4),
-                                     round(conf_mat2.get_mIoU() * 100, 4)
+                             .format(round(loss1_total / len(validate_loader), 2),
+                                     round(conf_mat1.get_aa() * 100, 2),
+                                     round(conf_mat1.get_mIoU() * 100, 2),
+                                     round(loss2_total / len(validate_loader), 2),
+                                     round(conf_mat2.get_aa() * 100, 2),
+                                     round(conf_mat2.get_mIoU() * 100, 2)
                                      ))
         pbar.close()
 

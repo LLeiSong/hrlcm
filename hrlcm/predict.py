@@ -8,7 +8,6 @@ import argparse
 from augmentation import *
 from dataset import *
 from torch.utils.data import DataLoader
-from torch.autograd import Variable
 import torch.nn.functional as F
 import pickle as pkl
 from models.deeplab import DeepLab
@@ -66,7 +65,6 @@ def main():
                         backbone='resnet',
                         pretrained_backbone=False,
                         output_stride=train_args.out_stride,
-                        sync_bn=False,
                         freeze_bn=False,
                         n_in=train_args.n_channels)
     else:

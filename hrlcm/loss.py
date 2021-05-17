@@ -12,13 +12,14 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
+from math import ceil
 import numpy as np
 
 
 class BalancedCrossEntropyLoss(nn.Module):
     """
     Balanced cross entropy loss by weighting of inverse class ratio
+    Author: Boka Luo
     Args:
         ignore_index (int): Class index to ignore
         reduction (str): Reduction method to apply, return mean over batch if 'mean',
@@ -49,100 +50,248 @@ class BalancedCrossEntropyLoss(nn.Module):
         return loss(predict, target)
 
 
-def loss_coteaching(y_1, y_2, t, forget_rate, ind, noise_or_not):
-    """loss for co-teaching
-    https://github.com/bhanML/Co-teaching/blob/master/loss.py
-    updated to be used for semantic segmentation
+def loss_coteaching_image(y_1, y_2, t, forget_rate):
+    """loss for co-teaching, take the loss of each image as a whole
+    This version works in semantic segmentation very similar to the original version,
+    that takes each image as a whole thing. But it might be
+    limited useful because it wastes many useful training labels.
+    But good thing is it can filter some tiles with abnormal images.
+    Original code: https://github.com/bhanML/Co-teaching/blob/master/loss.py
     """
+    # Use balanced CE as the base loss function
     loss_fn = BalancedCrossEntropyLoss(reduction='none')
     loss_fn_update = BalancedCrossEntropyLoss()
 
+    # Calculate the mean loss of a whole image and rank
+    # Model1
     loss_ce_1 = loss_fn(y_1, t)
     loss_1 = torch.mean(loss_ce_1, dim=(1, 2))
     ind_1_sorted = np.argsort(loss_1.cpu().data).cuda()
 
+    # Model2
     loss_ce_2 = loss_fn(y_2, t)
     loss_2 = torch.mean(loss_ce_2, dim=(1, 2))
     ind_2_sorted = np.argsort(loss_2.cpu().data).cuda()
 
+    # Calc number of image within each mini-batch to remember
     remember_rate = 1 - forget_rate
-    num_remember = int(remember_rate * len(ind_1_sorted))
+    num_remember = ceil(remember_rate * len(ind_1_sorted))
 
+    # Get the index of image within each mini-batch for loss
     ind_1_update = ind_1_sorted[:num_remember].cpu()
     ind_2_update = ind_2_sorted[:num_remember].cpu()
+
+    # Calc updated loss of model1 and model2
     if len(ind_1_update) == 0:
-        ind_1_update = ind_1_sorted.cpu().numpy()
-        ind_2_update = ind_2_sorted.cpu().numpy()
-        num_remember = ind_1_update.shape[0]
-
-    pure_ratio_1 = np.sum(noise_or_not[ind[ind_1_update]]) / float(num_remember)
-    pure_ratio_2 = np.sum(noise_or_not[ind[ind_2_update]]) / float(num_remember)
-
-    loss_1_update = loss_fn_update(y_1[ind_2_update], t[ind_2_update])
-    loss_2_update = loss_fn_update(y_2[ind_1_update], t[ind_1_update])
-
-    return loss_1_update, loss_2_update, pure_ratio_1, pure_ratio_2
-
-
-def loss_coteaching_plus(logits, logits2, labels, forget_rate, ind, noise_or_not, step, disagree_thred):
-    """loss-teaching-plus
-    https://github.com/xingruiyu/coteaching_plus/blob/master/loss.py
-    """
-    outputs = F.softmax(logits, dim=1)
-    outputs2 = F.softmax(logits2, dim=1)
-
-    _, pred1 = torch.max(logits.data, 1)
-    _, pred2 = torch.max(logits2.data, 1)
-
-    pred1, pred2 = pred1.cpu().numpy(), pred2.cpu().numpy()
-
-    # TODO This part of disagree need to be updated
-    # The idea could to get the disagree part within a tile
-    # Then ignore the disagree part to calculate the loss
-    # Meanwhile, an assumption could be if the disagree part exceed
-    # a threshold, exchange idea.
-    logical_disagree_id = np.zeros(labels.size()[0], dtype=bool)
-    disagree_id = []
-    for idx, p1 in enumerate(pred1):
-        if (p1 != pred1[idx]).sum() / p1.size > disagree_thred:
-            disagree_id.append(idx)
-            logical_disagree_id[idx] = True
-
-    temp_disagree = ind * logical_disagree_id.astype(np.int64)
-    ind_disagree = np.asarray([i for i in temp_disagree if i != 0]).transpose()
-    try:
-        assert ind_disagree.shape[0] == len(disagree_id)
-    except:
-        disagree_id = disagree_id[:ind_disagree.shape[0]]
-
-    _update_step = np.logical_or(logical_disagree_id, step < 5000).astype(np.float32)
-    update_step = Variable(torch.from_numpy(_update_step)).cuda()
-
-    if len(disagree_id) > 0:
-        update_labels = labels[disagree_id]
-        update_outputs = outputs[disagree_id]
-        update_outputs2 = outputs2[disagree_id]
-
-        loss_1, loss_2, pure_ratio_1, pure_ratio_2 = loss_coteaching(update_outputs, update_outputs2, update_labels,
-                                                                     forget_rate, ind_disagree, noise_or_not)
+        loss_1_update = loss_fn_update(y_1, t)
+        loss_2_update = loss_fn_update(y_2, t)
     else:
-        update_labels = labels
-        update_outputs = outputs
-        update_outputs2 = outputs2
+        loss_1_update = loss_fn_update(y_1[ind_2_update], t[ind_2_update])
+        loss_2_update = loss_fn_update(y_2[ind_1_update], t[ind_1_update])
 
-        cross_entropy_1 = F.cross_entropy(update_outputs, update_labels)
-        cross_entropy_2 = F.cross_entropy(update_outputs2, update_labels)
+    return loss_1_update, loss_2_update
 
-        loss_1 = torch.sum(update_step * cross_entropy_1) / labels.size()[0]
-        loss_2 = torch.sum(update_step * cross_entropy_2) / labels.size()[0]
 
-        pure_ratio_1 = np.sum(noise_or_not[ind]) / ind.shape[0]
-        pure_ratio_2 = np.sum(noise_or_not[ind]) / ind.shape[0]
-    return loss_1, loss_2, pure_ratio_1, pure_ratio_2
+def loss_colearning(y_1, y_2, t, forget_rate, noisy_or_not, mode='argue', golden_classes=None):
+    """A combined version of co-teaching-plus loss and co-teaching loss.
+        It takes the loss of each pixel separately in each image.
+        We rename it loss_colearning because it is very different from the original ones already.
+        Original code:
+        https://github.com/bhanML/Co-teaching/blob/master/loss.py
+        https://github.com/xingruiyu/coteaching_plus/blob/master/loss.py
+    Args:
+        y_1 (torch.Tensor): logits of model 1.
+        y_2 (torch.Tensor): logits of model 2.
+        t (torch.Tensor): labels.
+        golden_classes: (list or None): Golden classes to consider, e.g. minority classes.
+            It might not always helpful, so use it wisely.
+        noisy_or_not: (list): a list of flags if the label is noisy or not.
+            If it is a list of all True, then the loss becomes to
+            a loss without any prior knowledge of label quality.
+        mode (str): if use disagreement or not.
+            argue is for using disagreement, discuss is for not. ['argue', 'discuss']
+        forget_rate (float): the ratio of pixels to forget.
+    returns:
+        [torch.Tensor, torch.Tensor]: the loss of model 1 and model 2.
+    """
+
+    assert mode in ['argue', 'discuss']
+
+    # Use balanced CE as the base loss function
+    loss_fn = BalancedCrossEntropyLoss(reduction='none')
+    loss_fn_update = BalancedCrossEntropyLoss()
+
+    # Get prediction
+    pred_1 = torch.max(F.softmax(y_1, dim=1), 1)[1]
+    pred_2 = torch.max(F.softmax(y_2, dim=1), 1)[1]
+
+    # Calculate loss of each pixel
+    loss_ce_1 = loss_fn(y_1, t)
+    loss_ce_2 = loss_fn(y_2, t)
+
+    # Subset pixels within noisy image to calculate loss
+    logits1_update = []
+    target1_update = []
+    logits2_update = []
+    target2_update = []
+    for idx, loss1 in enumerate(loss_ce_1):
+        # Isolate this image
+        pred1 = torch.flatten(pred_1[idx])
+        pred2 = torch.flatten(pred_2[idx])
+        y1 = torch.flatten(y_1[idx], start_dim=1)
+        y2 = torch.flatten(y_2[idx], start_dim=1)
+        loss1 = torch.flatten(loss1)
+        loss2 = torch.flatten(loss_ce_2[idx])
+        target = torch.flatten(t[idx])
+
+        # If this image has noisy labels,
+        # use disagreement and exchange small loss pixels
+        if noisy_or_not[idx]:
+            # Mask out disagree pixels
+            if mode == 'argue':
+                dis_mask = pred1 != pred2
+                y1 = y1[:, dis_mask]
+                y2 = y2[:, dis_mask]
+                loss1 = loss1[dis_mask]
+                loss2 = loss2[dis_mask]
+                target = target[dis_mask]
+
+            # Calc number of pixel within each image to remember
+            remember_rate = 1 - forget_rate
+            num_remember = int(remember_rate * len(loss1))
+
+            # Select small loss pixels
+            ind_1_sorted = np.argsort(loss1.cpu().data).cuda()
+            ind_1_update = ind_1_sorted[:num_remember]
+            ind_2_sorted = np.argsort(loss2.cpu().data).cuda()
+            ind_2_update = ind_2_sorted[:num_remember]
+
+            # If set golden classes (e.g. minority classes)
+            if golden_classes is not None:
+                ind_golden = []
+                for val in golden_classes:
+                    ind_golden.append((target == val).nonzero(as_tuple=False))
+                ind_golden = torch.cat(ind_golden).squeeze()
+                if ind_golden.dim() == 0:
+                    ind_golden = ind_golden.unsqueeze(-1)
+
+                ind_1_update = torch.cat([ind_golden, ind_1_update]).unique()
+                ind_2_update = torch.cat([ind_golden, ind_2_update]).unique()
+
+            # Get subset of each variables and append to the lists
+            logits1_update.append(y1[:, ind_2_update])
+            target1_update.append(target[ind_2_update])
+            logits2_update.append(y2[:, ind_1_update])
+            target2_update.append(target[ind_1_update])
+
+        # If the image has clean labels, keep all pixels.
+        else:
+            logits1_update.append(y1)
+            target1_update.append(target)
+            logits2_update.append(y2)
+            target2_update.append(target)
+
+    logits1_update = torch.cat(logits1_update, 1)
+    target1_update = torch.cat(target1_update)
+    logits2_update = torch.cat(logits2_update, 1)
+    target2_update = torch.cat(target2_update)
+
+    # Calc updated loss of model1 and model2
+    loss_1_update = loss_fn_update(logits1_update.unsqueeze(0), target1_update.unsqueeze(0))
+    loss_2_update = loss_fn_update(logits2_update.unsqueeze(0), target2_update.unsqueeze(0))
+
+    return loss_1_update, loss_2_update
+
+
+def loss_colearning_batch(y_1, y_2, t, forget_rate, mode='argue', golden_classes=None):
+    """A combined version of co-teaching-plus loss and co-teaching loss.
+        It takes the loss of each pixel within the whole mini-batch.
+        We rename it loss_colearning because it is very different from the original ones already.
+        Original code:
+        https://github.com/bhanML/Co-teaching/blob/master/loss.py
+        https://github.com/xingruiyu/coteaching_plus/blob/master/loss.py
+    Args:
+        y_1 (torch.Tensor): logits of model 1.
+        y_2 (torch.Tensor): logits of model 2.
+        t (torch.Tensor): labels.
+        golden_classes: (list or None): Golden classes to consider, e.g. minority classes.
+            It might not always helpful, so use it wisely.
+        mode (str): if use disagreement or not.
+            argue is for using disagreement, discuss is for not. ['argue', 'discuss']
+        forget_rate (float): the ratio of pixels to forget.
+    returns:
+        [torch.Tensor, torch.Tensor]: the loss of model 1 and model 2.
+    """
+
+    assert mode in ['argue', 'discuss']
+
+    # Use balanced CE as the base loss function
+    loss_fn = BalancedCrossEntropyLoss(reduction='none')
+    loss_fn_update = BalancedCrossEntropyLoss()
+
+    # Get prediction
+    pred_1 = torch.max(F.softmax(y_1, dim=1), 1)[1]
+    pred_2 = torch.max(F.softmax(y_2, dim=1), 1)[1]
+
+    # Calculate loss of each pixel
+    loss_ce_1 = loss_fn(y_1, t)
+    loss_ce_2 = loss_fn(y_2, t)
+
+    # Flatten the variables for this mini-batch
+    pred_1 = torch.flatten(pred_1)
+    pred_2 = torch.flatten(pred_2)
+    loss_ce_1 = torch.flatten(loss_ce_1)
+    loss_ce_2 = torch.flatten(loss_ce_2)
+    y_1 = torch.flatten(y_1.permute(1, 0, 2, 3), start_dim = 1)
+    y_2 = torch.flatten(y_2.permute(1, 0, 2, 3), start_dim = 1)
+    t = torch.flatten(t)
+
+    # If this image has noisy labels,
+    # Mask out disagree pixels
+    if mode == 'argue':
+        dis_mask = pred_1 != pred_2
+        y_1 = y_1[:, dis_mask]
+        y_2 = y_2[:, dis_mask]
+        loss_ce_1 = loss_ce_1[dis_mask]
+        loss_ce_2 = loss_ce_2[dis_mask]
+        t = t[dis_mask]
+
+    # Calc number of pixel within each image to remember
+    remember_rate = 1 - forget_rate
+    num_remember = int(remember_rate * len(loss_ce_1))
+
+    # Select small loss pixels
+    ind_1_sorted = np.argsort(loss_ce_1.cpu().data).cuda()
+    ind_1_update = ind_1_sorted[:num_remember]
+    ind_2_sorted = np.argsort(loss_ce_2.cpu().data).cuda()
+    ind_2_update = ind_2_sorted[:num_remember]
+
+    # If set golden classes (e.g. minority classes)
+    if golden_classes is not None:
+        ind_golden = []
+        for val in golden_classes:
+            ind_golden.append((t == val).nonzero(as_tuple=False))
+        ind_golden = torch.cat(ind_golden).squeeze()
+        if ind_golden.dim() == 0:
+            ind_golden = ind_golden.unsqueeze(-1)
+
+        ind_1_update = torch.cat([ind_golden, ind_1_update]).unique()
+        ind_2_update = torch.cat([ind_golden, ind_2_update]).unique()
+
+    logits1_update = y_1[:, ind_2_update]
+    target1_update = t[ind_2_update]
+    logits2_update = y_2[:, ind_1_update]
+    target2_update = t[ind_1_update]
+
+    # Calc updated loss of model1 and model2
+    loss_1_update = loss_fn_update(logits1_update.unsqueeze(0), target1_update.unsqueeze(0))
+    loss_2_update = loss_fn_update(logits2_update.unsqueeze(0), target2_update.unsqueeze(0))
+
+    return loss_1_update, loss_2_update
 
 
 def kl_loss_compute(pred, soft_targets, reduce=True):
-    kl = F.kl_div(F.log_softmax(pred, dim=1), F.softmax(soft_targets, dim=1), reduce=False)
+    kl = F.kl_div(F.log_softmax(pred, dim=1), F.softmax(soft_targets, dim=1), reduction='none')
 
     if reduce:
         return torch.mean(torch.sum(kl, dim=1))
@@ -150,24 +299,49 @@ def kl_loss_compute(pred, soft_targets, reduce=True):
         return torch.sum(kl, 1)
 
 
-def loss_jocor(y_1, y_2, t, forget_rate, ind, noise_or_not, co_lambda=0.1):
-    loss_pick_1 = F.cross_entropy(y_1, t, reduce=False) * (1-co_lambda)
-    loss_pick_2 = F.cross_entropy(y_2, t, reduce=False) * (1-co_lambda)
+def loss_jocor(y_1, y_2, t, forget_rate, co_lambda=0.7, golden_classes=None):
+    """A modified version of JoCoR loss.
+        It takes the loss of each pixel within the whole mini-batch.
+        Original code:
+        https://github.com/hongxin001/JoCoR/blob/master/algorithm/loss.py
+    Args:
+        y_1 (torch.Tensor): logits of model 1.
+        y_2 (torch.Tensor): logits of model 2.
+        t (torch.Tensor): labels.
+        co_lambda (float): the lambda value for co_jor.
+        forget_rate (float): the ratio of pixels to forget.
+        golden_classes: (list or None): Golden classes to consider, e.g. minority classes.
+            It might not always helpful, so use it wisely.
+    returns:
+        torch.Tensor: the combined loss of model 1 and model 2.
+    """
+    loss_pick_1 = F.cross_entropy(y_1, t, reduction='none') * (1 - co_lambda)
+    loss_pick_2 = F.cross_entropy(y_2, t, reduction='none') * (1 - co_lambda)
     loss_pick = (loss_pick_1 + loss_pick_2 + co_lambda * kl_loss_compute(y_1, y_2, reduce=False) +
-                 co_lambda * kl_loss_compute(y_2, y_1, reduce=False)).cpu()
+                 co_lambda * kl_loss_compute(y_2, y_1, reduce=False)).flatten().cpu()
 
-    ind_sorted = np.argsort(loss_pick.data)
+    ind_sorted = np.argsort(loss_pick.data).cuda()
     loss_sorted = loss_pick[ind_sorted]
 
     remember_rate = 1 - forget_rate
     num_remember = int(remember_rate * len(loss_sorted))
 
-    pure_ratio = np.sum(noise_or_not[ind[ind_sorted[:num_remember]]])/float(num_remember)
-
     ind_update = ind_sorted[:num_remember]
+
+    # If set golden classes (e.g. minority classes)
+    if golden_classes is not None:
+        ind_golden = []
+        for val in golden_classes:
+            ind_golden.append((t == val).flatten().nonzero(as_tuple=False))
+        ind_golden = torch.cat(ind_golden).squeeze()
+        if ind_golden.dim() == 0:
+            ind_golden = ind_golden.unsqueeze(-1)
+
+        ind_update = torch.cat([ind_golden, ind_update]).unique()
 
     # exchange
     loss = torch.mean(loss_pick[ind_update])
 
-    return loss, loss, pure_ratio, pure_ratio
+    return loss
+
 

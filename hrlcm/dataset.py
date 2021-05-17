@@ -188,6 +188,8 @@ class NFSEN1LC(Dataset):
                     num_perfect = len(catalog_perfect.index)
                     num_noisy = floor(num_perfect * self.noise_ratio / (1 - self.noise_ratio))
                     catalog_rest = catalog_rest.sample(n=num_noisy)
+                else:
+                    self.noise_ratio = round(len(catalog_rest.index) / len(catalog.index), 1)
                 catalog_perfect = catalog_perfect.append(catalog_rest)
                 self.catalog = catalog_perfect
             else:
