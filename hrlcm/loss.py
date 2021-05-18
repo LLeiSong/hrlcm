@@ -339,7 +339,7 @@ def loss_jocor(y_1, y_2, t, forget_rate, co_lambda=0.7, golden_classes=None):
 
         ind_update = torch.cat([ind_golden, ind_update]).unique()
 
-    # exchange
+    # Ensemble loss
     loss = torch.mean(loss_pick[ind_update])
 
     return loss
