@@ -113,10 +113,10 @@ def main():
 
     # synchronize transform for train dataset
     sync_transform = Compose([
-        RandomScale(prob=args.trans_prob),
+        # RandomScale(prob=args.trans_prob),
         RandomFlip(prob=args.trans_prob),
-        RandomCenterRotate(degree=args.rg_rotate,
-                           prob=args.trans_prob),
+        # RandomCenterRotate(degree=args.rg_rotate,
+        #                    prob=args.trans_prob),
         SyncToTensor()
     ])
 
@@ -236,7 +236,7 @@ def main():
     # Start train
     step = 0
     trainer = Trainer(args)
-    pbar = tqdm(total=args.epochs, desc="[Epoch]", dynamic_ncols=True)
+    # pbar = tqdm(total=args.epochs, desc="[Epoch]", dynamic_ncols=True)
     for epoch in range(args.epochs):
         # Run training for one epoch
         model, step = trainer.train(model, train_loader, loss_fn,
@@ -254,6 +254,13 @@ def main():
         if epoch % args.save_freq == 0:
             trainer.export_model(model, optimizer=optimizer, step=step)
 
+        # # Update pbar
+        # pbar.set_description("[Epoch] lr: {:.3f}".format(
+        #     round(optimizer.param_groups[0]["lr"], 3)))
+        # pbar.update()
+        print("[Epoch {}] lr: {:.3f}".format(
+            epoch, round(optimizer.param_groups[0]["lr"], 3)))
+
         # Save learning rate to scalar
         writer.add_scalar("Train/lr",
                           optimizer.param_groups[0]["lr"],
@@ -261,16 +268,11 @@ def main():
         # Flush to disk
         writer.flush()
 
-        # Update pbar
-        pbar.set_description("[Epoch] lr: {:.3f}".format(
-            round(optimizer.param_groups[0]["lr"], 3)))
-        pbar.update()
-
     # Export final set of weights
     trainer.export_model(model, optimizer, name="final")
 
-    # Close pbar
-    pbar.close()
+    # # Close pbar
+    # pbar.close()
 
 
 if __name__ == "__main__":
