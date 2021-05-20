@@ -34,6 +34,8 @@ def main():
                         help='path to dataset')
     parser.add_argument('--out_dir', type=str, default="models",
                         help='path to output dir (default: ./models)')
+    parser.add_argument('--highest_score', type=int, default=10,
+                        help='highest score to subset train dataset (default: 10)')
     parser.add_argument('--lowest_score', type=int, default=10,
                         help='lowest score to subset train dataset (default: 10)')
     parser.add_argument('--noise_ratio', type=float, default=None,
@@ -57,12 +59,12 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     # Training hyper-parameters
-    parser.add_argument('--base_lr', type=float, default=0.001,
-                        help='initial learning rate or a constant learning rate.')
-    parser.add_argument('--max_lr', type=float, default=0.01,
-                        help='maximum learning rate.')
-    parser.add_argument('--final_lr', type=float, default=0.01,
-                        help='final learning rate for AdaBound or AmsBound')
+    parser.add_argument('--base_lr', type=float, default=0.0001,
+                        help='base learning rate for scheduler.')
+    parser.add_argument('--max_lr', type=float, default=0.001,
+                        help='maximum learning rate for scheduler.')
+    parser.add_argument('--gamma_lr', type=float, default=0.97,
+                        help='gamma for learning rate.')
     parser.add_argument('--optimizer_name', type=str,
                         choices=['AdaBound', 'AmsBound', 'AdamP'],
                         default="AmsBound",
@@ -77,8 +79,8 @@ def main():
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=32,
                         help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=100,
-                        help='number of training epochs (default: 100)')
+    parser.add_argument('--epochs', type=int, default=300,
+                        help='number of training epochs (default: 300)')
     parser.add_argument('--resume', '-r', type=str, default=None,
                         help='path to the pretrained weights file', )
 
@@ -140,6 +142,7 @@ def main():
     # Get train dataset
     train_dataset = NFSEN1LC(data_dir=args.data_dir,
                              usage='train',
+                             highest_score=args.highest_score,
                              lowest_score=args.lowest_score,
                              noise_ratio=args.noise_ratio,
                              label_offset=args.label_offset,
@@ -173,15 +176,16 @@ def main():
     args.n_classes = train_dataset.n_classes
     args.n_channels = train_dataset.n_channels
 
-    # Set up tensorboard logging
-    writer = SummaryWriter(log_dir=args.logs_dir)
-
     # Save config
     pkl.dump(args, open(os.path.join(args.checkpoint_dir, "args.pkl"), "wb"))
+
+    # Set up tensorboard logging
+    writer = SummaryWriter(log_dir=args.logs_dir)
 
     # Train network
     # Define model
     if args.model == "deeplab":
+        # TODO Not test yet
         model = DeepLab(num_classes=args.n_classes,
                         backbone='resnet',
                         pretrained_backbone=False,
@@ -209,22 +213,29 @@ def main():
     # Define optimizer
     if args.optimizer_name.lower() == 'AdaBound':
         optimizer = optim.AdaBound(model.parameters(),
-                                   lr=args.base_lr,
-                                   final_lr=args.final_lr)
+                                   lr=args.max_lr,
+                                   final_lr=args.base_lr)
     elif args.optimizer_name.lower() == 'AmsBound':
         optimizer = optim.AdaBound(model.parameters(),
-                                   lr=args.base_lr,
-                                   final_lr=args.final_lr,
+                                   lr=args.max_lr,
+                                   final_lr=args.base_lr,
                                    amsbound=True)
     elif args.optimizer_name.lower() == 'AdamP':
         optimizer = optim.AdamP(model.parameters(),
                                 nesterov=True,
-                                lr=args.base_lr)
+                                lr=args.max_lr)
     else:
         print('Not supported optimizer, use AdaBound instead.')
         optimizer = optim.AdaBound(model.parameters(),
-                                   lr=args.base_lr,
-                                   final_lr=args.final_lr)
+                                   lr=args.max_lr,
+                                   final_lr=args.base_lr)
+    # Set scheduler
+    lr_scheduler_1 = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.6)
+    lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.base_lr, max_lr=args.max_lr / 1.5,
+                                                       step_size_up=1, step_size_down=3,
+                                                       gamma=args.gamma_lr, cycle_momentum=False,
+                                                       mode='exp_range')
+
     # Start train
     step = 0
     trainer = Trainer(args)
@@ -238,20 +249,7 @@ def main():
 
         # Update learning rate
         if epoch <= 30:
-            if epoch == 30:
-                lr_scheduler_1 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer, base_lr=0.0008, max_lr=0.0012,
-                    step_size_up=1, step_size_down=3,
-                    gamma=0.97, cycle_momentum=False,
-                    mode='exp_range')
-        elif 30 < epoch <= 120:
             lr_scheduler_1.step()
-            if epoch == 120:
-                lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer, base_lr=0.0004, max_lr=0.0006,
-                    step_size_up=1, step_size_down=5,
-                    gamma=0.94, cycle_momentum=False,
-                    mode='exp_range')
         else:
             lr_scheduler_2.step()
 
@@ -259,9 +257,16 @@ def main():
         if epoch % args.save_freq == 0:
             trainer.export_model(model, optimizer=optimizer, step=step)
 
+        # Save learning rate to scalar
+        writer.add_scalar("Train/lr",
+                          optimizer.param_groups[0]["lr"],
+                          global_step=step)
+        # Flush to disk
+        writer.flush()
+
         # Update pbar
-        pbar.set_description("[Epoch] lr: {:.4f}".format(
-            round(optimizer.param_groups[0]["lr"], 4)))
+        pbar.set_description("[Epoch] lr: {:.3f}".format(
+            round(optimizer.param_groups[0]["lr"], 3)))
         pbar.update()
 
     # Export final set of weights

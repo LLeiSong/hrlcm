@@ -155,7 +155,7 @@ class Trainer:
         model2.train()
 
         # Training loop
-        pbar = tqdm(total=len(train_loader), desc="[Train]")
+        pbar = tqdm(total=len(train_loader), desc="[Train]", ncols='100%')
         loss1_total = 0
         loss2_total = 0
         for i, (image, target, indexes) in enumerate(train_loader):

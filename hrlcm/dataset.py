@@ -116,8 +116,9 @@ class NFSEN1LC(Dataset):
 
     def __init__(self, data_dir,
                  usage='train',
+                 highest_score=10,
                  lowest_score=9,
-                 noise_ratio=0.2,
+                 noise_ratio=0.3,
                  label_offset=1,
                  sync_transform=None,
                  img_transform=None,
@@ -158,6 +159,7 @@ class NFSEN1LC(Dataset):
         # Check inputs
         assert usage in ['train', 'validate', 'predict']
         assert lowest_score in [8, 9, 10]
+        assert highest_score in [8, 9, 10]
         assert os.path.exists(data_dir)
 
         # Read catalog
@@ -174,13 +176,14 @@ class NFSEN1LC(Dataset):
         # Shrink the catalog based on noise ratio
         if self.usage == 'train':
             # Initialize values
+            self.highest_score = highest_score
             self.lowest_score = lowest_score
             self.noise_ratio = noise_ratio
 
             # Subset catalog based on score
-            catalog = catalog_full.loc[catalog_full['score'] >= self.lowest_score]
+            catalog = catalog_full.loc[self.lowest_score <= catalog_full['score'] <= self.highest_score]
 
-            if self.lowest_score < 10:
+            if self.lowest_score < 10 & self.highest_score == 10:
                 # Subset catalog based on noise_ratio
                 catalog_perfect = catalog.loc[catalog['score'] == 10]
                 catalog_rest = catalog.loc[catalog['score'] < 10]

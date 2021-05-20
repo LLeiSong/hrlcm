@@ -154,12 +154,14 @@ Before any tests related to strategies to deal with noisy labels, we will build 
   
 - Scheduler: we decided to use a compose scheduler to have dynamic learning rate. Even though Adam-based optimizer uses dynamic learning rate already, but experiments prove that using both dynamic learning rate and Adam-based optimizer together could have better performance. So we chose to use 0.001 for the first 30 epochs, to use a decayed cyclic scheduler (0.0008 - 0.0012) for epoch 30 - 120, and use another decayed cyclic scheduler (0.0004 - 0.0006) for last 80 epochs.
   
-###### DeepLab
+##### DeepLab
 
   [TO BE CONTINUE]
 
 ### Resume
 
-#### Single model
+#### Single model 
+
+
 
 #### Double model
