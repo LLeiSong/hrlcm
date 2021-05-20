@@ -181,7 +181,8 @@ class NFSEN1LC(Dataset):
             self.noise_ratio = noise_ratio
 
             # Subset catalog based on score
-            catalog = catalog_full.loc[self.lowest_score <= catalog_full['score'] <= self.highest_score]
+            catalog = catalog_full.loc[(self.lowest_score <= catalog_full['score']) &
+                                       (catalog_full['score'] <= self.highest_score)]
 
             if self.lowest_score < 10 & self.highest_score == 10:
                 # Subset catalog based on noise_ratio
