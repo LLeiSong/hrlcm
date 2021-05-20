@@ -8,7 +8,7 @@ Maintainer: Lei Song (lsong@clarku.edu)
 import argparse
 from augmentation import *
 from dataset import *
-from tqdm import tqdm # use tqdm.auto for notebook
+from tqdm import tqdm  # use tqdm.auto for notebook
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import pickle as pkl
@@ -72,9 +72,6 @@ def main():
     parser.add_argument('--save_freq', type=int, default=10,
                         help='training state will be saved every save_freq \
                         batches during training')
-    parser.add_argument('--log_freq', type=int, default=100,
-                        help='tensorboard logs will be written every log_freq \
-                              number of batches/optimization steps')
     parser.add_argument('--train_batch_size', type=int, default=32,
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=32,
@@ -82,12 +79,12 @@ def main():
     parser.add_argument('--epochs', type=int, default=300,
                         help='number of training epochs (default: 300)')
     parser.add_argument('--resume', '-r', type=str, default=None,
-                        help='path to the pretrained weights file', )
+                        help='path to the pretrained weights file')
 
     args = parser.parse_args()
 
     # Check inputs
-    assert args.optimizer_name.lower() in ['AdaBound', 'AmsBound', 'AdamP']
+    assert args.optimizer_name.lower() in ['adabound', 'amsbound', 'adamp']
     assert args.model in ['deeplab', 'unet']
 
     # Set directory for saving files

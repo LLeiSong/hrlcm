@@ -219,14 +219,14 @@ def main():
     loss_fn_val = BalancedCrossEntropyLoss()
 
     # Define optimizer
-    if args.optimizer_name.lower() == 'AdaBound':
+    if args.optimizer_name.lower() == 'adabound':
         optimizer1 = optim.AdaBound(model1.parameters(),
                                     lr=args.base_lr,
                                     final_lr=args.final_lr)
         optimizer2 = optim.AdaBound(model2.parameters(),
                                     lr=args.base_lr,
                                     final_lr=args.final_lr)
-    elif args.optimizer_name.lower() == 'AmsBound':
+    elif args.optimizer_name.lower() == 'amsbound':
         optimizer1 = optim.AdaBound(model1.parameters(),
                                     lr=args.base_lr,
                                     final_lr=args.final_lr,
@@ -235,7 +235,7 @@ def main():
                                     lr=args.base_lr,
                                     final_lr=args.final_lr,
                                     amsbound=True)
-    elif args.optimizer_name.lower() == 'AdamP':
+    elif args.optimizer_name.lower() == 'adamp':
         optimizer1 = optim.AdamP(model1.parameters(),
                                  nesterov=True,
                                  lr=args.base_lr)
