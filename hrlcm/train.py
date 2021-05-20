@@ -30,7 +30,7 @@ class Trainer:
         model.train()
 
         # Training loop
-        pbar = tqdm(total=len(train_loader), desc="[Train]", ncols='100%')
+        pbar = tqdm(total=len(train_loader), desc="[Train]", dynamic_ncols=True)
         loss_total = 0
         for i, (image, target, _) in enumerate(train_loader):
             # Move data to gpu if model is on gpu
@@ -81,7 +81,7 @@ class Trainer:
         model.eval()
 
         # Validate loop
-        pbar = tqdm(total=len(validate_loader), desc="[Val]", ncols='100%')
+        pbar = tqdm(total=len(validate_loader), desc="[Val]", dynamic_ncols=True)
         loss_total = 0
         conf_mat = metrics.ConfMatrix(validate_loader.dataset.n_classes)
         for i, (image, target) in enumerate(validate_loader):
@@ -155,7 +155,7 @@ class Trainer:
         model2.train()
 
         # Training loop
-        pbar = tqdm(total=len(train_loader), desc="[Train]", ncols='100%')
+        pbar = tqdm(total=len(train_loader), desc="[Train]", dynamic_ncols=True)
         loss1_total = 0
         loss2_total = 0
         for i, (image, target, indexes) in enumerate(train_loader):
@@ -227,7 +227,7 @@ class Trainer:
         model2.train()
 
         # Training loop
-        pbar = tqdm(total=len(train_loader), desc="[Train]", ncols='100%')
+        pbar = tqdm(total=len(train_loader), desc="[Train]", dynamic_ncols=True)
         loss_total = 0
         for i, (image, target, indexes) in enumerate(train_loader):
             # Move data to gpu if model is on gpu
@@ -286,7 +286,7 @@ class Trainer:
         model2.eval()
 
         # Validate loop
-        pbar = tqdm(total=len(validate_loader), desc="[Val]", ncols='100%')
+        pbar = tqdm(total=len(validate_loader), desc="[Val]", dynamic_ncols=True)
         loss1_total = 0
         loss2_total = 0
         conf_mat1 = metrics.ConfMatrix(validate_loader.dataset.n_classes)

@@ -8,7 +8,7 @@ Maintainer: Lei Song (lsong@clarku.edu)
 import argparse
 from augmentation import *
 from dataset import *
-from tqdm.auto import tqdm
+from tqdm import tqdm # use tqdm.auto for notebook
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import pickle as pkl
@@ -87,7 +87,7 @@ def main():
     args = parser.parse_args()
 
     # Check inputs
-    assert args.optimizer_name in ['AdaBound', 'AmsBound', 'AdamP']
+    assert args.optimizer_name.lower() in ['AdaBound', 'AmsBound', 'AdamP']
     assert args.model in ['deeplab', 'unet']
 
     # Set directory for saving files
@@ -211,16 +211,16 @@ def main():
     loss_fn = BalancedCrossEntropyLoss()
 
     # Define optimizer
-    if args.optimizer_name.lower() == 'AdaBound':
+    if args.optimizer_name.lower() == 'adabound':
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
                                    final_lr=args.base_lr)
-    elif args.optimizer_name.lower() == 'AmsBound':
+    elif args.optimizer_name.lower() == 'amsbound':
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
                                    final_lr=args.base_lr,
                                    amsbound=True)
-    elif args.optimizer_name.lower() == 'AdamP':
+    elif args.optimizer_name.lower() == 'adamp':
         optimizer = optim.AdamP(model.parameters(),
                                 nesterov=True,
                                 lr=args.max_lr)
@@ -239,7 +239,7 @@ def main():
     # Start train
     step = 0
     trainer = Trainer(args)
-    pbar = tqdm(total=args.epochs, desc="[Epoch]")
+    pbar = tqdm(total=args.epochs, desc="[Epoch]", dynamic_ncols=True)
     for epoch in range(args.epochs):
         # Run training for one epoch
         model, step = trainer.train(model, train_loader, loss_fn,

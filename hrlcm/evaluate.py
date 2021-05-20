@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 import pickle as pkl
 from models.deeplab import DeepLab
 from models.unet import UNet
-from tqdm.auto import tqdm
+from tqdm import tqdm
 import torch.nn as nn
 import numpy as np
 from sklearn.metrics import f1_score, precision_score, recall_score, \
@@ -174,7 +174,6 @@ def main():
                         backbone='resnet',
                         pretrained_backbone=False,
                         output_stride=train_args.out_stride,
-                        sync_bn=False,
                         freeze_bn=False,
                         n_in=train_args.n_channels)
     else:
@@ -212,7 +211,8 @@ def main():
     predicted_probs = []
     conf_mat = ConfMatrix(validate_loader.dataset.n_classes)
     with torch.no_grad():
-        for i, (image, labels) in enumerate(tqdm(validate_loader, desc="Evaluate")):
+        for i, (image, labels) in enumerate(
+                tqdm(validate_loader, desc="Evaluate", dynamic_ncols=True)):
             # Move data to gpu if model is on gpu
             if args.use_gpu:
                 image = image.to(torch.device("cuda"))
@@ -246,14 +246,14 @@ def main():
     report = classification_report_(y_predicted, y_true)
     aa = conf_mat.get_aa()
 
-    info = {"weightedPrec": prec,
-            "weightedRec": rec,
-            "weightedF1": f1,
-            "weightedF2": f2,
-            "HammingLoss": hm_loss,
-            "clsReport": report,
-            "conf_mat": conf_mat.norm_on_lines(),
-            "AverageAcc": aa}
+    info = {"Weighted Precision": prec,
+            "Weighted Recall": rec,
+            "Weighted F1": f1,
+            "Weighted F2": f2,
+            "Hamming Loss": hm_loss,
+            "Cls Report": report,
+            "Confusion matrix": conf_mat.norm_on_lines(),
+            "Average Accuracy": aa}
 
     print("Save out metrics")
     pkl.dump(info,open(os.path.join(
