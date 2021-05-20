@@ -238,6 +238,9 @@ def main():
     trainer = Trainer(args)
     # pbar = tqdm(total=args.epochs, desc="[Epoch]", dynamic_ncols=True)
     for epoch in range(args.epochs):
+        # Update info
+        print("[Epoch {}] lr: {:.3f}".format(
+            epoch, round(optimizer.param_groups[0]["lr"], 3)))
         # Run training for one epoch
         model, step = trainer.train(model, train_loader, loss_fn,
                                     optimizer, writer, step=step)
@@ -258,8 +261,6 @@ def main():
         # pbar.set_description("[Epoch] lr: {:.3f}".format(
         #     round(optimizer.param_groups[0]["lr"], 3)))
         # pbar.update()
-        print("[Epoch {}] lr: {:.3f}".format(
-            epoch, round(optimizer.param_groups[0]["lr"], 3)))
 
         # Save learning rate to scalar
         writer.add_scalar("Train/lr",
