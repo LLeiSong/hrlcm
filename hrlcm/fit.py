@@ -30,10 +30,10 @@ def main():
                              'for logs and checkpoints (default: experiment)')
 
     # dataset
-    parser.add_argument('--data_dir', type=str, default=None,
-                        help='path to dataset')
-    parser.add_argument('--out_dir', type=str, default="models",
-                        help='path to output dir (default: ./models)')
+    parser.add_argument('--data_dir', type=str, default='results/north',
+                        help='path to dataset (default: results/north)')
+    parser.add_argument('--out_dir', type=str, default="results/dl",
+                        help='path to output dir (default: results/dl)')
     parser.add_argument('--highest_score', type=int, default=10,
                         help='highest score to subset train dataset (default: 10)')
     parser.add_argument('--lowest_score', type=int, default=10,
@@ -59,11 +59,11 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     # Training hyper-parameters
-    parser.add_argument('--base_lr', type=float, default=0.0001,
-                        help='base learning rate for scheduler.')
     parser.add_argument('--max_lr', type=float, default=0.001,
-                        help='maximum learning rate for scheduler.')
-    parser.add_argument('--gamma_lr', type=float, default=0.97,
+                        help='maximum or initial learning rate for scheduler.')
+    parser.add_argument('--step_size', type=int, default=5,
+                        help='step size for scheduler.')
+    parser.add_argument('--gamma_lr', type=float, default=0.9,
                         help='gamma for learning rate.')
     parser.add_argument('--optimizer_name', type=str,
                         choices=['AdaBound', 'AmsBound', 'AdamP'],
@@ -227,11 +227,12 @@ def main():
                                    lr=args.max_lr,
                                    final_lr=0.01)
     # Set scheduler
-    lr_scheduler_1 = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.6)
-    lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.base_lr, max_lr=args.max_lr / 1.5,
-                                                       step_size_up=1, step_size_down=3,
-                                                       gamma=args.gamma_lr, cycle_momentum=False,
-                                                       mode='exp_range')
+    # Decide to use a cleaner one scheduler
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_lr)
+    # lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.base_lr, max_lr=args.max_lr / 1.5,
+    #                                                    step_size_up=1, step_size_down=3,
+    #                                                    gamma=args.gamma_lr, cycle_momentum=False,
+    #                                                    mode='exp_range')
 
     # Start train
     step = 0
@@ -240,6 +241,7 @@ def main():
         # Update info
         print("[Epoch {}] lr: {:.3f}".format(
             epoch, round(optimizer.param_groups[0]["lr"], 3)))
+
         # Run training for one epoch
         model, step = trainer.train(model, train_loader, loss_fn,
                                     optimizer, writer, step=step)
@@ -247,10 +249,7 @@ def main():
         trainer.validate(model, validate_loader, step, loss_fn, writer)
 
         # Update learning rate
-        if epoch <= 30:
-            lr_scheduler_1.step()
-        else:
-            lr_scheduler_2.step()
+        lr_scheduler.step()
 
         # Save checkpoint
         if epoch % args.save_freq == 0:
