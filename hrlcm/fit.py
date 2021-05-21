@@ -211,11 +211,11 @@ def main():
     if args.optimizer_name.lower() == 'adabound':
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
-                                   final_lr=args.base_lr)
+                                   final_lr=0.01)  # use constant final_lr 0.01
     elif args.optimizer_name.lower() == 'amsbound':
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
-                                   final_lr=args.base_lr,
+                                   final_lr=0.01,
                                    amsbound=True)
     elif args.optimizer_name.lower() == 'adamp':
         optimizer = optim.AdamP(model.parameters(),
@@ -225,7 +225,7 @@ def main():
         print('Not supported optimizer, use AdaBound instead.')
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
-                                   final_lr=args.base_lr)
+                                   final_lr=0.01)
     # Set scheduler
     lr_scheduler_1 = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.6)
     lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.base_lr, max_lr=args.max_lr / 1.5,
@@ -236,7 +236,6 @@ def main():
     # Start train
     step = 0
     trainer = Trainer(args)
-    # pbar = tqdm(total=args.epochs, desc="[Epoch]", dynamic_ncols=True)
     for epoch in range(args.epochs):
         # Update info
         print("[Epoch {}] lr: {:.3f}".format(
@@ -255,12 +254,7 @@ def main():
 
         # Save checkpoint
         if epoch % args.save_freq == 0:
-            trainer.export_model(model, optimizer=optimizer, step=step)
-
-        # # Update pbar
-        # pbar.set_description("[Epoch] lr: {:.3f}".format(
-        #     round(optimizer.param_groups[0]["lr"], 3)))
-        # pbar.update()
+            trainer.export_model(model, optimizer=optimizer, step=step, name='interim')
 
         # Save learning rate to scalar
         writer.add_scalar("Train/lr",
@@ -271,9 +265,6 @@ def main():
 
     # Export final set of weights
     trainer.export_model(model, optimizer, name="final")
-
-    # # Close pbar
-    # pbar.close()
 
 
 if __name__ == "__main__":
