@@ -47,7 +47,7 @@ chmod 777 create_spot_instance.sh
 create_spot_instance.sh ami-0643df3b347740189 g3.16xlarge sg-0a8bbc91697d6a76b lc_dl_tz persistent 2021-01-22T23:00:00 lsong-keypair 200
 ```
 
-#### Parameters setting
+#### Instance setting
 After successfully launched the instance, then it is ready to get into the instance to work.
 
 The most essential work are arguably to clone project and set jupyter notebook:
@@ -80,6 +80,12 @@ The most essential work are arguably to clone project and set jupyter notebook:
   jupyter notebook
   ```
   replace the private IP with the public IP to open it in browser. If you can log in without issues, then it is ready to go.
+  
+#### Run experiments
+
+```
+python hrlcm/fit.py --exp_name unet_single --data_dir 'results/north' --out_dir 'results/dl' --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200
+```
   
 #### Tensorboard
 
