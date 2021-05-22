@@ -239,8 +239,8 @@ def main():
     trainer = Trainer(args)
     for epoch in range(args.epochs):
         # Update info
-        print("[Epoch {}] lr: {:.4f}".format(
-            epoch, round(optimizer.param_groups[0]["lr"], 4)))
+        print("[Epoch {}] lr: {}".format(
+            epoch, optimizer.param_groups[0]["lr"]))
 
         # Run training for one epoch
         model, step = trainer.train(model, train_loader, loss_fn,
