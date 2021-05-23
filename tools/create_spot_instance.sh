@@ -93,7 +93,7 @@ MAX_SPOT_PRICE=$(echo $PRICES |\
 
 
 ## get bid price by adding an overflow
-OVERFLOW=0.02
+OVERFLOW=0.08
 BID_PRICE=$(echo | awk -v a=$MAX_SPOT_PRICE -v b=$OVERFLOW '{print a+b}')
 
 ## get subnetId of lowest price zone

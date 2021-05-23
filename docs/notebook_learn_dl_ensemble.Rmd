@@ -86,6 +86,10 @@ The most essential work are arguably to clone project and set jupyter notebook:
 ```
 python hrlcm/fit.py --exp_name unet_single --data_dir 'results/north' --out_dir 'results/dl' --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200
 ```
+
+```
+python hrlcm/fit.py --exp_name unet_single --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200
+```
   
 #### Tensorboard
 
