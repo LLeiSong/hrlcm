@@ -240,21 +240,21 @@ def main():
     # Resume model based on settings
     if args.resume:
         if os.path.isfile(args.resume):
-            print("Load checkpoint '{}'".format(args.resume))
             checkpoint = torch.load(args.resume)
 
+            # Get step and epoch
             if checkpoint['step'] > step:
                 step = checkpoint['step']
-                epoch = floor(step / floor(len(train_dataset) / args.train_batch_size)) + 1
+                epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            print("Loaded checkpoint '{}' (epoch {})".format(args.resume, epoch))
+            print("Load checkpoint '{}' (epoch {})".format(args.resume, epoch))
         else:
             print("No checkpoint found at '{}'".format(args.resume))
 
     # Do loop
     trainer = Trainer(args)
-    for epoch in range(epoch, args.epochs):
+    for epoch in range(epoch + 1, args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(
             epoch, optimizer.param_groups[0]["lr"]))
