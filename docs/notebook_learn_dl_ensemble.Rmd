@@ -88,7 +88,7 @@ python hrlcm/fit.py --exp_name unet_single --data_dir 'results/north' --out_dir 
 ```
 
 ```
-python hrlcm/fit.py --exp_name unet_single --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200 --resume 'results/dl/resume/interim.pth'
+python hrlcm/fit.py --exp_name unet_single --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200 --resume 'results/dl/resume/interim.pth' --save_freq 5
 ```
   
 #### Tensorboard
