@@ -361,7 +361,7 @@ class Trainer:
         # Flush to disk
         writer.flush()
 
-    def export_model(self, model, optimizer=None, name=None, step=None):
+    def export_model(self, model, optimizer=None, scheduler=None, name=None, step=None):
         # Set output filename
         if name is not None:
             out_file = name
@@ -377,4 +377,6 @@ class Trainer:
             data["step"] = step
         if optimizer is not None:
             data["optimizer_state_dict"] = optimizer.state_dict()
+        if scheduler is not None:
+            data['scheduler_state_dict'] = scheduler.state_dict()
         torch.save(data, out_file)

@@ -253,6 +253,20 @@ def main():
                 epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if 30 <= epoch < epoch_stage1:
+                lr_scheduler_1 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.max_lr - 0.0002,
+                                                                   max_lr=args.max_lr + 0.0002,
+                                                                   step_size_up=1, step_size_down=3,
+                                                                   gamma=0.97, cycle_momentum=False,
+                                                                   mode='exp_range')
+                lr_scheduler_1.load_state_dict(checkpoint['scheduler_state_dict'])
+            elif epoch_stage1 <= epoch < epoch_stage2:
+                lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(args.max_lr - 0.0002) / 2,
+                                                                   max_lr=(args.max_lr + 0.0002) / 2,
+                                                                   step_size_up=1, step_size_down=5,
+                                                                   gamma=0.94, cycle_momentum=False,
+                                                                   mode='exp_range')
+                lr_scheduler_2.load_state_dict(checkpoint['scheduler_state_dict'])
             print("Load checkpoint '{}' (epoch {})".format(args.resume, epoch))
         else:
             print("No checkpoint found at '{}'".format(args.resume))
@@ -298,7 +312,14 @@ def main():
 
         # Save checkpoint
         if epoch % args.save_freq == 0:
-            trainer.export_model(model, optimizer=optimizer, step=step, name='interim')
+            if epoch < 30 | epoch >= epoch_stage2:
+                trainer.export_model(model, optimizer=optimizer, step=step, name='interim')
+            elif 30 < epoch < epoch_stage1:
+                trainer.export_model(model, optimizer=optimizer,
+                                     scheduler=lr_scheduler_1, step=step, name='interim')
+            else:
+                trainer.export_model(model, optimizer=optimizer,
+                                     scheduler=lr_scheduler_2, step=step, name='interim')
 
         # Save learning rate to scalar
         writer.add_scalar("Train/lr",
