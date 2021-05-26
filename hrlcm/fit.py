@@ -314,7 +314,7 @@ def main():
         if epoch % args.save_freq == 0:
             if epoch < 30 or epoch >= epoch_stage2:
                 trainer.export_model(model, optimizer=optimizer, step=step, name='interim')
-            elif 30 < epoch < epoch_stage1:
+            elif 30 <= epoch < epoch_stage1:
                 trainer.export_model(model, optimizer=optimizer,
                                      scheduler=lr_scheduler_1, step=step, name='interim')
             else:
