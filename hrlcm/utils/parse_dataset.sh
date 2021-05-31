@@ -22,16 +22,28 @@ fi
 
 if [ "$TYPE" == "1" ]; then
   echo "Download dataset to $DIR/north.zip"
-  curl -o "$DIR/north.zip" https://www.dropbox.com/s/v005zhcxwxfnf16/north.zip -L
+  curl -o "$DIR/north.zip" https://www.dropbox.com/s/7cxlclajdo6wid0/north.zip -L
+  unzip $DIR/north.zip -d $DIR
+  rm -rf $DIR/north.zip
+  rm -rf $DIR/__MACOSX
 elif [ "$TYPE" == "2" ]; then
   echo "Download dataset to $DIR/dl_train.zip"
   curl -o "$DIR/dl_train.zip" https://www.dropbox.com/s/gz463kp9yxtuqef/dl_train.zip -L
+  unzip $DIR/dl_train.zip -d $DIR
+  rm -rf $DIR/dl_train.zip
+  rm -rf $DIR/__MACOSX
 elif [ "$TYPE" == "3" ]; then
   echo "Download dataset to $DIR/dl_train_score9.zip"
   curl -o "$DIR/dl_train_score9.zip" https://www.dropbox.com/s/j4lozxcvxe4yvs6/dl_train_score9.zip -L
+  unzip $DIR/dl_train_score9.zip -d $DIR
+  rm -rf $DIR/dl_train_score9.zip
+  rm -rf $DIR/__MACOSX
 elif [ "$TYPE" == "4" ]; then
   echo "Download dataset to $DIR/dl_train_score8.zip"
   curl -o "$DIR/dl_train_score8.zip" https://www.dropbox.com/s/j4lozxcvxe4yvs6/dl_train_score8.zip -L
+  unzip $DIR/dl_train_score8.zip -d $DIR
+  rm -rf $DIR/dl_train_score8.zip
+  rm -rf $DIR/__MACOSX
 else
   echo "No such type."
 fi
