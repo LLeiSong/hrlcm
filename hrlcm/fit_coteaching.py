@@ -71,9 +71,9 @@ def main():
     parser.add_argument('--save_freq', type=int, default=10,
                         help='training state will be saved every save_freq \
                         batches during training')
-    parser.add_argument('--train_batch_size', type=int, default=32,
+    parser.add_argument('--train_batch_size', type=int, default=16,
                         help='batch size for training (default: 16)')
-    parser.add_argument('--val_batch_size', type=int, default=32,
+    parser.add_argument('--val_batch_size', type=int, default=16,
                         help='batch size for validation (default: 16)')
     parser.add_argument('--epochs', type=int, default=50,
                         help='number of training epochs (default: 50). '
