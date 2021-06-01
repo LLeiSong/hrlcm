@@ -190,14 +190,14 @@ class Trainer:
             writer.add_scalar("Train/loss2", loss2, global_step=global_step)
 
             # Update progressbar
-            pbar.set_description("[Train] Loss1: {:.2f}, Loss2: {:.2f}".format(
-                round(loss1.item(), 2), round(loss2.item(), 2)))
+            pbar.set_description("[Train] Loss1: {:.3f}, Loss2: {:.3f}".format(
+                round(loss1.item(), 3), round(loss2.item(), 3)))
             pbar.update()
 
         # Close progressbar
-        pbar.set_description("[Train] Loss1: {:.2f}, Loss2: {:.2f}".format(
-            round(loss1_total / len(train_loader), 2),
-            round(loss2_total / len(train_loader), 2)))
+        pbar.set_description("[Train] Loss1: {:.3f}, Loss2: {:.3f}".format(
+            round(loss1_total / len(train_loader), 3),
+            round(loss2_total / len(train_loader), 3)))
         pbar.close()
 
         # Flush to disk
