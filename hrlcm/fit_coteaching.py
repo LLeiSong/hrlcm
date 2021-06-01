@@ -266,53 +266,24 @@ def main():
 
     # Start train
     step = 0
-    epoch = 0
     epoch_stage1 = 10
     if args.resume1 and args.resume2:
         if os.path.isfile(args.resume1):
             checkpoint = torch.load(args.resume1)
-
-            # Get step and epoch
-            if checkpoint['step'] > step:
-                step = checkpoint['step']
-                epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
             model1.load_state_dict(checkpoint['model_state_dict'])
             optimizer1.load_state_dict(checkpoint['optimizer_state_dict'])
-
-            if epoch >= 10:
-                lr_scheduler_11 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer1, base_lr=args.max_lr - 0.0006,
-                    max_lr=args.max_lr + 0.0002,
-                    step_size_up=1, step_size_down=3,
-                    gamma=0.93, cycle_momentum=False,
-                    mode='exp_range')
-                lr_scheduler_11.load_state_dict(checkpoint['scheduler_state_dict'])
         else:
             print("No checkpoint found at '{}'".format(args.resume1))
 
         if os.path.isfile(args.resume2):
             checkpoint = torch.load(args.resume2)
-
-            # Get step and epoch
-            if checkpoint['step'] > step:
-                step = checkpoint['step']
-                epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
             model2.load_state_dict(checkpoint['model_state_dict'])
             optimizer2.load_state_dict(checkpoint['optimizer_state_dict'])
-
-            if epoch >= 10:
-                lr_scheduler_12 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer2, base_lr=args.max_lr - 0.0006,
-                    max_lr=args.max_lr + 0.0002,
-                    step_size_up=1, step_size_down=3,
-                    gamma=0.93, cycle_momentum=False,
-                    mode='exp_range')
-                lr_scheduler_12.load_state_dict(checkpoint['scheduler_state_dict'])
         else:
             print("No checkpoint found at '{}'".format(args.resume2))
 
     trainer = Trainer(args)
-    for epoch in range(epoch + 1, args.epochs):
+    for epoch in range(args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(
             epoch, optimizer1.param_groups[0]["lr"]))
