@@ -86,7 +86,6 @@ if [ -z "$ZONE" ]; then
 else
   ZONE=$(echo "\"$ZONE\"")
 fi
-echo "$ZONE"
 
 MAX_SPOT_PRICE=$(echo $PRICES |\
 	jq '[.SpotPriceHistory[] | select(.AvailabilityZone == '"$ZONE"')] | max_by(.SpotPrice | tonumber) |.SpotPrice |tonumber')
@@ -103,16 +102,17 @@ SUBNETID=$(aws ec2 describe-subnets \
 		--output text \
 		--query 'Subnets[*].SubnetId')
 
+echo "$SUBNETID"
 
 ## Set up new instance
 echo "Setting up new spot instance named $NEWINAME from AMI $AMIID with volume size $SDASIZE in $ZONE on a bid_price of $BID_PRICE"
 
-if [ "$SPOTTYPE" == "persistent" ]; then
+if [ "$SPOTTYPE" = "persistent" ]; then
   aws ec2 run-instances \
     --image-id $AMIID \
     --count 1 \
     --instance-type $ITYPE \
-    --subnet-id $SUBNETID \
+    # --subnet-id $SUBNETID \
     --iam-instance-profile 'Name="activemapper_planet_readwriteS3"' \
     --key-name $KEYNAME \
     --security-group-ids $SECGROUPID \
@@ -129,7 +129,6 @@ else
     --image-id $AMIID \
     --count 1 \
     --instance-type $ITYPE \
-    --subnet-id $SUBNETID \
     --iam-instance-profile 'Name="activemapper_planet_readwriteS3"' \
     --key-name $KEYNAME \
     --security-group-ids $SECGROUPID \
