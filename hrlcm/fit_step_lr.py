@@ -59,8 +59,6 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     # Training hyper-parameters
-    parser.add_argument('--base_lr', type=float, default=0.0001,
-                        help='minimum or last learning rate for scheduler.')
     parser.add_argument('--max_lr', type=float, default=0.001,
                         help='maximum or initial learning rate for scheduler.')
     parser.add_argument('--step_size', type=int, default=5,
@@ -78,9 +76,8 @@ def main():
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=32,
                         help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=200,
-                        help='number of training epochs (default: 200). '
-                             'NOTE: The scheduler is designed best for 200.')
+    parser.add_argument('--epochs', type=int, default=300,
+                        help='number of training epochs (default: 300)')
     parser.add_argument('--resume', '-r', type=str, default=None,
                         help='path to the pretrained weights file')
 
@@ -231,7 +228,7 @@ def main():
                                    final_lr=0.01)
     # Set scheduler
     # Decide to use a cleaner one scheduler
-    # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_lr)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_lr)
     # lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.base_lr, max_lr=args.max_lr / 1.5,
     #                                                    step_size_up=1, step_size_down=3,
     #                                                    gamma=args.gamma_lr, cycle_momentum=False,
@@ -240,8 +237,6 @@ def main():
     # Start train
     step = 0
     epoch = 0
-    epoch_stage1 = floor(args.epochs * 0.6)
-    epoch_stage2 = floor(args.epochs * 0.85)
     # Resume model based on settings
     if args.resume:
         if os.path.isfile(args.resume):
@@ -253,20 +248,6 @@ def main():
                 epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            if 30 <= epoch < epoch_stage1:
-                lr_scheduler_1 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.max_lr - 0.0002,
-                                                                   max_lr=args.max_lr + 0.0002,
-                                                                   step_size_up=1, step_size_down=3,
-                                                                   gamma=0.97, cycle_momentum=False,
-                                                                   mode='exp_range')
-                lr_scheduler_1.load_state_dict(checkpoint['scheduler_state_dict'])
-            elif epoch_stage1 <= epoch < epoch_stage2:
-                lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(args.max_lr - 0.0002) / 2,
-                                                                   max_lr=(args.max_lr + 0.0002) / 2,
-                                                                   step_size_up=1, step_size_down=5,
-                                                                   gamma=0.94, cycle_momentum=False,
-                                                                   mode='exp_range')
-                lr_scheduler_2.load_state_dict(checkpoint['scheduler_state_dict'])
             print("Load checkpoint '{}' (epoch {})".format(args.resume, epoch))
         else:
             print("No checkpoint found at '{}'".format(args.resume))
@@ -285,41 +266,11 @@ def main():
         trainer.validate(model, validate_loader, step, loss_fn, writer)
 
         # Update learning rate
-        # Since learning rate is a very important hyper-parameter,
-        # it is recommended to visualize learning rate first.
-        # The first 30 epochs use a constant 0.001 as a start.
-        # The last 30 epochs use a constant 0.0001 as an end.
-        if epoch <= 30:
-            if epoch == 30:
-                lr_scheduler_1 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.max_lr-0.0002,
-                                                                   max_lr=args.max_lr+0.0002,
-                                                                   step_size_up=1, step_size_down=3,
-                                                                   gamma=0.97, cycle_momentum=False,
-                                                                   mode='exp_range')
-        elif 30 < epoch <= epoch_stage1:
-            lr_scheduler_1.step()
-            if epoch == epoch_stage1:
-                lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(args.max_lr-0.0002)/2,
-                                                                   max_lr=(args.max_lr+0.0002)/2,
-                                                                   step_size_up=1, step_size_down=5,
-                                                                   gamma=0.94, cycle_momentum=False,
-                                                                   mode='exp_range')
-        elif epoch_stage1 < epoch <= epoch_stage2:
-            lr_scheduler_2.step()
-            if epoch == epoch_stage2:
-                for param_group in optimizer.param_groups:
-                    param_group["lr"] = args.base_lr
+        lr_scheduler.step()
 
         # Save checkpoint
         if epoch % args.save_freq == 0:
-            if epoch < 30 or epoch >= epoch_stage2:
-                trainer.export_model(model, optimizer=optimizer, step=step, name='interim')
-            elif 30 <= epoch < epoch_stage1:
-                trainer.export_model(model, optimizer=optimizer,
-                                     scheduler=lr_scheduler_1, step=step, name='interim')
-            else:
-                trainer.export_model(model, optimizer=optimizer,
-                                     scheduler=lr_scheduler_2, step=step, name='interim')
+            trainer.export_model(model, optimizer=optimizer, step=step, name='interim')
 
         # Save learning rate to scalar
         writer.add_scalar("Train/lr",
