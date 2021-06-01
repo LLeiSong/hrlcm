@@ -88,7 +88,7 @@ python hrlcm/fit.py --exp_name unet_compose_lr --num_workers 32 --gpu_devices '0
 ```
 
 ```
-python hrlcm/fit.py --exp_name unet_compose_lr --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200 --resume 'results/dl/resume/interim.pth' --save_freq 5
+python hrlcm/fit.py --exp_name unet_compose_lr --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200 --save_freq 5 --resume 'results/dl/resume/interim.pth'
 ```
   
 #### Tensorboard

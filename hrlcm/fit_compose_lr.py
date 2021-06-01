@@ -8,7 +8,6 @@ Maintainer: Lei Song (lsong@clarku.edu)
 import argparse
 from augmentation import *
 from dataset import *
-from tqdm import tqdm  # use tqdm.auto for notebook
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import pickle as pkl

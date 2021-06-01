@@ -35,9 +35,9 @@ def main():
                         help='path to output dir (default: results/dl)')
     parser.add_argument('--highest_score', type=int, default=10,
                         help='highest score to subset train dataset (default: 10)')
-    parser.add_argument('--lowest_score', type=int, default=10,
+    parser.add_argument('--lowest_score', type=int, default=9,
                         help='lowest score to subset train dataset (default: 10)')
-    parser.add_argument('--noise_ratio', type=float, default=None,
+    parser.add_argument('--noise_ratio', type=float, default=0.3,
                         help='ratio of noise to subset train dataset (default: None)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
@@ -62,8 +62,6 @@ def main():
                         help='minimum or last learning rate for scheduler.')
     parser.add_argument('--max_lr', type=float, default=0.001,
                         help='maximum or initial learning rate for scheduler.')
-    parser.add_argument('--step_size', type=int, default=5,
-                        help='step size for scheduler.')
     parser.add_argument('--gamma_lr', type=float, default=0.9,
                         help='gamma for learning rate.')
     parser.add_argument('--optimizer_name', type=str,
