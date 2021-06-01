@@ -256,14 +256,14 @@ class Trainer:
             writer.add_scalar("Train/loss2", loss, global_step=global_step)
 
             # Update progressbar
-            pbar.set_description("[Train] Loss1: {:.2f}, Loss2: {:.2f}".format(
-                round(loss.item(), 2), round(loss.item(), 2)))
+            pbar.set_description("[Train] Loss1: {:.3f}, Loss2: {:.3f}".format(
+                round(loss.item(), 3), round(loss.item(), 3)))
             pbar.update()
 
         # Close progressbar
-        pbar.set_description("[Train] Loss1: {:.2f}, Loss2: {:.2f}".format(
-            round(loss_total / len(train_loader), 2),
-            round(loss_total / len(train_loader), 2)))
+        pbar.set_description("[Train] Loss1: {:.3f}, Loss2: {:.3f}".format(
+            round(loss_total / len(train_loader), 3),
+            round(loss_total / len(train_loader), 3)))
         pbar.close()
 
         # Flush to disk
@@ -311,8 +311,8 @@ class Trainer:
             conf_mat2.add_batch(target, logits2.max(1)[1])
 
             # Update progressbar
-            pbar.set_description("[Val] Loss1: {:.2f}, Loss2: {:.2f}".format(
-                round(loss1.item(), 2), round(loss2.item(), 2)))
+            pbar.set_description("[Val] Loss1: {:.3f}, Loss2: {:.3f}".format(
+                round(loss1.item(), 3), round(loss2.item(), 3)))
             pbar.update()
 
         # Write validation metrics to tensorboard
