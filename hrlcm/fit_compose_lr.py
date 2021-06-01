@@ -63,8 +63,6 @@ def main():
                         help='minimum or last learning rate for scheduler.')
     parser.add_argument('--max_lr', type=float, default=0.001,
                         help='maximum or initial learning rate for scheduler.')
-    parser.add_argument('--step_size', type=int, default=5,
-                        help='step size for scheduler.')
     parser.add_argument('--gamma_lr', type=float, default=0.9,
                         help='gamma for learning rate.')
     parser.add_argument('--optimizer_name', type=str,
@@ -229,14 +227,6 @@ def main():
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
                                    final_lr=0.01)
-    # Set scheduler
-    # Decide to use a cleaner one scheduler
-    # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma_lr)
-    # lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.base_lr, max_lr=args.max_lr / 1.5,
-    #                                                    step_size_up=1, step_size_down=3,
-    #                                                    gamma=args.gamma_lr, cycle_momentum=False,
-    #                                                    mode='exp_range')
-
     # Start train
     step = 0
     epoch = 0

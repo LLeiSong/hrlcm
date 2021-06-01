@@ -8,7 +8,6 @@ Maintainer: Lei Song (lsong@clarku.edu)
 import argparse
 from augmentation import *
 from dataset import *
-from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import pickle as pkl
@@ -30,10 +29,12 @@ def main():
                              'for logs and checkpoints (default: experiment)')
 
     # dataset
-    parser.add_argument('--data_dir', type=str, default=None,
-                        help='path to dataset')
-    parser.add_argument('--out_dir', type=str, default="models",
-                        help='path to output dir (default: ./models)')
+    parser.add_argument('--data_dir', type=str, default='results/north',
+                        help='path to dataset (default: results/north)')
+    parser.add_argument('--out_dir', type=str, default="results/dl",
+                        help='path to output dir (default: results/dl)')
+    parser.add_argument('--highest_score', type=int, default=10,
+                        help='highest score to subset train dataset (default: 10)')
     parser.add_argument('--lowest_score', type=int, default=10,
                         help='lowest score to subset train dataset (default: 10)')
     parser.add_argument('--noise_ratio', type=float, default=None,
@@ -57,12 +58,14 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     # Training hyper-parameters
-    parser.add_argument('--base_lr', type=float, default=0.001,
-                        help='initial learning rate or a constant learning rate.')
-    parser.add_argument('--max_lr', type=float, default=0.01,
-                        help='maximum learning rate.')
-    parser.add_argument('--final_lr', type=float, default=0.01,
-                        help='final learning rate for AdaBound or AmsBound')
+    parser.add_argument('--base_lr', type=float, default=0.0001,
+                        help='minimum or last learning rate for scheduler.')
+    parser.add_argument('--max_lr', type=float, default=0.001,
+                        help='maximum or initial learning rate for scheduler.')
+    parser.add_argument('--step_size', type=int, default=5,
+                        help='step size for scheduler.')
+    parser.add_argument('--gamma_lr', type=float, default=0.9,
+                        help='gamma for learning rate.')
     parser.add_argument('--optimizer_name', type=str,
                         choices=['AdaBound', 'AmsBound', 'AdamP'],
                         default="AmsBound",
@@ -70,22 +73,28 @@ def main():
     parser.add_argument('--save_freq', type=int, default=10,
                         help='training state will be saved every save_freq \
                         batches during training')
-    parser.add_argument('--log_freq', type=int, default=100,
-                        help='tensorboard logs will be written every log_freq \
-                              number of batches/optimization steps')
     parser.add_argument('--train_batch_size', type=int, default=32,
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=32,
                         help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=100,
-                        help='number of training epochs (default: 100)')
-    parser.add_argument('--resume', '-r', type=str, default=None,
-                        help='path to the pretrained weights file', )
+    parser.add_argument('--epochs', type=int, default=50,
+                        help='number of training epochs (default: 50). '
+                             'NOTE: The scheduler is designed best for 50.')
+    parser.add_argument('--resume1', '-r1', type=str, default=None,
+                        help='path to the pretrained weights file of model1.')
+    parser.add_argument('--resume2', '-r2', type=str, default=None,
+                        help='path to the pretrained weights file of model2.')
+
+    # Co-teaching
+    parser.add_argument('--exponent', type=int, default=3,
+                        help='exponent for co-teaching forget rate drop (default: 2)')
+    parser.add_argument('--num_gradual', type=int, default=10,
+                        help='number of gradual drop in forget rate (default: 15)')
 
     args = parser.parse_args()
 
     # Check inputs
-    assert args.optimizer_name in ['AdaBound', 'AmsBound', 'AdamP']
+    assert args.optimizer_name.lower() in ['adabound', 'amsbound', 'adamp']
     assert args.model in ['deeplab', 'unet']
 
     # Set directory for saving files
@@ -114,10 +123,10 @@ def main():
 
     # synchronize transform for train dataset
     sync_transform = Compose([
-        RandomScale(prob=args.trans_prob),
+        # RandomScale(prob=args.trans_prob),
         RandomFlip(prob=args.trans_prob),
-        RandomCenterRotate(degree=args.rg_rotate,
-                           prob=args.trans_prob),
+        # RandomCenterRotate(degree=args.rg_rotate,
+        #                    prob=args.trans_prob),
         SyncToTensor()
     ])
 
@@ -140,6 +149,7 @@ def main():
     # Get train dataset
     train_dataset = NFSEN1LC(data_dir=args.data_dir,
                              usage='train',
+                             highest_score=args.highest_score,
                              lowest_score=args.lowest_score,
                              noise_ratio=args.noise_ratio,
                              label_offset=args.label_offset,
@@ -221,47 +231,94 @@ def main():
     # Define optimizer
     if args.optimizer_name.lower() == 'adabound':
         optimizer1 = optim.AdaBound(model1.parameters(),
-                                    lr=args.base_lr,
-                                    final_lr=args.final_lr)
+                                    lr=args.max_lr,
+                                    final_lr=0.01)
         optimizer2 = optim.AdaBound(model2.parameters(),
-                                    lr=args.base_lr,
-                                    final_lr=args.final_lr)
+                                    lr=args.max_lr,
+                                    final_lr=0.01)
     elif args.optimizer_name.lower() == 'amsbound':
         optimizer1 = optim.AdaBound(model1.parameters(),
-                                    lr=args.base_lr,
-                                    final_lr=args.final_lr,
+                                    lr=args.max_lr,
+                                    final_lr=0.01,
                                     amsbound=True)
         optimizer2 = optim.AdaBound(model2.parameters(),
-                                    lr=args.base_lr,
-                                    final_lr=args.final_lr,
+                                    lr=args.max_lr,
+                                    final_lr=0.01,
                                     amsbound=True)
     elif args.optimizer_name.lower() == 'adamp':
         optimizer1 = optim.AdamP(model1.parameters(),
                                  nesterov=True,
-                                 lr=args.base_lr)
+                                 lr=args.max_lr)
         optimizer2 = optim.AdamP(model2.parameters(),
                                  nesterov=True,
-                                 lr=args.base_lr)
+                                 lr=args.max_lr)
     else:
         print('Not supported optimizer, use AdaBound instead.')
         optimizer1 = optim.AdaBound(model1.parameters(),
-                                    lr=args.base_lr,
-                                    final_lr=args.final_lr)
+                                    lr=args.max_lr,
+                                    final_lr=0.01)
         optimizer2 = optim.AdaBound(model2.parameters(),
-                                    lr=args.base_lr,
-                                    final_lr=args.final_lr)
+                                    lr=args.max_lr,
+                                    final_lr=0.01)
 
     # Define drop rate schedule
     forget_rate = args.noise_ratio
-    args.exponent = 2
-    args.num_gradual = 15
     rate_schedule = np.ones(args.epochs) * forget_rate
     rate_schedule[:args.num_gradual] = np.linspace(0, forget_rate ** args.exponent, args.num_gradual)
+
     # Start train
     step = 0
+    epoch = 0
+    epoch_stage1 = 10
+    if args.resume:
+        if os.path.isfile(args.resume1):
+            checkpoint = torch.load(args.resume1)
+
+            # Get step and epoch
+            if checkpoint['step'] > step:
+                step = checkpoint['step']
+                epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
+            model1.load_state_dict(checkpoint['model_state_dict'])
+            optimizer1.load_state_dict(checkpoint['optimizer_state_dict'])
+
+            if epoch >= 10:
+                lr_scheduler_11 = torch.optim.lr_scheduler.CyclicLR(
+                    optimizer1, base_lr=args.max_lr - 0.0006,
+                    max_lr=args.max_lr + 0.0002,
+                    step_size_up=1, step_size_down=3,
+                    gamma=0.93, cycle_momentum=False,
+                    mode='exp_range')
+                lr_scheduler_11.load_state_dict(checkpoint['scheduler_state_dict'])
+        else:
+            print("No checkpoint found at '{}'".format(args.resume1))
+
+        if os.path.isfile(args.resume2):
+            checkpoint = torch.load(args.resume2)
+
+            # Get step and epoch
+            if checkpoint['step'] > step:
+                step = checkpoint['step']
+                epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
+            model2.load_state_dict(checkpoint['model_state_dict'])
+            optimizer2.load_state_dict(checkpoint['optimizer_state_dict'])
+
+            if epoch >= 10:
+                lr_scheduler_12 = torch.optim.lr_scheduler.CyclicLR(
+                    optimizer2, base_lr=args.max_lr - 0.0006,
+                    max_lr=args.max_lr + 0.0002,
+                    step_size_up=1, step_size_down=3,
+                    gamma=0.93, cycle_momentum=False,
+                    mode='exp_range')
+                lr_scheduler_12.load_state_dict(checkpoint['scheduler_state_dict'])
+        else:
+            print("No checkpoint found at '{}'".format(args.resume2))
+
     trainer = Trainer(args)
-    pbar = tqdm(total=args.epochs, desc="[Epoch]")
-    for epoch in range(args.epochs):
+    for epoch in range(epoch + 1, args.epochs):
+        # Update info
+        print("[Epoch {}] lr: {}".format(
+            epoch, optimizer1.param_groups[0]["lr"]))
+
         # Run training for one epoch
         model1, model2, step = trainer.co_train(model1, model2, train_loader, loss_fn,
                                                 optimizer1, optimizer2, args.noise_or_not,
@@ -270,52 +327,32 @@ def main():
         trainer.co_validate(model1, model2, validate_loader, step, loss_fn_val, writer)
 
         # Update learning rate
-        if epoch <= 30:
-            if epoch == 30:
+        if epoch <= epoch_stage1:
+            if epoch == epoch_stage1:
                 lr_scheduler_11 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer1, base_lr=0.0008, max_lr=0.0012,
+                    optimizer1, base_lr=args.max_lr - 0.0006,
+                    max_lr=args.max_lr + 0.0002,
                     step_size_up=1, step_size_down=3,
-                    gamma=0.97, cycle_momentum=False,
+                    gamma=0.93, cycle_momentum=False,
                     mode='exp_range')
                 lr_scheduler_12 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer2, base_lr=0.0008, max_lr=0.0012,
+                    optimizer2, base_lr=args.max_lr - 0.0006,
+                    max_lr=args.max_lr + 0.0002,
                     step_size_up=1, step_size_down=3,
-                    gamma=0.97, cycle_momentum=False,
-                    mode='exp_range')
-        elif 30 < epoch <= 120:
-            lr_scheduler_11.step()
-            lr_scheduler_12.step()
-            if epoch == 120:
-                lr_scheduler_21 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer1, base_lr=0.0004, max_lr=0.0006,
-                    step_size_up=1, step_size_down=5,
-                    gamma=0.94, cycle_momentum=False,
-                    mode='exp_range')
-                lr_scheduler_22 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer2, base_lr=0.0004, max_lr=0.0006,
-                    step_size_up=1, step_size_down=5,
-                    gamma=0.94, cycle_momentum=False,
+                    gamma=0.93, cycle_momentum=False,
                     mode='exp_range')
         else:
-            lr_scheduler_21.step()
-            lr_scheduler_22.step()
+            lr_scheduler_11.step()
+            lr_scheduler_12.step()
 
         # Save checkpoint
         if epoch % args.save_freq == 0:
             trainer.export_model(model1, optimizer=optimizer1, step=step, name='model1')
             trainer.export_model(model2, optimizer=optimizer2, step=step, name='model2')
 
-        # Update pbar
-        pbar.set_description("[Epoch] lr: {:.4f}".format(
-            round(optimizer1.param_groups[0]["lr"], 4)))
-        pbar.update()
-
     # Export final set of weights
     trainer.export_model(model1, optimizer1, name="model1_final")
     trainer.export_model(model2, optimizer2, name="model2_final")
-
-    # Close pbar
-    pbar.close()
 
 
 if __name__ == "__main__":
