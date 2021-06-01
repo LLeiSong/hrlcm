@@ -84,11 +84,11 @@ The most essential work are arguably to clone project and set jupyter notebook:
 #### Run experiments
 
 ```
-python hrlcm/fit.py --exp_name unet_single --data_dir 'results/north' --out_dir 'results/dl' --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200
+python hrlcm/fit.py --exp_name unet_compose_lr --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200
 ```
 
 ```
-python hrlcm/fit.py --exp_name unet_single --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200 --resume 'results/dl/resume/interim.pth' --save_freq 5
+python hrlcm/fit.py --exp_name unet_compose_lr --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200 --resume 'results/dl/resume/interim.pth' --save_freq 5
 ```
   
 #### Tensorboard
@@ -156,6 +156,7 @@ Before any tests related to strategies to deal with noisy labels, we will build 
   
   - 0.1 is too large
   - 0.01 and 0.001 works similarly, but 0.001 works slightly better for multiple optimizer.
+  - Learning rate smaller than 0.0001 might be too small for this case.
   
 - Optimizer: we plan to try some more recent optimizer such as AdaBound, AdamP, etc. Because SGD could make model have higher generalization while Adam can train the model faster. So if we could use an optimizer that has both advantages, it would be ideal. AdaBound is such kind of optimizer. Since our research is not about the improvement of DL algorithm, so we just pick up the most right one at the moment.
   
