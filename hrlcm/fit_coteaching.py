@@ -260,9 +260,12 @@ def main():
                                     final_lr=0.01)
 
     # Define drop rate schedule
+    warm_up_step = 2
     forget_rate = args.noise_ratio
     rate_schedule = np.ones(args.epochs) * forget_rate
-    rate_schedule[:args.num_gradual] = np.linspace(0, forget_rate ** args.exponent, args.num_gradual)
+    rate_schedule[:warm_up_step] = 0
+    rate_schedule[warm_up_step:(args.num_gradual + warm_up_step)] = \
+        np.linspace(0, forget_rate ** args.exponent, args.num_gradual)
 
     # Start train
     step = 0
@@ -281,6 +284,12 @@ def main():
             optimizer2.load_state_dict(checkpoint['optimizer_state_dict'])
         else:
             print("No checkpoint found at '{}'".format(args.resume2))
+
+    # Reset learning rate
+    for param_group in optimizer1.param_groups:
+        param_group["lr"] = args.max_lr
+    for param_group in optimizer2.param_groups:
+        param_group["lr"] = args.max_lr
 
     trainer = Trainer(args)
     for epoch in range(args.epochs):
