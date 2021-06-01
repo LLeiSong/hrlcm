@@ -268,7 +268,7 @@ def main():
     step = 0
     epoch = 0
     epoch_stage1 = 10
-    if args.resume:
+    if args.resume1 and args.resume2:
         if os.path.isfile(args.resume1):
             checkpoint = torch.load(args.resume1)
 
