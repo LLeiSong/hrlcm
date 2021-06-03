@@ -316,17 +316,17 @@ class Trainer:
             pbar.update()
 
         # Write validation metrics to tensorboard
-        writer.add_scalar("validate/loss1",
+        writer.add_scalar("Validate/loss1",
                           loss1_total / len(validate_loader), global_step=step)
-        writer.add_scalar("validate/AA1", conf_mat1.get_aa(),
+        writer.add_scalar("Validate/AA1", conf_mat1.get_aa(),
                           global_step=step)
-        writer.add_scalar("validate/mIoU1", conf_mat1.get_mIoU(),
+        writer.add_scalar("Validate/mIoU1", conf_mat1.get_mIoU(),
                           global_step=step)
-        writer.add_scalar("validate/loss2",
+        writer.add_scalar("Validate/loss2",
                           loss2_total / len(validate_loader), global_step=step)
-        writer.add_scalar("validate/AA2", conf_mat2.get_aa(),
+        writer.add_scalar("Validate/AA2", conf_mat2.get_aa(),
                           global_step=step)
-        writer.add_scalar("validate/mIoU2", conf_mat2.get_mIoU(),
+        writer.add_scalar("Validate/mIoU2", conf_mat2.get_mIoU(),
                           global_step=step)
         # Add single class accuracy
         confmatrix1 = np.diagonal(conf_mat1.norm_on_lines())

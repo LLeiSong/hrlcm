@@ -78,6 +78,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=50,
                         help='number of training epochs (default: 50). '
                              'NOTE: The scheduler is designed best for 50.')
+    parser.add_argument('--start_epoch', type=int, default=0,
+                        help='the start epoch for resume (default: 0).')
     parser.add_argument('--resume1', '-r1', type=str, default=None,
                         help='path to the pretrained weights file of model1.')
     parser.add_argument('--resume2', '-r2', type=str, default=None,
@@ -268,7 +270,7 @@ def main():
         np.linspace(0, forget_rate ** args.exponent, args.num_gradual)
 
     # Start train
-    step = 0
+    step = args.start_epoch * args.train_batch_size - 1
     epoch_stage1 = 10
     if args.resume1 and args.resume2:
         if os.path.isfile(args.resume1):
@@ -292,7 +294,7 @@ def main():
         param_group["lr"] = args.max_lr
 
     trainer = Trainer(args)
-    for epoch in range(args.epochs):
+    for epoch in range(args.start_epoch, args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(
             epoch, optimizer1.param_groups[0]["lr"]))
@@ -327,6 +329,16 @@ def main():
         if epoch % args.save_freq == 0:
             trainer.export_model(model1, optimizer=optimizer1, step=step, name='model1')
             trainer.export_model(model2, optimizer=optimizer2, step=step, name='model2')
+
+        # Save learning rate to scalar
+        writer.add_scalar("Train/lr1",
+                          optimizer1.param_groups[0]["lr"],
+                          global_step=step)
+        writer.add_scalar("Train/lr2",
+                          optimizer2.param_groups[0]["lr"],
+                          global_step=step)
+        # Flush to disk
+        writer.flush()
 
     # Export final set of weights
     trainer.export_model(model1, optimizer1, name="model1_final")
