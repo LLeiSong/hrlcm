@@ -159,8 +159,6 @@ class Trainer:
         loss1_total = 0
         loss2_total = 0
         for i, (image, target, indexes) in enumerate(train_loader):
-            # Subset noisy_or_not list
-            noisy_or_not = noisy_or_not_full[indexes.cpu().numpy().transpose()]
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
                 image, target = image.cuda(), target.cuda()
@@ -168,9 +166,16 @@ class Trainer:
             # Forward pass
             logits1 = model1(image)
             logits2 = model2(image)
-            loss1, loss2 = loss_fn(logits1, logits2, target,
-                                   forget_rate, noisy_or_not,
-                                   mode, golden_classes)
+
+            if noisy_or_not_full is not None:
+                # Subset noisy_or_not list
+                noisy_or_not = noisy_or_not_full[indexes.cpu().numpy().transpose()]
+                loss1, loss2 = loss_fn(logits1, logits2, target,
+                                       forget_rate, noisy_or_not,
+                                       mode, golden_classes)
+            else:
+                loss1, loss2 = loss_fn(logits1, logits2, target,
+                                       forget_rate, mode, golden_classes)
             loss1_total += loss1.item()
             loss2_total += loss2.item()
 
