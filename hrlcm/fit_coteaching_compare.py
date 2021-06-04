@@ -262,7 +262,7 @@ def main():
     # Start train
     step = 0
     trainer = Trainer(args)
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in range(args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(
             epoch, optimizer1.param_groups[0]["lr"]))
