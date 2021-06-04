@@ -215,7 +215,7 @@ def main():
         model2 = model2.cuda()
 
     # Define loss function
-    loss_fn = loss_colearning
+    loss_fn = loss_colearning_batch
     loss_fn_val = BalancedCrossEntropyLoss()
 
     # Define optimizer
@@ -269,8 +269,9 @@ def main():
 
         # Run training for one epoch
         model1, model2, step = trainer.co_train(model1, model2, train_loader, loss_fn,
-                                                optimizer1, optimizer2, args.noise_or_not,
-                                                writer, rate_schedule[epoch], step)
+                                                optimizer1, optimizer2, None,
+                                                writer, rate_schedule[epoch], step,
+                                                mode='argue')
         # Run validation
         trainer.co_validate(model1, model2, validate_loader, step, loss_fn_val, writer)
 
