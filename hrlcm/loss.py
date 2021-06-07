@@ -242,8 +242,8 @@ def loss_colearning_batch(y_1, y_2, t, forget_rate, mode='argue', golden_classes
     pred_2 = torch.flatten(pred_2)
     loss_ce_1 = torch.flatten(loss_ce_1)
     loss_ce_2 = torch.flatten(loss_ce_2)
-    y_1 = torch.flatten(y_1.permute(1, 0, 2, 3), start_dim = 1)
-    y_2 = torch.flatten(y_2.permute(1, 0, 2, 3), start_dim = 1)
+    y_1 = torch.flatten(y_1.permute(1, 0, 2, 3), start_dim=1)
+    y_2 = torch.flatten(y_2.permute(1, 0, 2, 3), start_dim=1)
     t = torch.flatten(t)
 
     # If this image has noisy labels,
