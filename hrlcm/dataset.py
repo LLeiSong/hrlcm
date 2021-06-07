@@ -119,6 +119,7 @@ class NFSEN1LC(Dataset):
                  highest_score=10,
                  lowest_score=9,
                  noise_ratio=0.3,
+                 random_state=1,
                  label_offset=1,
                  sync_transform=None,
                  img_transform=None,
@@ -130,6 +131,7 @@ class NFSEN1LC(Dataset):
             usage (str): Usage of the dataset : "train", "validate" or "predict"
             lowest_score (int): the lowest value of label score, [8, 9, 10], just for train.
             noise_ratio (float or None): the ratio of noise in training, just for train.
+            random_state (int): the random state for pandas sampling.
             label_offset (int): the offset of label to minus in order to fit into DL model.
             sync_transform (transform or None): Synthesize Data augmentation methods
             img_transform (transform or None): Image only augmentation methods
@@ -141,6 +143,7 @@ class NFSEN1LC(Dataset):
         super(NFSEN1LC, self).__init__()
         self.data_dir = data_dir
         self.usage = usage
+        self.random_state = random_state
         self.label_offset = label_offset
         self.sync_transform = sync_transform
         self.img_transform = img_transform
@@ -191,7 +194,7 @@ class NFSEN1LC(Dataset):
                 if self.noise_ratio is not None:
                     num_perfect = len(catalog_perfect.index)
                     num_noisy = floor(num_perfect * self.noise_ratio / (1 - self.noise_ratio))
-                    catalog_rest = catalog_rest.sample(n=num_noisy)
+                    catalog_rest = catalog_rest.sample(n=num_noisy, random_state=self.random_state)
                 else:
                     self.noise_ratio = round(len(catalog_rest.index) / len(catalog.index), 1)
                 catalog_perfect = catalog_perfect.append(catalog_rest)
@@ -204,6 +207,7 @@ class NFSEN1LC(Dataset):
             self.noisy_or_not = self.noisy_or_not.to_numpy()
         elif self.usage == 'validate':
             self.catalog = catalog_full
+        # Prediction
         else:
             self.chip_size = 512  # image size of train
             self.tile_id = tile_id
