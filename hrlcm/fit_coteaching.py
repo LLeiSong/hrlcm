@@ -39,6 +39,8 @@ def main():
                         help='lowest score to subset train dataset (default: 10)')
     parser.add_argument('--noise_ratio', type=float, default=0.3,
                         help='ratio of noise to subset train dataset (default: None)')
+    parser.add_argument('--random_state', type=int, default=1,
+                        help='random state for pandas sampling, similar to seed (default: 1)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
     parser.add_argument('--rg_rotate', type=str, default='-90, 90',
@@ -152,6 +154,7 @@ def main():
                              highest_score=args.highest_score,
                              lowest_score=args.lowest_score,
                              noise_ratio=args.noise_ratio,
+                             random_state=args.random_state,
                              label_offset=args.label_offset,
                              sync_transform=sync_transform,
                              img_transform=img_transform,
@@ -262,7 +265,7 @@ def main():
                                     final_lr=0.01)
 
     # Define drop rate schedule
-    warm_up_step = 2
+    warm_up_step = 1
     forget_rate = args.noise_ratio
     rate_schedule = np.ones(args.epochs) * forget_rate
     rate_schedule[:warm_up_step] = 0
@@ -271,8 +274,9 @@ def main():
 
     # Start train
     step = args.start_epoch * args.train_batch_size - 1
-    epoch_stage1 = 10
+    epoch_stage1 = args.start_epoch + 10  # 10 epochs for discuss, then 20 epochs for argue
     if args.resume1 and args.resume2:
+        # This is not for unexpected stop, but to continue training
         if os.path.isfile(args.resume1):
             checkpoint = torch.load(args.resume1)
             model1.load_state_dict(checkpoint['model_state_dict'])
@@ -299,31 +303,34 @@ def main():
         print("[Epoch {}] lr: {}".format(
             epoch, optimizer1.param_groups[0]["lr"]))
 
-        # Run training for one epoch
-        model1, model2, step = trainer.co_train(model1, model2, train_loader, loss_fn,
-                                                optimizer1, optimizer2, args.noise_or_not,
-                                                writer, rate_schedule[epoch], step)
-        # Run validation
-        trainer.co_validate(model1, model2, validate_loader, step, loss_fn_val, writer)
-
         # Update learning rate
         if epoch <= epoch_stage1:
+            # Run training for one epoch
+            model1, model2, step = trainer.co_train(model1, model2, train_loader, loss_fn,
+                                                    optimizer1, optimizer2, args.noise_or_not,
+                                                    writer, rate_schedule[epoch], step, mode='discuss')
             if epoch == epoch_stage1:
                 lr_scheduler_11 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer1, base_lr=args.max_lr - 0.0006,
+                    optimizer1, base_lr=args.max_lr - 0.0004,
                     max_lr=args.max_lr + 0.0002,
-                    step_size_up=1, step_size_down=3,
-                    gamma=0.93, cycle_momentum=False,
+                    step_size_up=1, step_size_down=2,
+                    gamma=0.86, cycle_momentum=False,
                     mode='exp_range')
                 lr_scheduler_12 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer2, base_lr=args.max_lr - 0.0006,
+                    optimizer2, base_lr=args.max_lr - 0.0004,
                     max_lr=args.max_lr + 0.0002,
-                    step_size_up=1, step_size_down=3,
-                    gamma=0.93, cycle_momentum=False,
+                    step_size_up=1, step_size_down=2,
+                    gamma=0.86, cycle_momentum=False,
                     mode='exp_range')
         else:
+            model1, model2, step = trainer.co_train(model1, model2, train_loader, loss_fn,
+                                                    optimizer1, optimizer2, args.noise_or_not,
+                                                    writer, rate_schedule[epoch], step)
             lr_scheduler_11.step()
             lr_scheduler_12.step()
+
+        # Run validation
+        trainer.co_validate(model1, model2, validate_loader, step, loss_fn_val, writer)
 
         # Save checkpoint
         if epoch % args.save_freq == 0:
