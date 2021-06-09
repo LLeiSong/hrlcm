@@ -15,7 +15,7 @@ from models.deeplab import DeepLab
 from models.unet import UNet
 from train import Trainer
 import torch_optimizer as optim
-from loss import BalancedCrossEntropyLoss, loss_colearning, loss_colearning_batch, loss_jocor
+from loss import BalancedCrossEntropyLoss, loss_colearning, loss_colearning_batch
 
 
 def main():
@@ -215,7 +215,7 @@ def main():
         model2 = model2.cuda()
 
     # Define loss function
-    loss_fn = loss_colearning_batch
+    loss_fn = loss_colearning
     loss_fn_val = BalancedCrossEntropyLoss()
 
     # Define optimizer

@@ -84,11 +84,11 @@ The most essential work are arguably to clone project and set jupyter notebook:
 #### Run experiments
 
 ```
-python hrlcm/fit.py --exp_name unet_compose_lr --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200
+python hrlcm/fit_coteaching_compare.py --exp_name unet_cot_argue --num_workers 32 --gpu_devices '0,1,2,3' --epochs 30
 ```
 
 ```
-python hrlcm/fit.py --exp_name unet_compose_lr --num_workers 32 --gpu_devices '0,1,2,3' --epochs 200 --save_freq 5 --resume 'results/dl/resume/interim.pth'
+python hrlcm/fit_coteaching.py --exp_name unet_cot_da --num_workers 32 --gpu_devices '0,1,2,3' --save_freq 5 --resume1 'results/dl/unet_cot_da/model1_final.pth' --resume2 'results/dl/unet_cot_da/model2_final.pth'
 ```
   
 #### Tensorboard
@@ -129,11 +129,18 @@ The general loss is higher than classic cross entropy loss. But it do help to re
 
 #### Co-teaching and co-teaching-plus
 
+Based on the original papers and their GitHub repos, we combined these two logic into one function and adapted it for image segmentation. 
 
+- The first version is image based, which means it takes each image as a whole thing. If the label of one image is "perfect", then use the whole image, otherwise only use pixels with small loss to update the models.
+  - Under "argue" mode, use disagreement to update the models.
+  - Under "discuss" mode, do not use disagreement.
+  
+- The second version is batch based, which means it only use pixels with small loss from the whole batch to update the models. Mode works similarly as the first version. 
 
 #### JoCoR
+Since the original paper is about image classification rather than image segmentation, it is harder to adapt this method into image segmentation with good performance. 
 
-
+[NEED MORE EXPERIMENTS]
 
 ## Experiments
 
@@ -143,10 +150,10 @@ Before any tests related to strategies to deal with noisy labels, we will build 
 
 #### Hyper-parameters
 
-- Learning rate and learning rate scheduler
+- <input type="checkbox" checked> Learning rate and learning rate scheduler</input>
 - Batch size
 - Optimizer
-- Model (Unet or Deeplab)
+- Model (U-net or Deeplab)
 - Transform methods (if necessary)
 
 ##### Unet
@@ -169,10 +176,10 @@ Before any tests related to strategies to deal with noisy labels, we will build 
 
   [TO BE CONTINUE]
 
-### Resume
+### Co-teaching
 
-#### Single model 
+We first use constant parameters, 0.001 learning rate, AmsBound optimizer, and 30 epochs, to run the models.
 
+- Co_teaching_batch doesn't fit multi-classes classification task. It might be good for binary classification. Because based on the curves, co_teaching_batch give up the minorities. 
 
-
-#### Double model
+- Co_teaching works good. "Discuss" mode works slightly better than "argue" mode.

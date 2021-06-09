@@ -15,7 +15,7 @@ from models.deeplab import DeepLab
 from models.unet import UNet
 from train import Trainer
 import torch_optimizer as optim
-from loss import BalancedCrossEntropyLoss, loss_colearning, loss_colearning_batch, loss_jocor
+from loss import BalancedCrossEntropyLoss, loss_colearning
 
 
 def main():
@@ -77,9 +77,9 @@ def main():
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=16,
                         help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=50,
-                        help='number of training epochs (default: 50). '
-                             'NOTE: The scheduler is designed best for 50.')
+    parser.add_argument('--epochs', type=int, default=30,
+                        help='number of training epochs (default: 30). '
+                             'NOTE: The scheduler is designed best for 30.')
     parser.add_argument('--start_epoch', type=int, default=0,
                         help='the start epoch for resume (default: 0).')
     parser.add_argument('--resume1', '-r1', type=str, default=None,
