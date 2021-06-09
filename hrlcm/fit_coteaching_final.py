@@ -265,12 +265,7 @@ def main():
                                     final_lr=0.01)
 
     # Define drop rate schedule
-    warm_up_step = 1
-    forget_rate = args.noise_ratio
-    rate_schedule = np.ones(args.epochs) * forget_rate
-    rate_schedule[:warm_up_step] = 0
-    rate_schedule[warm_up_step:(args.num_gradual + warm_up_step)] = \
-        np.linspace(0, forget_rate ** args.exponent, args.num_gradual)
+    rate_schedule = np.ones(args.epochs) * 0
 
     # Start train
     step = args.start_epoch * args.train_batch_size - 1
