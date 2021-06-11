@@ -1,5 +1,6 @@
 """
-This is a script of fitting DL model.
+This is a script of fitting co-teaching models.
+We just keep the compose learning rate version since it is better than step learning rate.
 Reference: https://github.com/lukasliebel/dfc2020_baseline/blob/master/code/train.py
 Author: Lei Song
 Maintainer: Lei Song (lsong@clarku.edu)
@@ -64,8 +65,10 @@ def main():
                         help='minimum or last learning rate for scheduler.')
     parser.add_argument('--max_lr', type=float, default=0.001,
                         help='maximum or initial learning rate for scheduler.')
-    parser.add_argument('--gamma_lr', type=float, default=0.9,
-                        help='gamma for learning rate.')
+    parser.add_argument('--gamma_lr_stage1', type=float, default=0.97,
+                        help='gamma for learning rate of stage 1.')
+    parser.add_argument('--gamma_lr_stage2', type=float, default=0.94,
+                        help='gamma for learning rate of stage 2.')
     parser.add_argument('--optimizer_name', type=str,
                         choices=['AdaBound', 'AmsBound', 'AdamP'],
                         default="AmsBound",
@@ -80,8 +83,6 @@ def main():
     parser.add_argument('--epochs', type=int, default=30,
                         help='number of training epochs (default: 30). '
                              'NOTE: The scheduler is designed best for 30.')
-    parser.add_argument('--start_epoch', type=int, default=0,
-                        help='the start epoch for resume (default: 0).')
     parser.add_argument('--resume1', '-r1', type=str, default=None,
                         help='path to the pretrained weights file of model1.')
     parser.add_argument('--resume2', '-r2', type=str, default=None,
@@ -273,64 +274,131 @@ def main():
         np.linspace(0, forget_rate ** args.exponent, args.num_gradual)
 
     # Start train
-    step = args.start_epoch * args.train_batch_size - 1
-    epoch_stage1 = args.start_epoch + 10  # 10 epochs for discuss, then 20 epochs for argue
-    if args.resume1 and args.resume2:
-        # This is not for unexpected stop, but to continue training
+    step = 0
+    epoch = 0
+    # A bit hardcode here
+    epoch_stage1 = floor(args.epochs * 0.6)
+    epoch_stage2 = floor(args.epochs * 0.85)
+
+    # Resume model1
+    if args.resume1:
         if os.path.isfile(args.resume1):
             checkpoint = torch.load(args.resume1)
+
+            # Get step and epoch
+            if checkpoint['step'] > step:
+                step = checkpoint['step']
+                epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
             model1.load_state_dict(checkpoint['model_state_dict'])
             optimizer1.load_state_dict(checkpoint['optimizer_state_dict'])
+            if 30 <= epoch < epoch_stage1:
+                lr_scheduler_11 = torch.optim.lr_scheduler.CyclicLR(optimizer1, base_lr=args.max_lr - 0.0002,
+                                                                    max_lr=args.max_lr + 0.0002,
+                                                                    step_size_up=1, step_size_down=3,
+                                                                    gamma=args.gamma_lr_stage1,
+                                                                    cycle_momentum=False,
+                                                                    mode='exp_range')
+                lr_scheduler_11.load_state_dict(checkpoint['scheduler_state_dict'])
+            elif epoch_stage1 <= epoch < epoch_stage2:
+                lr_scheduler_21 = torch.optim.lr_scheduler.CyclicLR(optimizer1, base_lr=(args.max_lr - 0.0002) / 2,
+                                                                    max_lr=(args.max_lr + 0.0002) / 2,
+                                                                    step_size_up=1, step_size_down=5,
+                                                                    gamma=args.gamma_lr_stage2,
+                                                                    cycle_momentum=False,
+                                                                    mode='exp_range')
+                lr_scheduler_21.load_state_dict(checkpoint['scheduler_state_dict'])
+            print("Load checkpoint '{}' (epoch {})".format(args.resume1, epoch))
         else:
             print("No checkpoint found at '{}'".format(args.resume1))
 
+    # Resume model2
+    if args.resume2:
         if os.path.isfile(args.resume2):
             checkpoint = torch.load(args.resume2)
+
+            # Get step and epoch
+            # Step and epoch should be the same as model1.
+
             model2.load_state_dict(checkpoint['model_state_dict'])
             optimizer2.load_state_dict(checkpoint['optimizer_state_dict'])
+            if 30 <= epoch < epoch_stage1:
+                lr_scheduler_12 = torch.optim.lr_scheduler.CyclicLR(optimizer2, base_lr=args.max_lr - 0.0002,
+                                                                    max_lr=args.max_lr + 0.0002,
+                                                                    step_size_up=1, step_size_down=3,
+                                                                    gamma=args.gamma_lr_stage1,
+                                                                    cycle_momentum=False,
+                                                                    mode='exp_range')
+                lr_scheduler_12.load_state_dict(checkpoint['scheduler_state_dict'])
+            elif epoch_stage1 <= epoch < epoch_stage2:
+                lr_scheduler_22 = torch.optim.lr_scheduler.CyclicLR(optimizer2, base_lr=(args.max_lr - 0.0002) / 2,
+                                                                    max_lr=(args.max_lr + 0.0002) / 2,
+                                                                    step_size_up=1, step_size_down=5,
+                                                                    gamma=args.gamma_lr_stage2,
+                                                                    cycle_momentum=False,
+                                                                    mode='exp_range')
+                lr_scheduler_22.load_state_dict(checkpoint['scheduler_state_dict'])
+            print("Load checkpoint '{}' (epoch {})".format(args.resume2, epoch))
         else:
             print("No checkpoint found at '{}'".format(args.resume2))
 
-    # Reset learning rate
-    for param_group in optimizer1.param_groups:
-        param_group["lr"] = args.max_lr
-    for param_group in optimizer2.param_groups:
-        param_group["lr"] = args.max_lr
-
     trainer = Trainer(args)
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in range(epoch + 1, args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(
             epoch, optimizer1.param_groups[0]["lr"]))
 
-        # Update learning rate
-        if epoch <= epoch_stage1:
-            # Run training for one epoch
-            model1, model2, step = trainer.co_train(model1, model2, train_loader, loss_fn,
-                                                    optimizer1, optimizer2, args.noise_or_not,
-                                                    writer, rate_schedule[epoch], step, mode='discuss')
-            if epoch == epoch_stage1:
-                lr_scheduler_11 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer1, base_lr=args.max_lr - 0.0004,
-                    max_lr=args.max_lr + 0.0002,
-                    step_size_up=1, step_size_down=2,
-                    gamma=0.86, cycle_momentum=False,
-                    mode='exp_range')
-                lr_scheduler_12 = torch.optim.lr_scheduler.CyclicLR(
-                    optimizer2, base_lr=args.max_lr - 0.0004,
-                    max_lr=args.max_lr + 0.0002,
-                    step_size_up=1, step_size_down=2,
-                    gamma=0.86, cycle_momentum=False,
-                    mode='exp_range')
-        else:
-            model1, model2, step = trainer.co_train(model1, model2, train_loader, loss_fn,
-                                                    optimizer1, optimizer2, args.noise_or_not,
-                                                    writer, rate_schedule[epoch], step)
-            lr_scheduler_11.step()
-            lr_scheduler_12.step()
+        # Run training for one epoch
+        model1, model2, step = trainer.co_train(model1, model2, train_loader, loss_fn,
+                                                optimizer1, optimizer2, args.noise_or_not,
+                                                writer, rate_schedule[epoch], step,
+                                                mode='discuss')
 
         # Run validation
         trainer.co_validate(model1, model2, validate_loader, step, loss_fn_val, writer)
+
+        # Update learning rate
+        # Since learning rate is a very important hyper-parameter,
+        # it is recommended to visualize learning rate first.
+        # The first 30 epochs use a constant 0.001 as a start.
+        # The last 30 epochs use a constant 0.0001 as an end.
+        if epoch <= 30:
+            if epoch == 30:
+                lr_scheduler_11 = torch.optim.lr_scheduler.CyclicLR(optimizer1, base_lr=args.max_lr - 0.0002,
+                                                                    max_lr=args.max_lr + 0.0002,
+                                                                    step_size_up=1, step_size_down=3,
+                                                                    gamma=args.gamma_lr_stage1,
+                                                                    cycle_momentum=False,
+                                                                    mode='exp_range')
+                lr_scheduler_12 = torch.optim.lr_scheduler.CyclicLR(optimizer2, base_lr=args.max_lr - 0.0002,
+                                                                    max_lr=args.max_lr + 0.0002,
+                                                                    step_size_up=1, step_size_down=3,
+                                                                    gamma=args.gamma_lr_stage1,
+                                                                    cycle_momentum=False,
+                                                                    mode='exp_range')
+        elif 30 < epoch <= epoch_stage1:
+            lr_scheduler_11.step()
+            lr_scheduler_12.step()
+            if epoch == epoch_stage1:
+                lr_scheduler_21 = torch.optim.lr_scheduler.CyclicLR(optimizer1, base_lr=(args.max_lr - 0.0002) / 2,
+                                                                    max_lr=(args.max_lr + 0.0002) / 2,
+                                                                    step_size_up=1, step_size_down=5,
+                                                                    gamma=args.gamma_lr_stage2,
+                                                                    cycle_momentum=False,
+                                                                    mode='exp_range')
+                lr_scheduler_22 = torch.optim.lr_scheduler.CyclicLR(optimizer2, base_lr=(args.max_lr - 0.0002) / 2,
+                                                                    max_lr=(args.max_lr + 0.0002) / 2,
+                                                                    step_size_up=1, step_size_down=5,
+                                                                    gamma=args.gamma_lr_stage2,
+                                                                    cycle_momentum=False,
+                                                                    mode='exp_range')
+        elif epoch_stage1 < epoch <= epoch_stage2:
+            lr_scheduler_21.step()
+            lr_scheduler_22.step()
+            if epoch == epoch_stage2:
+                for param_group in optimizer1.param_groups:
+                    param_group["lr"] = args.base_lr
+                for param_group in optimizer2.param_groups:
+                    param_group["lr"] = args.base_lr
 
         # Save checkpoint
         if epoch % args.save_freq == 0:
@@ -338,11 +406,8 @@ def main():
             trainer.export_model(model2, optimizer=optimizer2, step=step, name='model2')
 
         # Save learning rate to scalar
-        writer.add_scalar("Train/lr1",
+        writer.add_scalar("Train/lr",
                           optimizer1.param_groups[0]["lr"],
-                          global_step=step)
-        writer.add_scalar("Train/lr2",
-                          optimizer2.param_groups[0]["lr"],
                           global_step=step)
         # Flush to disk
         writer.flush()

@@ -62,8 +62,10 @@ def main():
                         help='minimum or last learning rate for scheduler.')
     parser.add_argument('--max_lr', type=float, default=0.001,
                         help='maximum or initial learning rate for scheduler.')
-    parser.add_argument('--gamma_lr', type=float, default=0.9,
-                        help='gamma for learning rate.')
+    parser.add_argument('--gamma_lr_stage1', type=float, default=0.97,
+                        help='gamma for learning rate of stage 1.')
+    parser.add_argument('--gamma_lr_stage2', type=float, default=0.94,
+                        help='gamma for learning rate of stage 2.')
     parser.add_argument('--optimizer_name', type=str,
                         choices=['AdaBound', 'AmsBound', 'AdamP'],
                         default="AmsBound",
@@ -248,14 +250,16 @@ def main():
                 lr_scheduler_1 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.max_lr - 0.0002,
                                                                    max_lr=args.max_lr + 0.0002,
                                                                    step_size_up=1, step_size_down=3,
-                                                                   gamma=0.97, cycle_momentum=False,
+                                                                   gamma=args.gamma_lr_stage1,
+                                                                   cycle_momentum=False,
                                                                    mode='exp_range')
                 lr_scheduler_1.load_state_dict(checkpoint['scheduler_state_dict'])
             elif epoch_stage1 <= epoch < epoch_stage2:
                 lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(args.max_lr - 0.0002) / 2,
                                                                    max_lr=(args.max_lr + 0.0002) / 2,
                                                                    step_size_up=1, step_size_down=5,
-                                                                   gamma=0.94, cycle_momentum=False,
+                                                                   gamma=args.gamma_lr_stage2,
+                                                                   cycle_momentum=False,
                                                                    mode='exp_range')
                 lr_scheduler_2.load_state_dict(checkpoint['scheduler_state_dict'])
             print("Load checkpoint '{}' (epoch {})".format(args.resume, epoch))
@@ -285,7 +289,8 @@ def main():
                 lr_scheduler_1 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.max_lr-0.0002,
                                                                    max_lr=args.max_lr+0.0002,
                                                                    step_size_up=1, step_size_down=3,
-                                                                   gamma=0.97, cycle_momentum=False,
+                                                                   gamma=args.gamma_lr_stage1,
+                                                                   cycle_momentum=False,
                                                                    mode='exp_range')
         elif 30 < epoch <= epoch_stage1:
             lr_scheduler_1.step()
@@ -293,7 +298,8 @@ def main():
                 lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(args.max_lr-0.0002)/2,
                                                                    max_lr=(args.max_lr+0.0002)/2,
                                                                    step_size_up=1, step_size_down=5,
-                                                                   gamma=0.94, cycle_momentum=False,
+                                                                   gamma=args.gamma_lr_stage2,
+                                                                   cycle_momentum=False,
                                                                    mode='exp_range')
         elif epoch_stage1 < epoch <= epoch_stage2:
             lr_scheduler_2.step()
