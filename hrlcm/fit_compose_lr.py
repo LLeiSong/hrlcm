@@ -229,8 +229,10 @@ def main():
     # Start train
     step = 0
     epoch = 0
+    # A bit hardcode here
     epoch_stage1 = floor(args.epochs * 0.6)
     epoch_stage2 = floor(args.epochs * 0.85)
+
     # Resume model based on settings
     if args.resume:
         if os.path.isfile(args.resume):

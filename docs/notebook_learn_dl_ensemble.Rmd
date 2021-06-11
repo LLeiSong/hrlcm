@@ -88,6 +88,10 @@ python hrlcm/fit_coteaching_compare.py --exp_name unet_cot_argue --num_workers 3
 ```
 
 ```
+python hrlcm/fit_compose_lr.py --exp_name dpl_compose_lr --num_workers 32 --model deeplab --gpu_devices '0,1,2,3' --train_batch_size 16 --val_batch_size 16
+```
+
+```
 python hrlcm/fit_coteaching.py --exp_name unet_cot_da --num_workers 32 --gpu_devices '0,1,2,3' --save_freq 5 --resume1 'results/dl/unet_cot_da/model1_final.pth' --resume2 'results/dl/unet_cot_da/model2_final.pth'
 ```
   

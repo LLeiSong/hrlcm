@@ -182,7 +182,7 @@ def main():
     # Train network
     # Define model
     if args.model == "deeplab":
-        # TODO Not test yet
+        # TODO Not test fully yet
         model = DeepLab(num_classes=args.n_classes,
                         backbone='resnet',
                         pretrained_backbone=False,
