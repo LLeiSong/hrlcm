@@ -37,9 +37,9 @@ def main():
     parser.add_argument('--highest_score', type=int, default=10,
                         help='highest score to subset train dataset (default: 10)')
     parser.add_argument('--lowest_score', type=int, default=9,
-                        help='lowest score to subset train dataset (default: 10)')
-    parser.add_argument('--noise_ratio', type=float, default=0.3,
-                        help='ratio of noise to subset train dataset (default: None)')
+                        help='lowest score to subset train dataset, 8 or 9. (default: 9)')
+    parser.add_argument('--noise_ratio', type=float, default=0.4,
+                        help='ratio of noise to subset train dataset (default: 0.4)')
     parser.add_argument('--random_state', type=int, default=1,
                         help='random state for pandas sampling, similar to seed (default: 1)')
     parser.add_argument('--label_offset', type=int, default=1,
@@ -73,16 +73,16 @@ def main():
                         choices=['AdaBound', 'AmsBound', 'AdamP'],
                         default="AmsBound",
                         help='optimizer (default: AmsBound)')
-    parser.add_argument('--save_freq', type=int, default=10,
+    parser.add_argument('--save_freq', type=int, default=5,
                         help='training state will be saved every save_freq \
                         batches during training')
     parser.add_argument('--train_batch_size', type=int, default=16,
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=16,
                         help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=30,
-                        help='number of training epochs (default: 30). '
-                             'NOTE: The scheduler is designed best for 30.')
+    parser.add_argument('--epochs', type=int, default=200,
+                        help='number of training epochs (default: 200). '
+                             'NOTE: The scheduler is designed best for 200.')
     parser.add_argument('--resume1', '-r1', type=str, default=None,
                         help='path to the pretrained weights file of model1.')
     parser.add_argument('--resume2', '-r2', type=str, default=None,
@@ -90,9 +90,9 @@ def main():
 
     # Co-teaching
     parser.add_argument('--exponent', type=int, default=3,
-                        help='exponent for co-teaching forget rate drop (default: 2)')
-    parser.add_argument('--num_gradual', type=int, default=10,
-                        help='number of gradual drop in forget rate (default: 15)')
+                        help='exponent for co-teaching forget rate drop (default: 3)')
+    parser.add_argument('--num_gradual', type=int, default=5,
+                        help='number of gradual drop in forget rate (default: 5)')
 
     args = parser.parse_args()
 
@@ -267,7 +267,7 @@ def main():
 
     # Define drop rate schedule
     warm_up_step = 1
-    forget_rate = args.noise_ratio
+    forget_rate = 0.2 if args.lowest_score == 9 else 0.4
     rate_schedule = np.ones(args.epochs) * forget_rate
     rate_schedule[:warm_up_step] = 0
     rate_schedule[warm_up_step:(args.num_gradual + warm_up_step)] = \
