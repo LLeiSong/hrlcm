@@ -38,8 +38,8 @@ def main():
                         help='highest score to subset train dataset (default: 10)')
     parser.add_argument('--lowest_score', type=int, default=9,
                         help='lowest score to subset train dataset, 8 or 9. (default: 9)')
-    parser.add_argument('--noise_ratio', type=float, default=0.4,
-                        help='ratio of noise to subset train dataset (default: 0.4)')
+    parser.add_argument('--noise_ratio', type=float, default=None,
+                        help='ratio of noise to subset train dataset (default: None)')
     parser.add_argument('--random_state', type=int, default=1,
                         help='random state for pandas sampling, similar to seed (default: 1)')
     parser.add_argument('--label_offset', type=int, default=1,
