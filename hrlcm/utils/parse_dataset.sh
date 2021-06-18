@@ -40,7 +40,7 @@ elif [ "$TYPE" = "3" ]; then
   rm -rf $DIR/__MACOSX
 elif [ "$TYPE" = "4" ]; then
   echo "Download dataset to $DIR/dl_train_score8.zip"
-  curl -o "$DIR/dl_train_score8.zip" https://www.dropbox.com/s/j4lozxcvxe4yvs6/dl_train_score8.zip -L
+  curl -o "$DIR/dl_train_score8.zip" https://www.dropbox.com/s/pzc11fsh56lj0he/dl_train_score8.zip -L
   unzip $DIR/dl_train_score8.zip -d $DIR
   rm -rf $DIR/dl_train_score8.zip
   rm -rf $DIR/__MACOSX
