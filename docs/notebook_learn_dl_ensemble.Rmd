@@ -65,7 +65,7 @@ The most essential work are arguably to clone project and set jupyter notebook:
 - STEP 2: Clone the repo into instance:
   
   ```
-  git clone git@github.com:agroimpacts/pytorch_planet.git
+  git clone git@github.com:LLeiSong/hrlcm.git
   ```
   
   If necessary, use `git checkout` to switch branch and use `git pull` to grab the updates.
@@ -178,7 +178,7 @@ Before any tests related to strategies to deal with noisy labels, we will build 
   
 ##### DeepLab
 
-  [TO BE CONTINUE]
+  Our experiments proved that architecture of DeepLab family has worse performance.
 
 ### Co-teaching
 

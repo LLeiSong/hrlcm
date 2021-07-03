@@ -27,6 +27,9 @@ def main():
                         help='path to checkpoint file (default: ./checkpoint.pth)')
 
     # Dataset
+    parser.add_argument('--fname_predict', type=str,
+                        default='dl_catalog_predict.csv',
+                        help='the csv file name to do prediction.')
     parser.add_argument('--data_dir', type=str, default=None,
                         help='path to dataset')
     parser.add_argument('--out_dir', type=str, default="prediction",
@@ -101,7 +104,7 @@ def main():
         ImgNorm(mean, std)
     ])
 
-    catalog = pd.read_csv(os.path.join(args.data_dir, 'dl_catalog_predict.csv'))
+    catalog = pd.read_csv(os.path.join(args.data_dir, args.fname_predict))
     for tile_id in catalog['tile_id']:
         # Get predict dataset
         predict_dataset = NFSEN1LC(data_dir=args.data_dir,
