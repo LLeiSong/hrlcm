@@ -106,6 +106,7 @@ def main():
 
     catalog = pd.read_csv(os.path.join(args.data_dir, args.fname_predict))
     for tile_id in catalog['tile_id']:
+        print('Do prediction for {}'.format(tile_id))
         # Get predict dataset
         predict_dataset = NFSEN1LC(data_dir=args.data_dir,
                                    usage='predict',
@@ -179,3 +180,7 @@ def main():
         for n in range(n_class):
             with rasterio.open('{}_class{}.tif'.format(name_score, n), 'w', **meta) as dst:
                 dst.write(canvas_score_ls[n])
+
+
+if __name__ == "__main__":
+    main()
