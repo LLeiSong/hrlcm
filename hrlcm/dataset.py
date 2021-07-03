@@ -254,9 +254,9 @@ class NFSEN1LC(Dataset):
             img = self.img_ls[index]
             if self.img_transform is not None:
                 img = self.img_transform(img)
-            index = self.index_ls[index]
+            ind = self.index_ls[index]
 
-            return img, index
+            return img, ind
 
     def __len__(self):
         """Get number of samples in the dataset

@@ -60,6 +60,13 @@ def main():
 
     # Create output dir
     os.makedirs(args.out_dir, exist_ok=True)
+    # Set and create paths
+    score_path = os.path.join(args.out_dir, 'score')
+    class_path = os.path.join(args.out_dir, 'class')
+    if not os.path.isdir(score_path):
+        os.mkdir(score_path)
+    if not os.path.isdir(class_path):
+        os.mkdir(class_path)
 
     # Set flags for GPU processing if available
     args.use_gpu = torch.cuda.is_available()
@@ -123,14 +130,6 @@ def main():
                                     shuffle=False,
                                     drop_last=False)
 
-        # Set and crate paths
-        score_path = os.path.join(args.out_dir, 'score')
-        class_path = os.path.join(args.out_dir, 'class')
-        if not os.path.isdir(score_path):
-            os.mkdir(score_path)
-        if not os.path.isdir(class_path):
-            os.mkdir(class_path)
-
         # File names
         name_score = os.path.join(score_path, 'score_{}'.format(tile_id))
         name_class = os.path.join(class_path, 'class_{}.tif'.format(tile_id))
@@ -182,6 +181,8 @@ def main():
         for n in range(n_class):
             with rasterio.open('{}_class{}.tif'.format(name_score, n), 'w', **meta) as dst:
                 dst.write(canvas_score_ls[n])
+
+        del predict_dataset, predict_loader
 
 
 if __name__ == "__main__":

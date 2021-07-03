@@ -114,7 +114,7 @@ Do the following steps to use the tensorboard on a remote server (reference: htt
 #### Prediction
 
 ```
-python hrlcm/predict.py --args_path 'results/dl/resume/args.pkl' --checkpoint_file 'results/dl/resume/final.pth' --fname_predict 'results/north/dl_catalog_valid_full.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/predict.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/final.pth' --fname_predict 'results/north/dl_catalog_valid_full.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 ```
 
 ### Google Colab
