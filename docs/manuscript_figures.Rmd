@@ -1,0 +1,647 @@
+---
+title: "Manuscript figures"
+author: "Lei Song"
+date: "6/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
+
+## Introduction
+
+This is just a markdown to record the script to generate figures for the paper.
+
+## Study area
+
+Study area figure should include a overall view of study area in a bigger background, a zoom-in view of the study area (northern of Tanzania), the ecozones, the NICFI tiling system and the following sub-tiling system, 
+
+```{r}
+library(here)
+library(sf)
+library(nngeo)
+library(ggplot2)
+library(ggspatial)
+library(RColorBrewer)
+library(dplyr)
+library(rnaturalearth)
+
+# Read boundaries
+tz_bry <- read_sf(here('data/geoms/tanzania.geojson'))
+study_area <- read_sf(here('data/geoms/study_area.geojson')) %>% 
+    st_remove_holes()
+nicfi_tiles <- read_sf(here('data/geoms/tiles_nicfi_north.geojson')) %>% 
+    mutate(`NICFI tile` = 1)
+ecozones <- read_sf(here('data/geoms/ecozones.geojson')) %>% 
+    st_intersection(study_area) %>% 
+    rename(Ecozone = zone)
+
+# The overview of study area in the whole country at the left corner
+# Get the surrounding countries
+countries <- ne_countries(type = 'countries', scale = 'large',
+                          returnclass = 'sf') %>% 
+    st_intersection(., st_bbox(tz_bry) %>% 
+                        st_as_sfc() %>% 
+                        st_buffer(5, joinStyle = 'MITRE') %>% 
+                        st_bbox(tz_bry) %>% # Get he squared one
+                        st_as_sfc())
+
+# Make overview
+xlim <- c(st_bbox(countries)[1] + 3, st_bbox(countries)[3] - 3)
+ylim <- c(st_bbox(countries)[2] + 3, st_bbox(countries)[4] - 3)
+overview <- ggplotGrob(ggplot(tz_bry) +
+    geom_sf(fill = 'lightblue', color = 'grey') +
+    geom_sf_text(aes(label = geounit), size = 4) +
+    geom_sf(data = countries, fill = NA, color = 'grey') +
+    geom_sf(data = study_area, fill = 'red', color = 'grey') +
+    coord_sf(xlim = xlim, ylim = ylim) +
+    theme_bw() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(rep(0, 4), "cm")))
+
+# Make the main figure
+main_fg <- ggplot(ecozones) +
+    geom_sf(aes(fill = Ecozone), 
+            color = 'grey') +
+    scale_fill_brewer(palette = 'Accent') +
+    geom_sf(data = nicfi_tiles, fill = NA, 
+            aes(color = "black", lty = "dotted"), 
+            lwd = 0.4) +
+    geom_sf(data = study_area, fill = NA, 
+            aes(color = 'red', lty = 'solid')) +
+    scale_color_identity(name = '',
+                         breaks = c('black', 'red'),
+                         labels = c('NICFI tiles', 'Study area'),
+                         guide = 'legend') +
+    scale_linetype_identity(name = '',
+                            breaks = c('dotted', 'solid'),
+                            labels = c('NICFI tiles', 'Study area'),
+                            guide = 'legend') +
+    annotation_custom(grob = overview, 
+                      xmin = 36.5, xmax = 38.5,
+                      ymin = -2.3, ymax = -0.5) +
+    annotation_scale(location = 'br', text_cex = 1) +
+    annotation_north_arrow(which_north = "true", location = 'tl') +
+    theme_minimal() + 
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          legend.text = element_text(size = 12),
+          plot.margin = unit(rep(0, 4),"cm"))
+
+ggsave(here('docs/figures/study_area.png'),
+       main_fg,
+       width = 10, height = 5.7, dpi = 600)
+main_fg
+```
+
+## Satellite images
+
+This figure will provide an example of satellite images including NICFI images with two seasons, and the harmonic regression of Sentinel-1 images.
+
+```{r}
+library(sf)
+library(raster)
+library(ggplot2)
+library(ggpubr)
+library(dplyr)
+library(tidyr)
+library(RStoolbox)
+
+# Read example images
+# tile 1227-1002, 
+# this tile has a few different land cover types and obvious characteristics
+# so it could be a good example tile.
+tile_id <- '1227-1002'
+fnames_nicfi <- list.files(here('data/plts_nicfi'),
+                           pattern = tile_id,
+                           full.names = T)
+nicfi_s1 <- stack(fnames_nicfi[1]) %>% subset(1:4)
+nicfi_s2 <- stack(fnames_nicfi[2]) %>% subset(1:4)
+rm(fnames_nicfi)
+
+# Define example points
+pts_example <- read_sf(here('data/north/pts_example.shp')) %>% 
+    st_cast('POINT')
+
+# NICFI
+# Transform points
+pts_nicfi <- pts_example %>% 
+    st_transform(crs = crs(nicfi_s1))
+
+# Define colors
+cols_lc <- tibble(cols = c('#ff7f00', '#074702', '#b2df8a',
+                           '#33a02c', '#3347f9', '#5a6057',
+                           '#fdbf6f'),
+                  `Land cover type` = c("Cropland", 'Forest', "Grassland", 
+                                        'Shrubland',  "Water", "Built-up",
+                                        'Bareland'),
+                  ids = as.factor(1:7))
+
+# Image of season 1
+s1_fg <- ggRGB(nicfi_s1, r = 4, g = 3, b = 2, 
+               scale = max(values(nicfi_s1)[, 2:4]), 
+               stretch = 'hist') +
+    geom_sf(data = pts_nicfi,
+            color = 'black',
+            size = 3) +
+    geom_sf(data = pts_nicfi,
+            aes(color = factor(id)),
+            size = 2,
+            show.legend = F) +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    theme_minimal() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))
+
+# Image of season 2
+s2_fg <- ggRGB(nicfi_s2, r = 4, g = 3, b = 2, 
+               scale = max(values(nicfi_s2)[, 2:4]), 
+               stretch = 'lin') +
+    geom_sf(data = pts_nicfi,
+            color = 'black',
+            size = 3) +
+    geom_sf(data = pts_nicfi,
+            aes(color = factor(id)),
+            size = 2,
+            show.legend = F) +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    theme_minimal() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))
+
+# Spectral signature of examples
+# Extract values
+pts_nicfi_s1 <- raster::extract(nicfi_s1, pts_nicfi) %>% 
+    t() %>% data.frame() %>% 
+    `names<-`(pts_nicfi$type) %>% 
+    `rownames<-`(1:nrow(.)) %>% 
+    mutate(`Band name` = c('Blue', 'Green', 'Red', 'NIR'),
+           Band = 1:4) %>% 
+    pivot_longer(cols = names(.)[1:(ncol(.) - 2)], 
+                 names_to = 'Land cover type',
+                 values_to = 'Reflectance') %>% 
+    mutate(`Land cover type` = as.factor(`Land cover type`),
+           Season = 'Season 1')
+pts_nicfi_s2 <- raster::extract(nicfi_s2, pts_nicfi) %>% 
+    t() %>% data.frame() %>% 
+    `names<-`(pts_nicfi$type) %>% 
+    `rownames<-`(1:nrow(.)) %>% 
+    mutate(`Band name` = c('Blue', 'Green', 'Red', 'NIR'),
+           Band = 1:4) %>% 
+    pivot_longer(cols = names(.)[1:(ncol(.) - 2)], 
+                 names_to = 'Land cover type',
+                 values_to = 'Reflectance') %>% 
+    mutate(`Land cover type` = as.factor(`Land cover type`),
+           Season = 'Season 2')
+pts_nicfi_all <- rbind(pts_nicfi_s1, pts_nicfi_s2)
+rm(pts_nicfi_s1, pts_nicfi_s2)
+
+# Figure
+pts_nicfi_all <- merge(pts_nicfi_all, cols_lc[, 2:3])
+ref_epl <- ggplot(pts_nicfi_all,
+                  aes(x = Band, y = Reflectance / 1000,
+                      color = ids)) +
+    geom_point() + geom_line(show.legend = 'line') +
+    ylab(bquote('Reflectance'~(10^3))) + 
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    scale_x_discrete(limit = 1:4,
+                     labels = unique(pts_nicfi_all$`Band name`)) +
+    theme_bw() +
+    theme(axis.title.x = element_blank()) +
+    facet_wrap(~ Season, nrow = 2, 
+               scales = "free_y",
+               strip.position = "right")
+
+nicfi_fg <- ggarrange(
+    ggarrange(s1_fg, s2_fg,
+              labels = c('Season 1', 'Season 2'),
+              font.label = list(size = 12),
+              vjust = 3,
+              ncol = 2), 
+    ref_epl, ncol = 2)
+ggsave(here('docs/figures/nicfi_image.png'),
+       nicfi_fg,
+       width = 8, height = 2.7, dpi = 300)
+
+# Sentinel-1 harmonic coefficient regression
+fnames_s1 <- list.files(here('data/s1_harmonic'),
+                        pattern = tile_id,
+                        full.names = T)
+vv_coefs <- stack(fnames_s1[str_detect(fnames_s1, 'VV')])
+vh_coefs <- stack(fnames_s1[str_detect(fnames_s1, 'VH')])
+
+# Image of VV
+# Slope, Cos(x), Intercept
+vv_fg <- ggRGB(vv_coefs, r = 2, g = 4, b = 1, 
+               scale = max(values(vv_coefs)[, c(2, 4, 1)]), 
+               stretch = 'hist') +
+    geom_sf(data = pts_example,
+            color = 'white',
+            size = 3) +
+    geom_sf(data = pts_example,
+            aes(color = factor(id)),
+            size = 2,
+            show.legend = F) +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    theme_minimal() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))
+
+# Image of VH
+# Slope, Cos(x), Intercept
+vh_fg <- ggRGB(vh_coefs, r = 2, g = 4, b = 1, 
+               scale = max(values(vh_coefs)[, c(1, 2, 4)]), 
+               stretch = 'lin') +
+    geom_sf(data = pts_example,
+            color = 'white',
+            size = 3) +
+    geom_sf(data = pts_example,
+            aes(color = factor(id)),
+            size = 2,
+            show.legend = F) +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    theme_minimal() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))
+
+# Time series and harmonic fitting of examples
+# out = cos((2 * pi * n0 * t) / freq - (n % 2) * pi / 2)
+# n_0 = {0,1,1,2,2}
+# n = {0,1,2,3,4}
+# freq = 365
+# Band1: intercept
+# Band2: slope
+# Band3: sin(x)
+# Band4: cos(x)
+# Band5: sin(2x)
+# Band6: cos(2x)
+
+# Real time series
+## Images
+vv_ts <- stack(
+    list.files(here('data/s1_timeseries_example/temp_ard_1227-1002'),
+               pattern = 'VV',
+               full.names = T)) 
+vh_ts <- stack(
+    list.files(here('data/s1_timeseries_example/temp_ard_1227-1002'),
+               pattern = 'VH',
+               full.names = T))
+
+# DOY
+doy <- c(0,   9,  12,  21,  33,  45,  48,  57,  69,  81,  93, 105, 117,
+       129, 141, 153, 165, 177, 189, 201, 213, 225, 237, 249, 261, 273,
+       285, 288, 293, 297, 300, 305, 309, 312, 317, 321, 324, 329, 333,
+       336, 345, 348, 357, 360)
+
+# Extract values
+pts_vv_ts <- raster::extract(vv_ts, pts_example) %>% 
+    t() %>% data.frame() %>% 
+    `names<-`(pts_example$type) %>% 
+    mutate(date = rownames(.)) %>% 
+    `rownames<-`(1:nrow(.)) %>% 
+    mutate(date = str_extract(date, '[0-9]{8}')) %>% 
+    arrange(date) %>% 
+    mutate(DOY = doy, polarization = 'VV',
+           type = 'Real value')
+
+pts_vh_ts <- raster::extract(vh_ts, pts_example) %>% 
+    t() %>% data.frame() %>% 
+    `names<-`(pts_example$type) %>% 
+    mutate(date = rownames(.)) %>% 
+    `rownames<-`(1:nrow(.)) %>% 
+    mutate(date = str_extract(date, '[0-9]{8}')) %>% 
+    arrange(date) %>% 
+    mutate(DOY = doy, polarization = 'VH',
+           type = 'Real value')
+
+pts_ts <- rbind(pts_vv_ts, pts_vh_ts) %>% 
+    dplyr::select(-date) %>% 
+    pivot_longer(names(.)[1:7], 
+                 names_to = "Land cover type", 
+                 values_to = "dB")
+rm(pts_vv_ts, pts_vh_ts)
+
+# Harmonic coefficients
+pts_vv <- raster::extract(vv_coefs, pts_example) %>% 
+    t() %>% data.frame() %>% 
+    `names<-`(pts_example$type) %>% 
+    `rownames<-`(1:nrow(.)) %>% 
+    mutate(`Band name` = c('Intersept', 'Slope', 
+                           'Sin(x)', 'Cos(x)', 
+                           'Sin(2x)', "Cos(2x)"), Band = 1:6)
+
+pts_vv_fit <- do.call(cbind, lapply(names(pts_vv)[1:7], function(typ){
+    coefs <- pts_vv %>% pull(typ)
+    data.frame(val = coefs[1] + coefs[2] * doy +
+    coefs[3] * sin(2 * pi * doy /365) + 
+    coefs[4] * cos(2 * pi * doy /365) + 
+    coefs[5] * sin(4 * pi * doy /365) + 
+    coefs[6] * cos(4 * pi * doy /365))
+})) %>% `names<-`(names(pts_vv)[1:7]) %>% 
+    mutate(DOY = doy) %>% 
+    mutate(polarization = 'VV',
+           type = 'Harmoic regression')
+    
+pts_vh <- raster::extract(vh_coefs, pts_example) %>% 
+    t() %>% data.frame() %>% 
+    `names<-`(pts_example$type) %>% 
+    `rownames<-`(1:nrow(.)) %>% 
+    mutate(`Band name` = c('Intersept', 'Slope', 
+                           'Sin(x)', 'Cos(x)', 
+                           'Sin(2x)', "Cos(2x)"), Band = 1:6)
+
+pts_vh_fit <- do.call(cbind, lapply(names(pts_vh)[1:7], function(typ){
+    coefs <- pts_vh %>% pull(typ)
+    data.frame(val = coefs[1] + coefs[2] * doy +
+    coefs[3] * sin(2 * pi * doy /365) + 
+    coefs[4] * cos(2 * pi * doy /365) + 
+    coefs[5] * sin(4 * pi * doy /365) + 
+    coefs[6] * cos(4 * pi * doy /365))
+})) %>% `names<-`(names(pts_vh)[1:7]) %>% 
+    mutate(DOY = doy) %>% 
+    mutate(polarization = 'VH',
+           type = 'Harmoic regression')
+
+pts_fit <- rbind(pts_vv_fit, pts_vh_fit) %>% 
+    pivot_longer(names(.)[1:7], 
+                 names_to = "Land cover type", 
+                 values_to = "dB")
+rm(pts_vv_ts, pts_vh_ts)
+
+# Make figure
+pts_ts <- merge(pts_ts, cols_lc[, 2:3])
+pts_fit <- merge(pts_fit, cols_lc[, 2:3])
+ts_epl <- ggplot() + 
+    geom_point(data = pts_ts, 
+               aes(x = DOY, y = `dB`, 
+                   color = factor(ids)),
+               size = 0.6) +
+    geom_line(data = pts_fit,
+               aes(x = DOY, y = `dB`, 
+                   color = factor(ids))) +
+    facet_wrap(~polarization, 
+               scales = 'free_y', nrow = 2,
+               strip.position = "right") +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    theme_bw()
+
+s1_fg <- ggarrange(
+    ggarrange(vv_fg, vh_fg,
+              labels = c('VV', 'VH'),
+              font.label = list(size = 12),
+              vjust = 3,
+              ncol = 2), 
+    ts_epl, ncol = 2)
+
+ggsave(here('docs/figures/s1_image.png'),
+       s1_fg,
+       width = 8, height = 2.7, dpi = 300)
+```
+
+## Samples for Random forest and U-Net
+
+This figure will provide the selected 200 tiles for RF to predict, the sub-tiling system for human checking, and the distribution of sub-tiles (chips) with score higher than 7.
+
+```{r}
+library(sf)
+library(rasterVis)
+library(ggnewscale)
+library(cowplot)
+
+# Read tiles
+guess_tiles <- read_sf(here('results/north/label_check_catalog.geojson')) %>% 
+    pull(tile) %>% unique()
+nicfi_tiles <- read_sf(here('data/geoms/tiles_nicfi_north.geojson')) %>% 
+    mutate(guess = ifelse(tile %in% guess_tiles, 1, 0))
+samples <- read_sf(here('results/north/label_check_catalog.geojson')) %>% 
+    filter(score > 7)
+sample_quality <- read_sf(here('results/north/label_check_catalog.geojson')) %>% 
+    filter(tile == '1228-999' & score > 7)
+
+# Sub-tiling
+indices <- matrix(1:64, 8, 8)
+indices <- indices[, ncol(indices):1]
+sub_tiling <- nicfi_tiles %>% 
+    filter(tile == '1228-999') %>% 
+    st_make_grid(n = c(8, 8)) %>% 
+        st_sf() %>% 
+        mutate(index = as.vector(indices))
+
+# Weak labels
+labels_esb <- raster(here('data/north/lc_labels_north_mask.tif')) %>% 
+    crop( nicfi_tiles %>% filter(tile == '1228-999'))
+labels_guess <- raster(
+    here('results/north/prediction/classed_1228-999.tif'))
+
+# Sub-tiling figure
+sub_tiling_fg <- ggplot(sub_tiling) + 
+    geom_sf(color = 'blue', fill = NA, lwd = 0.3) + 
+    geom_sf_text(aes(label = index), size = 2.5) +
+    theme_minimal() +
+    labs(title = 'B') +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.title = element_text(hjust = -0.15, vjust = -6),
+          plot.margin = unit(rep(0, 4),"cm"))
+
+# Weak ensemble labels
+r_df <- as.data.frame(labels_esb, xy = TRUE) %>%
+    rename(`Weak ensemble label` = lc_labels_north_mask) %>% 
+    mutate(`Weak ensemble label` = factor(`Weak ensemble label`)) %>% 
+    na.omit()
+weak_lb_fg <- ggplot() + 
+    geom_raster(
+        data = r_df, 
+        aes(x = x, y = y, 
+            fill = `Weak ensemble label`)) +
+    scale_fill_manual(
+        values = c('#ff7f00', '#33a02c', '#b2df8a',
+                   '#074702', '#0ea591'), 
+        breaks = c(1, 4, 3, 2, 5),
+        labels = c("Cropland", "Shrubland", 
+                   "Grassland", "Forest", 'Wetland')) +
+    geom_sf(data = sub_tiling, color = 'blue', 
+            fill = NA, lty = 'dotted', lwd = 0.4) +
+    theme_minimal() +
+    theme(legend.position = 'none',
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))
+
+# RF guessed labels
+r_df <- as.data.frame(labels_guess, xy = TRUE) %>%
+    rename(`RF guess label` = classed_1228.999) %>% 
+    mutate(`RF guess label` = factor(`RF guess label`)) %>% 
+    na.omit()
+guess_lb_fg <- ggplot() + 
+    geom_raster(
+        data = r_df, 
+        aes(x = x, y = y, 
+            fill = `RF guess label`)) +
+    scale_fill_manual(
+        values = c('#ff7f00', '#074702', '#b2df8a',
+                   '#33a02c', '#3347f9', '#5a6057',
+                   '#fdbf6f'), 
+        breaks = 1:7,
+        labels = c("Cropland", 'Forest', "Grassland", 
+                   'Shrubland',  "Water", "Urban/Built-up",
+                   'Bareland')) +
+    geom_sf(data = sub_tiling %>% 
+                st_transform(crs(labels_guess)), 
+            color = 'blue', 
+            fill = NA, lty = 'dotted', lwd = 0.4) +
+    theme_minimal() +
+    theme(legend.position = 'none',
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))
+
+# Sample distribution
+legend_lc <- ggplot() + 
+    geom_raster(
+        data = r_df, 
+        aes(x = x, y = y, 
+            fill = `RF guess label`)) +
+    scale_fill_manual('Land cover',
+        values = c('#ff7f00', '#074702', '#b2df8a',
+                   '#33a02c', '#3347f9', '#5a6057',
+                   '#fdbf6f'), 
+        breaks = 1:7,
+        labels = c("Cropland", 'Forest', "Grassland", 
+                   'Shrubland',  "Water", "Built-up",
+                   'Bareland')) +
+    geom_sf(data = sub_tiling %>% 
+                st_transform(crs(labels_guess)), 
+            color = 'blue', 
+            fill = NA, lty = 'dotted', lwd = 0.4) +
+    theme_minimal() +
+    theme(legend.position = 'left',
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))
+legend_lc <- get_legend(legend_lc)
+
+samples_fg <- ggplot() + 
+    geom_sf(data = nicfi_tiles,
+            aes(color = factor(guess),
+                lty = factor(guess)), 
+            fill = 'white', lwd = 0.4) +
+    scale_linetype_manual('Usage', values = c('solid', 'solid'),
+                          labels = c('Others', 'Guessed tile')) +
+    scale_color_manual('Usage', values = c("grey", "blue"),
+                       labels = c('Others', 'Guessed tile')) +
+    geom_sf(data = samples, aes(fill = factor(score)), color = NA) +
+    scale_fill_manual('Lable score', 
+                      values = c("#00AFBB", "#E7B800", "#FC4E07")) +
+    annotation_custom(grob = ggplotGrob(sub_tiling_fg), 
+                      xmin = 35.8, xmax = 38.2,
+                      ymin = -2.2, ymax = -0.1) +
+    labs(title = 'A') +
+    theme_minimal() +
+    theme(legend.position = 'bottom',
+          legend.box = "vertical",
+          legend.margin = margin(0, 0, 0, 0),
+          legend.box.margin = margin(-20, 2, 2, 2),
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.title = element_text(vjust = -6),
+          plot.margin = unit(c(0, 0, 0, 0.2),"cm"))
+    # guides(fill = guide_legend(nrow = 2, byrow = TRUE),
+    #        color = guide_legend(nrow = 2, byrow = TRUE),
+    #        linetype = guide_legend(nrow = 2, byrow = TRUE))
+
+samples_fg <- ggarrange(samples_fg, legend_lc, 
+                        nrow = 1, widths = c(1, 0.2))
+imgs <- ggarrange(weak_lb_fg, guess_lb_fg, 
+                  nrow = 2, labels = c('C', 'D'),
+                  font.label = list(face = "plain"),
+                  hjust = 0, vjust = 2)
+sample_imgs <- ggarrange(samples_fg, imgs, 
+                         ncol = 2,
+                         widths = c(2.5, 1))
+ggsave(here('docs/figures/samples_distribution.png'),
+       sample_imgs,
+       width = 8, height = 4.5, dpi = 600)
+```
+
+## Workflow
+
+This figure will provide an overall flowchart of methods.

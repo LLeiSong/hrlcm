@@ -84,7 +84,7 @@ The most essential work are arguably to clone project and set jupyter notebook:
 #### Run experiments
 
 ```
-python hrlcm/fit_coteaching_compare.py --exp_name unet_cot_argue --num_workers 32 --gpu_devices '0,1,2,3' --epochs 30
+python hrlcm/fit_coteaching.py --exp_name unet_cot_noisy8_40 --lowest_score 8 --num_workers 32 --gpu_devices '0,1,2,3' --num_gradual 10
 ```
 
 ```

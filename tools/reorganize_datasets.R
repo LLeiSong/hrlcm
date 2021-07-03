@@ -76,18 +76,18 @@ write.csv(catalog_train_8, file.path(dst_dir, 'dl_catalog_train_noisy8_40.csv'),
           row.names = F)
 
 # # Fixed perfect sample numbers
-# catalog_train <- catalog_train %>% filter(score == 9) %>% 
+# catalog_train <- catalog_train %>% filter(score == 9) %>%
 #     sample_n(nrow(sample_perfect) * noise_ratio / (1 - noise_ratio))
 
 # # Copy files
 # dir.create(file.path(dst_dir, 'dl_train'), showWarnings = F)
 # dir.create(file.path(dst_dir, 'dl_valid'), showWarnings = F)
 # mclapply(1:nrow(catalog_train), function(n){
-#     ctg_n <- catalog_train %>% 
+#     ctg_n <- catalog_train %>%
 #         slice(n)
-#     file.copy(here(file.path(src_dir, ctg_n$img)), 
+#     file.copy(here(file.path(src_dir, ctg_n$img)),
 #               file.path(dst_dir, ctg_n$img))
-#     file.copy(here(file.path(src_dir, ctg_n$label)), 
+#     file.copy(here(file.path(src_dir, ctg_n$label)),
 #               file.path(dst_dir, ctg_n$label))
 # }, mc.cores = 6)
 
