@@ -217,7 +217,7 @@ class NFSEN1LC(Dataset):
             elif len(catalog.index) != 1:
                 sys.exit('Duplicate catalog for tile {}.'.format(self.tile_id))
             else:
-                catalog['img'][0] = os.path.join(self.data_dir, catalog['img'][0])
+                catalog['img'][catalog.index[0]] = os.path.join(self.data_dir, catalog['img'][catalog.index[0]])
                 self.catalog = catalog.iloc[0]
                 img = load_tile(self.catalog, unlabeled=True)
                 self.meta = get_meta(self.catalog['img'])

@@ -12,7 +12,6 @@ import torch.nn.functional as F
 import pickle as pkl
 from models.deeplab import DeepLab
 from models.unet import UNet
-from tqdm import tqdm
 
 
 def main():
@@ -144,8 +143,7 @@ def main():
         canvas_score_ls = []
 
         with torch.no_grad():
-            for m, (img, index_full) in enumerate(
-                    tqdm(predict_loader, desc="Predict", dynamic_ncols=True)):
+            for m, (img, index_full) in enumerate(predict_loader):
                 # GPU setting
                 if args.use_gpu:
                     img = img.cuda()
