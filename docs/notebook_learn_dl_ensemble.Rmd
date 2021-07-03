@@ -110,6 +110,12 @@ Do the following steps to use the tensorboard on a remote server (reference: htt
 2. Then you may start the tensorboard on the remote server with the specific port we want to transfer:
 
     (on the remote server) `tensorboard --logdir='./tensorboard_dirs' --port=16007`
+    
+#### Prediction
+
+```
+python hrlcm/predict.py --args_path 'results/dl/resume/args.pkl' --checkpoint_file 'results/dl/resume/final.pth' --fname_predict 'results/north/dl_catalog_valid_full.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+```
 
 ### Google Colab
 In general, we mean to use Google Colab to run the model. For this case, it is more convenient to read the data locally and pickle them. Then directly load the pickles into Google Colab and just use the GPU environment to run the models.

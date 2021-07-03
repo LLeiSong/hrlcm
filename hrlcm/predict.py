@@ -34,6 +34,8 @@ def main():
                         help='path to dataset')
     parser.add_argument('--out_dir', type=str, default="prediction",
                         help='path to output dir (default: ./prediction)')
+    parser.add_argument('--stats_dir', type=str, default="norm_stats",
+                        help='path of normalization params (default: ./norm_stats)')
     parser.add_argument('--num_workers', type=int, default=0,
                         help='number of worker(s) to load dataset (default: 0)')
 
