@@ -131,17 +131,29 @@ python hrlcm/evaluate.py --args_path 'results/dl/args.pkl' --checkpoint_file 're
 python hrlcm/evaluate.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/model1_final.pth' --data_dir 'results/north' --out_dir 'results/evaluation1' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 ```
 
-### Google Colab
-In general, we mean to use Google Colab to run the model. For this case, it is more convenient to read the data locally and pickle them. Then directly load the pickles into Google Colab and just use the GPU environment to run the models.
+#### Other useful commands
+
+##### Check disk space and clean trash
+
+```bash
+df -H
+cd .local/share/Trash/
+rm -rf *
+```
+##### Check the RAM usage in M
+
+```bash
+free -m
+```
 
 ## Methodology
 ### Candidate models
 
-- U-net, which has simple architecture and is friendly to small dataset. This model is especially suitable for guess training.
+- U-net, which has simple architecture and is friendly to small dataset.
 
-- Deeplab3plus with ResNet as backbone. This architecture can consider the global context and have skip connections to ensure the complex structure still could get coverage. This model is super useful for the final train with manually corrected labels.
+- Deeplab3plus with ResNet as backbone. This architecture can consider the global context and have skip connections to ensure the complex structure still could get coverage.
 
-### Strategies to deal with noisy labels
+### Possible strategies to deal with noisy labels
 
 #### Add noisy labels to fine tune
 
@@ -162,9 +174,9 @@ Based on the original papers and their GitHub repos, we combined these two logic
 - The second version is batch based, which means it only use pixels with small loss from the whole batch to update the models. Mode works similarly as the first version. 
 
 #### JoCoR
-Since the original paper is about image classification rather than image segmentation, it is harder to adapt this method into image segmentation with good performance. 
+Since the original paper is about image classification rather than image segmentation, it is harder to adapt this method into image segmentation with good performance.
 
-[NEED MORE EXPERIMENTS]
+So after all experiments, we decide to stick with co-teaching & co-teaching-plus.
 
 ## Experiments
 
@@ -175,9 +187,9 @@ Before any tests related to strategies to deal with noisy labels, we will build 
 #### Hyper-parameters
 
 - <input type="checkbox" checked> Learning rate and learning rate scheduler</input>
-- Batch size
-- Optimizer
-- Model (U-net or Deeplab)
+- <input type="checkbox" checked> Batch size</input>
+- <input type="checkbox" checked> Optimizer</input>
+- <input type="checkbox" checked> Model (U-net or Deeplab)</input>
 - Transform methods (if necessary)
 
 ##### Unet
@@ -206,4 +218,4 @@ We first use constant parameters, 0.001 learning rate, AmsBound optimizer, and 3
 
 - Co_teaching_batch doesn't fit multi-classes classification task. It might be good for binary classification. Because based on the curves, co_teaching_batch give up the minorities. 
 
-- Co_teaching works good. "Discuss" mode works slightly better than "argue" mode.
+- Co_teaching works good. "Discuss" mode works slightly better than "argue" mode. Since "argue" mode use the disagreement between two models, we assume this method would be helpful to transfer a model to other areas. Of course, this assumption needs more test.
