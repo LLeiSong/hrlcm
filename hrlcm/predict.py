@@ -37,8 +37,10 @@ def main():
                         help='path of normalization params (default: ./norm_stats)')
     parser.add_argument('--num_workers', type=int, default=0,
                         help='number of worker(s) to load dataset (default: 0)')
+    parser.add_argument('--label_offset', type=int, default=1,
+                        help='offset value to minus from label in order to start from 0 (default: 1)')
 
-    # Hyper-parameters of evaluation
+    # Hyper-parameters of GPU
     parser.add_argument('--batch_size', type=int, default=16,
                         help='mini-batch size (default: 16)')
     parser.add_argument('--gpu_devices', type=str, default=None,
@@ -158,6 +160,7 @@ def main():
                     index = (index_full[0][i], index_full[1][i])
                     out_predict = out.max(dim=1)[1][:, :, :].cpu().numpy()[i, :, :]
                     out_predict = np.expand_dims(out_predict, axis=0)
+                    out_predict = out_predict + args.label_offset
                     out_predict = out_predict.astype(np.int8)
                     canvas[:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_predict
 
@@ -177,7 +180,7 @@ def main():
             dst.write(canvas)
 
         for n in range(n_class):
-            with rasterio.open('{}_class{}.tif'.format(name_score, n), 'w', **meta) as dst:
+            with rasterio.open('{}_class{}.tif'.format(name_score, n + args.label_offset), 'w', **meta) as dst:
                 dst.write(canvas_score_ls[n])
 
         del predict_dataset, predict_loader
