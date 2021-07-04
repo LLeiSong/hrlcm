@@ -107,6 +107,8 @@ def main():
                         help='path to dataset')
     parser.add_argument('--out_dir', type=str, default="models",
                         help='path to output dir (default: ./models)')
+    parser.add_argument('--stats_dir', type=str, default="norm_stats",
+                        help='path of normalization params (default: ./norm_stats)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
     parser.add_argument('--num_workers', type=int, default=0,
