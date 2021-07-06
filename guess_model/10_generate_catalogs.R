@@ -107,7 +107,7 @@ message('Step 3: Get train dataset')
 # All other tiles with different levels of quality
 tiles_train <- st_read(here('results/north/label_check_catalog.geojson')) %>% 
     filter(pass == 'yes') %>% 
-    filter(score > 7) %>% 
+    filter(score > 5) %>% 
     mutate(id = paste0(tile, index)) %>% 
     filter(!id %in% paste0(tiles_validate$tile, tiles_validate$index)) %>% 
     dplyr::select(-id)
