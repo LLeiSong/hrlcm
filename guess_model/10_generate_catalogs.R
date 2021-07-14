@@ -30,44 +30,44 @@ message('Step 2: Select validate dataset')
 
 # Get perfect tiles
 tiles_perfect <- st_read(here('results/north/label_check_catalog.geojson')) %>% 
-    filter(pass == 'yes') %>% 
-    filter(score == 10)
+  filter(pass == 'yes') %>% 
+  filter(score == 10)
 
 # Make summary of these tiles
 tiles_summary <- mclapply(1:nrow(tiles_perfect), function(n){
-    tile_row <- tiles_perfect %>% slice(n)
-    label_nm <- paste0('refine_', tile_row$tile, 
-                       "_", tile_row$index, '.tif')
-    label <- rast(here(file.path('results/north/guess_labels',
-                                 label_nm)))
-    freq(label) %>% data.frame() %>% 
-        filter(value != 0) %>%
-        dplyr::select(-layer) %>%
-        pivot_wider(names_from = value, values_from = count) %>% 
-        mutate(tile = tile_row$tile,
-               index = tile_row$index) %>% 
-        dplyr::select(tile, index, setdiff(names(.), c('tile', 'index')))
+  tile_row <- tiles_perfect %>% slice(n)
+  label_nm <- paste0('refine_', tile_row$tile, 
+                     "_", tile_row$index, '.tif')
+  label <- rast(here(file.path('results/north/guess_labels',
+                               label_nm)))
+  freq(label) %>% data.frame() %>% 
+    filter(value != 0) %>%
+    dplyr::select(-layer) %>%
+    pivot_wider(names_from = value, values_from = count) %>% 
+    mutate(tile = tile_row$tile,
+           index = tile_row$index) %>% 
+    dplyr::select(tile, index, setdiff(names(.), c('tile', 'index')))
 }, mc.cores = 6) %>% bind_rows()
 
 # Select out validation dataset
 tiles_valid <- lapply(as.character(1:7), function(ind){
-    if (ind %in% 6:7){
-        set.seed(10)
-        tiles_summary %>% 
-            dplyr::select(tile, index, all_of(ind)) %>% 
-            na.omit() %>% arrange(desc(across(ind))) %>% 
-            slice(1:(nrow(.) / 2)) %>% 
-            sample_n(400)
-    } else{
-        tiles_summary %>% 
-            dplyr::select(tile, index, all_of(ind)) %>% 
-            na.omit() %>% arrange(desc(across(ind))) %>% 
-            slice(1:100)
-    }
+  if (ind %in% 6:7){
+    set.seed(10)
+    tiles_summary %>% 
+      dplyr::select(tile, index, all_of(ind)) %>% 
+      na.omit() %>% arrange(desc(across(ind))) %>% 
+      slice(1:(nrow(.) / 2)) %>% 
+      sample_n(400)
+  } else{
+    tiles_summary %>% 
+      dplyr::select(tile, index, all_of(ind)) %>% 
+      na.omit() %>% arrange(desc(across(ind))) %>% 
+      slice(1:100)
+  }
 })
 
 tiles_valid_selected <- lapply(tiles_valid, function(each){
-    each %>% dplyr::select(tile, index)
+  each %>% dplyr::select(tile, index)
 }) %>% bind_rows() %>% distinct()
 
 tiles_valid_selected <- lapply(
@@ -86,16 +86,16 @@ tiles_valid_selected <- lapply(
 ## Class 6 and 7 are relatively small.
 ## Urban and bareland.
 tiles_valid_sum <- tiles_valid %>% 
-    reduce(full_join, by = c('tile', 'index')) %>% 
-    dplyr::select(-c(tile, index)) %>% 
-    colSums(na.rm = T) %>% print()
+  reduce(full_join, by = c('tile', 'index')) %>% 
+  dplyr::select(-c(tile, index)) %>% 
+  colSums(na.rm = T) %>% print()
 
 # Save out
 ### Relatively pure tiles with high quality and good balance
 tiles_validate <- st_read(here('results/north/label_check_catalog.geojson')) %>% 
-    merge(., tiles_valid_selected, by = c('tile', 'index')) %>% 
-    mutate(double_check = 'yes') %>% 
-    dplyr::select(tile, index, pass, score, double_check, comment)
+  merge(., tiles_valid_selected, by = c('tile', 'index')) %>% 
+  mutate(double_check = 'yes') %>% 
+  dplyr::select(tile, index, pass, score, double_check, comment)
 st_write(tiles_validate,
          here('results/north/tiles_validate.geojson'))
 
@@ -106,11 +106,11 @@ message('Step 3: Get train dataset')
 
 # All other tiles with different levels of quality
 tiles_train <- st_read(here('results/north/label_check_catalog.geojson')) %>% 
-    filter(pass == 'yes') %>% 
-    filter(score > 5) %>% 
-    mutate(id = paste0(tile, index)) %>% 
-    filter(!id %in% paste0(tiles_validate$tile, tiles_validate$index)) %>% 
-    dplyr::select(-id)
+  filter(pass == 'yes') %>% 
+  filter(score > 7) %>% 
+  mutate(id = paste0(tile, index)) %>% 
+  filter(!id %in% paste0(tiles_validate$tile, tiles_validate$index)) %>% 
+  dplyr::select(-id)
 st_write(tiles_train,
          here('results/north/tiles_train.geojson'))
 
@@ -131,12 +131,12 @@ catalog_train <- tiles_train %>%
   dplyr::select(tile, index, score) %>%
   mutate(
     label = file.path(
-        train_path,
-        paste0(tile, "_", index, "_label.tif")
+      train_path,
+      paste0(tile, "_", index, "_label.tif")
     ),
     img = file.path(
-        train_path,
-        paste0(tile, "_", index, "_img.tif")
+      train_path,
+      paste0(tile, "_", index, "_img.tif")
     ),
     tile_id = paste(tile, index, sep = '_')
   ) %>% 
@@ -148,19 +148,19 @@ write.csv(catalog_train,
 # Validate catalog
 message('--Catalog of validation')
 catalog_valid <- tiles_validate %>%
-    st_drop_geometry() %>%
-    dplyr::select(tile, index, score) %>%
-    mutate(
-        label = file.path(
-            valid_path,
-            paste0(tile, "_", index, "_label.tif")
-        ),
-        img = file.path(
-            valid_path,
-            paste0(tile, "_", index, "_img.tif")
-        ),
-        tile_id = paste(tile, index, sep = '_')
-    ) %>% 
+  st_drop_geometry() %>%
+  dplyr::select(tile, index, score) %>%
+  mutate(
+    label = file.path(
+      valid_path,
+      paste0(tile, "_", index, "_label.tif")
+    ),
+    img = file.path(
+      valid_path,
+      paste0(tile, "_", index, "_img.tif")
+    ),
+    tile_id = paste(tile, index, sep = '_')
+  ) %>% 
   dplyr::select(tile_id, tile, index, score, label, img)
 write.csv(catalog_valid, 
           here('results/north/dl_catalog_valid.csv'),
@@ -185,26 +185,26 @@ message('--Prepare labels')
 message('----Labels for train')
 copy_to <- catalog_train$label
 invisible(mclapply(copy_to, function(x){
-    file.copy(
-        file.path(
-        label_from, 
-        paste0('refine_',
-               gsub('_label', '', 
-                    basename(x)))),
-        x)
+  file.copy(
+    file.path(
+      label_from, 
+      paste0('refine_',
+             gsub('_label', '', 
+                  basename(x)))),
+    file.path(train_path, basename(x)))
 }, mc.cores = 8))
 
 ## Validation
 message('----Labels for validation')
 copy_to <- catalog_valid$label
 invisible(mclapply(copy_to, function(x){
-    file.copy(
-        file.path(
-            label_from, 
-            paste0('refine_',
-                   gsub('_label', '', 
-                        basename(x)))),
-        x)
+  file.copy(
+    file.path(
+      label_from, 
+      paste0('refine_',
+             gsub('_label', '', 
+                  basename(x)))),
+    file.path(valid_path, basename(x)))
 }, mc.cores = 8))
 
 # Satellite images
@@ -212,50 +212,58 @@ message('--Prepare satellite images')
 # Select features
 load(here('data/north/forest_vip.rda'))
 var_selected <- data.frame(var = names(forest_vip$fit$variable.importance),
-                      imp = forest_vip$fit$variable.importance) %>% 
-    filter(str_detect(var, c('band')) | # remove indices
-               str_detect(var, c('vv')) |
-               str_detect(var, c('vh'))) %>% 
-    filter(imp > 1000) # remove less important ones
+                           imp = forest_vip$fit$variable.importance) %>% 
+  filter(str_detect(var, c('band')) | # remove indices
+           str_detect(var, c('vv')) |
+           str_detect(var, c('vh'))) %>% 
+  filter(imp > 1000) # remove less important ones
 
 tiles <- unique(c(catalog_train$tile, catalog_valid$tile))
-invisible(lapply(tiles, function(tile_id){
-    message(tile_id)
-    sat <- rast(
-        file.path(
-            img_from, paste0(tile_id, '.tif')
-            ))
-    sat <- subset(sat, var_selected$var)
-    
-    # train
-    train_this_tile <- catalog_train %>% 
-        filter(tile == tile_id)
-    if (nrow(train_this_tile) > 0){
-        invisible(lapply(1:nrow(train_this_tile), function(n){
-            msk <- rast(train_this_tile %>% 
-                            slice(n) %>% 
-                            pull(label))
-            imgs <- crop(sat, msk)
-            writeRaster(imgs, 
-                        train_this_tile %>% 
-                            slice(n) %>%
-                            pull(img))
-        }))
-    }
-    
-    # validation
-    valid_this_tile <- catalog_valid %>% 
-        filter(tile == tile_id)
-    if (nrow(valid_this_tile) > 0){
-        invisible(lapply(1:nrow(valid_this_tile), function(n){
-            msk <- rast(valid_this_tile %>% 
-                            slice(n) %>% 
-                            pull(label))
-            imgs <- crop(sat, msk)
-            writeRaster(imgs, 
-                        valid_this_tile %>% 
-                            slice(n) %>%
-                            pull(img))
-        }))
-    }
+invisible(lapply(tiles, function(id){
+  message(id)
+  sat <- rast(
+    file.path(
+      img_from, paste0(id, '.tif')
+    ))
+  sat <- subset(sat, var_selected$var)
+  
+  # train
+  train_this_tile <- catalog_train %>% 
+    filter(tile == id)
+  if (nrow(train_this_tile) > 0){
+    invisible(lapply(1:nrow(train_this_tile), function(n){
+      msk <- rast(train_this_tile %>% 
+                    slice(n) %>% 
+                    pull(label) %>%
+                    basename() %>% 
+                    file.path(train_path, .))
+      imgs <- crop(sat, msk)
+      writeRaster(imgs, 
+                  train_this_tile %>% 
+                    slice(n) %>%
+                    pull(img) %>%
+                    basename() %>% 
+                    file.path(train_path, .))
+    }))
+  }
+  
+  # validation
+  valid_this_tile <- catalog_valid %>% 
+    filter(tile == id)
+  if (nrow(valid_this_tile) > 0){
+    invisible(lapply(1:nrow(valid_this_tile), function(n){
+      msk <- rast(valid_this_tile %>% 
+                    slice(n) %>% 
+                    pull(label) %>%
+                    basename() %>% 
+                    file.path(valid_path, .))
+      imgs <- crop(ssat, msk)
+      writeRaster(imgs, 
+                  valid_this_tile %>% 
+                    slice(n) %>%
+                    pull(img) %>%
+                    basename() %>% 
+                    file.path(valid_path, .))
+    }))
+  }
 }))

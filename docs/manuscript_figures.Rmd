@@ -645,3 +645,134 @@ ggsave(here('docs/figures/samples_distribution.png'),
 ## Workflow
 
 This figure will provide an overall flowchart of methods.
+
+## Scalars
+
+```{r}
+# Single U-Net model with step learning rate
+# Get file names
+fns <- list.files('results/scalars/single_step_lr', 
+                  pattern = 'step_lr',
+                  full.names = T)
+
+# Learning rate
+step_lr <- read.csv(fns[2], stringsAsFactors = F) %>% 
+    mutate(Step = Step / 113)
+
+# Scalars
+fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
+unet_step_lr_scalars <- lapply(fns, function(fn){
+    scalar <- read.csv(fn, stringsAsFactors = F) %>% 
+        mutate(Step = Step / 113) %>% 
+        select(-Wall.time)
+})
+names(unet_step_lr_scalars) <- gsub(
+    '.csv', "", 
+    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+
+# Single U-Net model with compose learning rate
+# Get file names
+fns <- list.files('results/scalars/single_compose_lr', 
+                  pattern = 'compose_lr',
+                  full.names = T)
+
+# Learning rate
+compose_lr <- read.csv(fns[2], stringsAsFactors = F) %>% 
+    mutate(Step = Step / 113)
+
+# Scalars
+fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
+unet_compose_lr_scalars <- lapply(fns, function(fn){
+    scalar <- read.csv(fn, stringsAsFactors = F) %>% 
+        mutate(Step = Step / 113) %>% 
+        select(-Wall.time)
+})
+names(unet_compose_lr_scalars) <- gsub(
+    '.csv', "", 
+    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+
+# Coteaching + single U-Net model
+nms <- gsub(
+    '.csv', "", 
+    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+fns_cot <- list.files('results/scalars/cot_single/cot', 
+                  full.names = T)
+stages <- c('8_5_1', '8_5_2', '9_5_1', '9_5_2')
+
+cot_scalars <- lapply(nms, function(nm){
+    fns1 <- fns_cot[str_detect(fns_cot, paste0(nm, "1"))]
+    fns2 <- fns_cot[str_detect(fns_cot, paste0(nm, "2"))]
+    scalar1 <- do.call(rbind, lapply(stages, function(stage){
+        fns <- fns1[str_detect(fns1, stage)]
+        if (stage == '8_5_2') {
+            read.csv(fns) %>%
+                mutate(Step = Step/min(Step) + 5)
+        } else if (stage == '9_5_1'){
+            read.csv(fns) %>%
+                mutate(Step = Step/min(Step) + 10)
+        } else if (stage == '9_5_2'){
+            read.csv(fns) %>%
+                mutate(Step = Step/min(Step) + 15)
+        } else{
+            read.csv(fns) %>%
+                mutate(Step = Step/min(Step))
+        }
+    }))
+    scalar2 <- do.call(rbind, lapply(stages, function(stage){
+        fns <- fns2[str_detect(fns2, stage)]
+        if (stage == '8_5_2') {
+            read.csv(fns) %>%
+                mutate(Step = Step/min(Step) + 5)
+        } else if (stage == '9_5_1'){
+            read.csv(fns) %>%
+                mutate(Step = Step/min(Step) + 10)
+        } else if (stage == '9_5_2'){
+            read.csv(fns) %>%
+                mutate(Step = Step/min(Step) + 15)
+        } else{
+            read.csv(fns) %>%
+                mutate(Step = Step/min(Step))
+        }
+    }))
+    scalar1 %>% select(-Wall.time) %>% 
+        rename(Value_m1 = Value) %>% 
+        merge(scalar2 %>% select(-Wall.time) %>% 
+                  rename(Value_m2 = Value),
+              by = 'Step')
+})
+names(cot_scalars) <- nms
+
+fns <- list.files('results/scalars/cot_single/single_ctn', 
+                  full.names = T)
+fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
+cot_ctn_scalars <- lapply(fns, function(fn){
+    scalar <- read.csv(fn, stringsAsFactors = F) %>% 
+        mutate(Step = Step / 113 + 20) %>% 
+        select(-Wall.time)
+})
+names(cot_ctn_scalars) <- gsub(
+    '.csv', "", 
+    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+
+cot_single_scalars <- lapply(nms, function(nm){
+    cot_scalars[[nm]] %>% 
+        select(Step, Value_m2) %>% 
+        rename(Value = Value_m2) %>% 
+        rbind(cot_ctn_scalars[[nm]])
+})
+names(cot_single_scalars) <- nms
+
+# Plot
+
+aa <- merge(unet_compose_lr_scalars$Water, 
+            cot_single_scalars$Water, 
+            by = 'Step') %>% 
+    rename(Compose = Value.x, Cot = Value.y) %>% 
+    pivot_longer(cols = c(Compose, Cot),
+                 names_to = 'type', values_to = 'value')
+ggplot(aa, aes(x = Step, y = value)) +
+    geom_line(aes(color = type, lty = type)) +
+    # geom_smooth(aes(color = type)) +
+    theme_bw()
+```
+

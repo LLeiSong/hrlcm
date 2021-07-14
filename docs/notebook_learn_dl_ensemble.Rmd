@@ -83,12 +83,32 @@ The most essential work are arguably to clone project and set jupyter notebook:
   
 #### Run experiments
 
+Prepare work:
+
 ```
-python hrlcm/fit_coteaching.py --exp_name unet_cot_noisy8_40 --lowest_score 8 --num_workers 32 --gpu_devices '0,1,2,3' --num_gradual 10
+scp -r /Volumes/wildebeest/dl_train ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
+
+scp -r /Volumes/wildebeest/dl_valid ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
+
+scp -r /Users/pinot/Dropbox/research/hrlcm/results/north/norm_stats ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
+
+scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train.csv ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
+
+scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_valid.csv ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
+```
+
+Run models:
+
+```
+python hrlcm/fit_compose_lr.py --exp_name unet_single_gl --lowest_score 9 --num_workers 32 --gpu_devices '0,1,2,3'
 ```
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_single_noisy8_40 --lowest_score 8 --num_workers 32 --gpu_devices '0,1,2,3'
+python hrlcm/fit_coteaching.py --exp_name unet_cot_gl_blind --lowest_score 9 --num_workers 32 --gpu_devices '0,1,2,3'
+```
+
+```
+python hrlcm/fit_coteaching.py --exp_name unet_cot_8 --highest_score 8 --lowest_score 8 --num_workers 32 --gpu_devices '0,1,2,3'
 ```
   
 #### Tensorboard
@@ -133,7 +153,7 @@ python hrlcm/evaluate.py --args_path 'results/dl/args.pkl' --checkpoint_file 're
 
 ```bash
 df -H
-cd .local/share/Trash/
+cd ~/.local/share/Trash/
 rm -rf *
 ```
 ##### Check the RAM usage in M
