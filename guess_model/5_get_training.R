@@ -213,9 +213,7 @@ get_img_wdist <- function(tile_nm, tiles_north,
     imgs
 }
 
-get_img <- function(tile_nm, tiles_north,
-                          rivers_all, roads_all, 
-                          buildings_all){
+get_img <- function(tile_nm){
     message(tile_nm)
     
     # read Planet images

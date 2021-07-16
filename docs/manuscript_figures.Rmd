@@ -115,6 +115,7 @@ library(ggplot2)
 library(ggpubr)
 library(dplyr)
 library(tidyr)
+library(stringr)
 library(RStoolbox)
 
 # Read example images
@@ -233,13 +234,13 @@ ref_epl <- ggplot(pts_nicfi_all,
                        values = cols_lc$cols, 
                        breaks = cols_lc$ids,
                        labels = cols_lc$`Land cover type`) +
-    scale_x_discrete(limit = 1:4,
+    scale_x_discrete(limit = factor(1:4),
                      labels = unique(pts_nicfi_all$`Band name`)) +
     theme_bw() +
     theme(axis.title.x = element_blank()) +
     facet_wrap(~ Season, nrow = 2, 
                scales = "free_y",
-               strip.position = "right")
+               strip.position = "top")
 
 nicfi_fg <- ggarrange(
     ggarrange(s1_fg, s2_fg,
@@ -426,7 +427,7 @@ ts_epl <- ggplot() +
                    color = factor(ids))) +
     facet_wrap(~polarization, 
                scales = 'free_y', nrow = 2,
-               strip.position = "right") +
+               strip.position = "top") +
     scale_color_manual("Land cover type",
                        values = cols_lc$cols, 
                        breaks = cols_lc$ids,
@@ -463,8 +464,6 @@ nicfi_tiles <- read_sf(here('data/geoms/tiles_nicfi_north.geojson')) %>%
     mutate(guess = ifelse(tile %in% guess_tiles, 1, 0))
 samples <- read_sf(here('results/north/label_check_catalog.geojson')) %>% 
     filter(score > 7)
-sample_quality <- read_sf(here('results/north/label_check_catalog.geojson')) %>% 
-    filter(tile == '1228-999' & score > 7)
 
 # Sub-tiling
 indices <- matrix(1:64, 8, 8)
@@ -646,12 +645,48 @@ ggsave(here('docs/figures/samples_distribution.png'),
 
 This figure will provide an overall flowchart of methods.
 
+## Metrics
+
+```{r}
+# Get file names
+fns <- list.files(here('results/scalars/single_compose_lr'), 
+                  pattern = 'compose_lr',
+                  full.names = T)
+
+# Metrics
+fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
+metrics_last10 <- do.call(cbind, lapply(fns, function(fn){
+    read.csv(fn, stringsAsFactors = F) %>% 
+        dplyr::select(-c(Wall.time, Step)) %>% 
+        tail(10)
+}))
+names(metrics_last10) <- gsub(
+    '.csv', "", 
+    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+
+# Calculate mean and sd
+items <- c('AA', 'IoU', 'Cropland', 'Forest', 
+           'Grassland', 'Shrubland', 'Water', 
+           'Urban', 'Bareland')
+options(digits = 3)
+tb <- do.call(rbind, lapply(items, function(item){
+    vals <- metrics_last10 %>% pull(all_of(item))
+    if (item == 'Urban') item <- 'Built-up'
+    data.frame(mean = mean(vals),
+               sd = sd(vals)) %>% 
+        mutate(metric = item)
+}))
+```
+
+
 ## Scalars
 
 ```{r}
+library(here)
+
 # Single U-Net model with step learning rate
 # Get file names
-fns <- list.files('results/scalars/single_step_lr', 
+fns <- list.files(here('results/scalars/single_step_lr'), 
                   pattern = 'step_lr',
                   full.names = T)
 
@@ -664,7 +699,7 @@ fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
 unet_step_lr_scalars <- lapply(fns, function(fn){
     scalar <- read.csv(fn, stringsAsFactors = F) %>% 
         mutate(Step = Step / 113) %>% 
-        select(-Wall.time)
+        dplyr::select(-Wall.time)
 })
 names(unet_step_lr_scalars) <- gsub(
     '.csv', "", 
@@ -672,7 +707,7 @@ names(unet_step_lr_scalars) <- gsub(
 
 # Single U-Net model with compose learning rate
 # Get file names
-fns <- list.files('results/scalars/single_compose_lr', 
+fns <- list.files(here('results/scalars/single_compose_lr'), 
                   pattern = 'compose_lr',
                   full.names = T)
 
@@ -685,94 +720,22 @@ fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
 unet_compose_lr_scalars <- lapply(fns, function(fn){
     scalar <- read.csv(fn, stringsAsFactors = F) %>% 
         mutate(Step = Step / 113) %>% 
-        select(-Wall.time)
+        dplyr::select(-Wall.time)
 })
 names(unet_compose_lr_scalars) <- gsub(
     '.csv', "", 
     str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
 
-# Coteaching + single U-Net model
-nms <- gsub(
-    '.csv', "", 
-    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
-fns_cot <- list.files('results/scalars/cot_single/cot', 
-                  full.names = T)
-stages <- c('8_5_1', '8_5_2', '9_5_1', '9_5_2')
-
-cot_scalars <- lapply(nms, function(nm){
-    fns1 <- fns_cot[str_detect(fns_cot, paste0(nm, "1"))]
-    fns2 <- fns_cot[str_detect(fns_cot, paste0(nm, "2"))]
-    scalar1 <- do.call(rbind, lapply(stages, function(stage){
-        fns <- fns1[str_detect(fns1, stage)]
-        if (stage == '8_5_2') {
-            read.csv(fns) %>%
-                mutate(Step = Step/min(Step) + 5)
-        } else if (stage == '9_5_1'){
-            read.csv(fns) %>%
-                mutate(Step = Step/min(Step) + 10)
-        } else if (stage == '9_5_2'){
-            read.csv(fns) %>%
-                mutate(Step = Step/min(Step) + 15)
-        } else{
-            read.csv(fns) %>%
-                mutate(Step = Step/min(Step))
-        }
-    }))
-    scalar2 <- do.call(rbind, lapply(stages, function(stage){
-        fns <- fns2[str_detect(fns2, stage)]
-        if (stage == '8_5_2') {
-            read.csv(fns) %>%
-                mutate(Step = Step/min(Step) + 5)
-        } else if (stage == '9_5_1'){
-            read.csv(fns) %>%
-                mutate(Step = Step/min(Step) + 10)
-        } else if (stage == '9_5_2'){
-            read.csv(fns) %>%
-                mutate(Step = Step/min(Step) + 15)
-        } else{
-            read.csv(fns) %>%
-                mutate(Step = Step/min(Step))
-        }
-    }))
-    scalar1 %>% select(-Wall.time) %>% 
-        rename(Value_m1 = Value) %>% 
-        merge(scalar2 %>% select(-Wall.time) %>% 
-                  rename(Value_m2 = Value),
-              by = 'Step')
-})
-names(cot_scalars) <- nms
-
-fns <- list.files('results/scalars/cot_single/single_ctn', 
-                  full.names = T)
-fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
-cot_ctn_scalars <- lapply(fns, function(fn){
-    scalar <- read.csv(fn, stringsAsFactors = F) %>% 
-        mutate(Step = Step / 113 + 20) %>% 
-        select(-Wall.time)
-})
-names(cot_ctn_scalars) <- gsub(
-    '.csv', "", 
-    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
-
-cot_single_scalars <- lapply(nms, function(nm){
-    cot_scalars[[nm]] %>% 
-        select(Step, Value_m2) %>% 
-        rename(Value = Value_m2) %>% 
-        rbind(cot_ctn_scalars[[nm]])
-})
-names(cot_single_scalars) <- nms
-
 # Plot
-
-aa <- merge(unet_compose_lr_scalars$Water, 
-            cot_single_scalars$Water, 
+aa <- merge(unet_compose_lr_scalars$AA, 
+            unet_step_lr_scalars$AA, 
             by = 'Step') %>% 
     rename(Compose = Value.x, Cot = Value.y) %>% 
     pivot_longer(cols = c(Compose, Cot),
                  names_to = 'type', values_to = 'value')
 ggplot(aa, aes(x = Step, y = value)) +
     geom_line(aes(color = type, lty = type)) +
-    # geom_smooth(aes(color = type)) +
+    geom_smooth(aes(color = type)) +
     theme_bw()
 ```
 
