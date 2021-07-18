@@ -27,9 +27,11 @@ library(ggplot2)
 message('Step 2: Load training')
 
 ## Get training
-load(file.path(here('data/north'), 'training.rda'))
+load(file.path(
+    here('data/north'), 'training.rda'))
 training <- training %>% 
-    # wetland is really not accurate. so we give up this class.
+    # wetland is really not accurate. 
+    # so we give up this class.
     filter(landcover != 5) %>% 
     arrange(landcover) %>% 
     mutate(landcover = as.factor(landcover))
@@ -54,7 +56,8 @@ forest_vip <- rand_forest() %>%
                importance = "impurity_corrected") %>%
     set_mode("classification") %>% 
     fit(landcover ~ ., data = training)
-save(forest_vip, file = here('data/north/forest_vip.rda'))
+save(forest_vip, 
+     file = here('data/north/forest_vip.rda'))
 
 ## Plot
 vip(forest_vip, 
@@ -63,21 +66,12 @@ vip(forest_vip,
                       fill = "red")) +
     theme_light()
 
-## Based on the figure above, we decide to get rid of 
-## vv (3, 5, 6) and vh(3, 5, 6) variables. Because they
-## are the least important features, and they have coarse
-## spatial resolution.
-
-# ## Subset the features based on importance
-# training <- training %>% 
-#     dplyr::select(-c(paste0('vv', c(3, 5, 6)),
-#                      paste0('vh', c(3, 5, 6))))
-
 ## Define the cross validation folds
 message('--Cross validation')
 
 set.seed(123)
-training_split <- initial_split(training, prop = 0.80)
+training_split <- initial_split(
+    training, prop = 0.80)
 lc_train <- training(training_split)
 lc_test <- testing(training_split)
 
@@ -114,7 +108,8 @@ tune_res <- tune_grid(
     grid = rf_grid,
     control = control_grid(verbose = TRUE)
 )
-save(tune_res, file = here('data/north/tune_res.rda'))
+save(tune_res, 
+     file = here('data/north/tune_res.rda'))
 
 ## Check the results
 tune_res %>%
@@ -143,7 +138,8 @@ final_wf <- workflow() %>%
 
 final_res <- final_wf %>%
     last_fit(training_split)
-save(final_res, file = here('data/north/final_res.rda'))
+save(final_res, 
+     file = here('data/north/final_res.rda'))
 
 final_res %>%
     collect_metrics()
@@ -163,12 +159,6 @@ rm(lc_test, lc_train, training, training_folds,
 
 ### Reload training
 load(file.path(here('data/north'), 'training.rda'))
-# training <- training %>%
-#     filter(landcover != 5) %>%
-#     arrange(landcover) %>% 
-#     mutate(landcover = as.factor(landcover)) %>% 
-#     dplyr::select(-c(paste0('vv', c(3, 5, 6)),
-#                      paste0('vh', c(3, 5, 6))))
 
 # Or use all features
 training <- training %>%
@@ -180,7 +170,8 @@ training <- training %>%
 guess_rf_md <- final_rf %>% 
     set_engine("ranger", num.threads = 11) %>% 
     fit(landcover ~ ., training)
-save(guess_rf_md, file = here('data/north/guess_rf_md.rda'))
+save(guess_rf_md, 
+     file = here('data/north/guess_rf_md.rda'))
 
 ############################################
 ##  Step 5: Predict one tile for example  ##
@@ -189,22 +180,14 @@ message('Step 5: Predict one tile for example')
 
 library(terra)
 ## Read image stack
-fnames <- list.files('/Volumes/elephant/pred_stack',
-                     full.names = T)
+fnames <- list.files(
+    '/Volumes/elephant/pred_stack',
+    full.names = T)
 set.seed(67)
 img_path <- fnames[sample(length(fnames), 1)]
-# imgs <- rast(img_path) %>% 
-#     subset(setdiff(names(.), 
-#                    c(c(paste0('vv', c(3, 5, 6)),
-#                        paste0('vh', c(3, 5, 6))),
-#                      'rivers_dist', 'buildings_dist', 
-#                      'roads_dist')))
 
 # Or use all features
-imgs <- rast(img_path) %>%
-    subset(setdiff(names(.),
-                   c('rivers_dist', 'buildings_dist',
-                     'roads_dist')))
+imgs <- rast(img_path)
 
 ## Predict scores and classes
 scores <- predict(imgs, guess_rf_md, type = "prob")

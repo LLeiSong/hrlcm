@@ -104,10 +104,6 @@ python hrlcm/fit_compose_lr.py --exp_name unet_single_gl --lowest_score 9 --num_
 ```
 
 ```
-python hrlcm/fit_coteaching.py --exp_name unet_cot_gl_blind --lowest_score 9 --num_workers 32 --gpu_devices '0,1,2,3'
-```
-
-```
 python hrlcm/fit_coteaching.py --exp_name unet_cot_8 --highest_score 8 --lowest_score 8 --num_workers 32 --gpu_devices '0,1,2,3'
 ```
   
@@ -133,18 +129,10 @@ Do the following steps to use the tensorboard on a remote server (reference: htt
 python hrlcm/predict.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 ```
 
-```
-python hrlcm/predict.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/model2_final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/north' --out_dir 'results/prediction2' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
-```
-
 #### Evaluation
 
 ```
 python hrlcm/evaluate.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/final.pth' --data_dir 'results/north' --out_dir 'results/evaluation' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
-```
-
-```
-python hrlcm/evaluate.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/model1_final.pth' --data_dir 'results/north' --out_dir 'results/evaluation1' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 ```
 
 #### Other useful commands
@@ -167,10 +155,7 @@ free -m
 
 - U-net, which has simple architecture and is friendly to small dataset.
 
-- Deeplab3plus with ResNet as backbone. This architecture can consider the global context and have skip connections to ensure the complex structure still could get coverage.
-
 ### Possible strategies to deal with noisy labels
-
 #### Add noisy labels to fine tune
 
 After the initial 200 epochs with perfect labels, adding more noisy labels to "adapt" the model. 
@@ -190,6 +175,7 @@ Based on the original papers and their GitHub repos, we combined these two logic
 - The second version is batch based, which means it only use pixels with small loss from the whole batch to update the models. Mode works similarly as the first version. 
 
 #### JoCoR
+
 Since the original paper is about image classification rather than image segmentation, it is harder to adapt this method into image segmentation with good performance.
 
 So after all experiments, we decide to stick with co-teaching & co-teaching-plus.
@@ -235,3 +221,9 @@ We first use constant parameters, 0.001 learning rate, AmsBound optimizer, and 3
 - Co_teaching_batch doesn't fit multi-classes classification task. It might be good for binary classification. Because based on the curves, co_teaching_batch give up the minorities. 
 
 - Co_teaching works good. "Discuss" mode works slightly better than "argue" mode. Since "argue" mode use the disagreement between two models, we assume this method would be helpful to transfer a model to other areas. Of course, this assumption needs more test.
+
+
+So now, I have a clear idea is that the "wrong" guess labels are actually the hard ones. So instead of dumping them, we should take advantage of them.
+
+- Randomly get 8 out of 64 for each tile, 6 for train, and 2 for validate.
+- For these sub-tiles, score them and also correct the wrong part. The scores will be used as weight to calculate loss. The lower the score is, the higher weight it is.
