@@ -7,7 +7,6 @@ Maintainer: Lei Song (lsong@clarku.edu)
 import os
 import sys
 import itertools
-from math import floor
 import pandas as pd
 import rasterio
 from torch.utils.data import Dataset
@@ -116,9 +115,8 @@ class NFSEN1LC(Dataset):
 
     def __init__(self, data_dir,
                  usage='train',
-                 highest_score=10,
-                 lowest_score=9,
-                 noise_ratio=0.3,
+                 score_factor=0.2,  # max score is 5, so 2.
+                 hardiness_factor=0.1,
                  random_state=1,
                  label_offset=1,
                  sync_transform=None,
@@ -129,8 +127,12 @@ class NFSEN1LC(Dataset):
         Args:
             data_dir (str): the directory of all data
             usage (str): Usage of the dataset : "train", "validate" or "predict"
-            lowest_score (int): the lowest value of label score, [8, 9, 10], just for train.
-            noise_ratio (float or None): the ratio of noise in training, just for train.
+            score_factor (float): the ratio to multiply with score as weight for loss calculation.
+                E.g. score = 4, then weight = score * score_factor = 4 * 0.2 = 0.8.
+            hardiness_factor (float): the ratio to multiply with hardiness as weight for loss calculation.
+                E.g. score = 4, and hardiness = 3,
+                then weight = score * score_factor * (1 + (hardiness - 1) * hardiness_factor) =
+                4 * 0.2 * (1 + (3 - 1) * 0.1) = 0.96
             random_state (int): the random state for pandas sampling.
             label_offset (int): the offset of label to minus in order to fit into DL model.
             sync_transform (transform or None): Synthesize Data augmentation methods
@@ -143,6 +145,8 @@ class NFSEN1LC(Dataset):
         super(NFSEN1LC, self).__init__()
         self.data_dir = data_dir
         self.usage = usage
+        self.score_factor = score_factor
+        self.hardiness_factor = hardiness_factor
         self.random_state = random_state
         self.label_offset = label_offset
         self.sync_transform = sync_transform
@@ -161,8 +165,6 @@ class NFSEN1LC(Dataset):
 
         # Check inputs
         assert usage in ['train', 'validate', 'predict']
-        assert lowest_score in [8, 9, 10]
-        assert highest_score in [8, 9, 10]
         assert os.path.exists(data_dir)
 
         # Read catalog
@@ -178,33 +180,13 @@ class NFSEN1LC(Dataset):
 
         # Shrink the catalog based on noise ratio
         if self.usage == 'train':
-            # Initialize values
-            self.highest_score = highest_score
-            self.lowest_score = lowest_score
-            self.noise_ratio = noise_ratio
+            self.catalog = catalog_full
 
-            # Subset catalog based on score
-            catalog = catalog_full.loc[(self.lowest_score <= catalog_full['score']) &
-                                       (catalog_full['score'] <= self.highest_score)]
-
-            if self.lowest_score < 10 & self.highest_score == 10:
-                # Subset catalog based on noise_ratio
-                catalog_perfect = catalog.loc[catalog['score'] == 10]
-                catalog_rest = catalog.loc[catalog['score'] < 10]
-                if self.noise_ratio is not None:
-                    num_perfect = len(catalog_perfect.index)
-                    num_noisy = floor(num_perfect * self.noise_ratio / (1 - self.noise_ratio))
-                    catalog_rest = catalog_rest.sample(n=num_noisy, random_state=self.random_state)
-                else:
-                    self.noise_ratio = round(len(catalog_rest.index) / len(catalog.index), 1)
-                catalog_perfect = catalog_perfect.append(catalog_rest)
-                self.catalog = catalog_perfect
-            else:
-                self.catalog = catalog
-
-            # Set noisy_or_not
-            self.noisy_or_not = self.catalog['score'] != 10
-            self.noisy_or_not = self.noisy_or_not.to_numpy()
+            # Set score, hardiness and loss weights
+            self.score = self.catalog['score'].to_numpy()
+            self.hardiness = self.catalog['hardiness'].to_numpy()
+            self.weight = self.score * self.score_factor * \
+                          (1 + (self.hardiness - 1) * self.hardiness_factor)
         elif self.usage == 'validate':
             self.catalog = catalog_full
         # Prediction

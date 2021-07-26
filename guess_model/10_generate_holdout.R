@@ -65,3 +65,7 @@ samples_mlhub <- read_sf(
 samples_pts <- rbind(samples_mappingafrica, samples_mlhub)
 rm(samples_mappingafrica, samples_mlhub); gc()
 st_write(samples_pts, here('data/north/pts_holdout.geojson'))
+
+# Then the authors check all these small boxes manually.
+# In order to have pure samples as possible, the authors might
+# move the generated boxes around.

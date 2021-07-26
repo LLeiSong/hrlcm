@@ -14,10 +14,9 @@ from torch.utils.data import DataLoader
 # Define a dummy args for testing
 class args_dummy:
     def __init__(self):
-        self.exp_name = 'unet_test'
+        self.exp_name = 'unet_norm_calc'
         self.data_dir = 'results/north'
         self.out_dir = 'results/dl'
-        self.lowest_score = 8
         self.noise_ratio = None
         self.trans_prob = 0.5
         self.label_offset = 1
@@ -51,9 +50,7 @@ sync_transform = Compose([
     SyncToTensor()
 ])
 train_set = NFSEN1LC(data_dir=args.data_dir,
-                     usage='validate',
-                     lowest_score=args.lowest_score,
-                     noise_ratio=args.noise_ratio,
+                     usage='train',
                      label_offset=args.label_offset,
                      sync_transform=sync_transform,
                      img_transform=None,
@@ -61,8 +58,6 @@ train_set = NFSEN1LC(data_dir=args.data_dir,
 
 valid_set = NFSEN1LC(data_dir=args.data_dir,
                      usage='validate',
-                     lowest_score=args.lowest_score,
-                     noise_ratio=args.noise_ratio,
                      label_offset=args.label_offset,
                      sync_transform=sync_transform,
                      img_transform=None,
@@ -86,7 +81,7 @@ num_pixel = 512 * 512
 num_img = len(train_set) + len(valid_set)
 
 # Mean
-for data, _ in loader:
+for data, _, _ in loader:
     mean += data.squeeze(0).sum((1, 2)) / num_pixel
 for data, _ in loader_val:
     mean += data.squeeze(0).sum((1, 2)) / num_pixel
@@ -97,7 +92,7 @@ pkl.dump(mean.detach().cpu().tolist(),
 
 # SD
 mean = mean.unsqueeze(1).unsqueeze(2)
-for data, _ in loader:
+for data, _, _ in loader:
     std += ((data.squeeze(0) - mean) ** 2).sum((1, 2)) / num_pixel
 for data, _ in loader_val:
     std += ((data.squeeze(0) - mean) ** 2).sum((1, 2)) / num_pixel

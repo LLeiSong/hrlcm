@@ -141,8 +141,31 @@ final_res <- final_wf %>%
 save(final_res, 
      file = here('data/north/final_res.rda'))
 
+#### Evaluation metrics
 final_res %>%
     collect_metrics()
+
+cm <- final_res$.predictions[[1]] %>% 
+    data.frame() %>% 
+    mutate(Prediction = .pred_class,
+           Truth = landcover) %>% 
+    dplyr::select(Truth, Prediction) %>% 
+    conf_mat(truth = Truth, estimate = Prediction)
+autoplot(cm, type = 'heatmap')
+# autoplot(cm, type = "mosaic")
+
+# Calculate each class accuracy
+producer_sum <- colSums(cm$table)
+user_sum <- rowSums(cm$table)
+producer_accuracy <- sapply(1:7, function(n){
+    cm$table[n, n] / producer_sum[n] * 100
+}) %>% units::set_units('%')
+user_accuracy <- sapply(1:7, function(n){
+    cm$table[n, n] / user_sum[n] * 100
+}) %>% units::set_units('%')
+
+producer_accuracy
+user_accuracy
 
 ###############################
 ##  Step 4: Train the model  ##

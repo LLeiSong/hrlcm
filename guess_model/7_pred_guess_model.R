@@ -34,7 +34,9 @@ load(here('data/north/guess_rf_md.rda'))
 # Define function to do prediction
 make_pred <- function(tile_id,
                       sample_tiles,
-                      tiles,
+                      road, # sf object
+                      waterbody, # sf object
+                      building, # sf object
                       size_sub_tile = 512,
                       skip_class = 8,
                       img_dir,
@@ -45,24 +47,8 @@ make_pred <- function(tile_id,
     imgs <- rast(file.path(img_dir, paste0(tile_id, '.tif')))
     
     # Subset vectors for whole tile
-    tile <- tiles %>% 
-        filter(tile == tile_id) %>% 
-        st_buffer(0.01)
     sub_tiles <- sample_tiles %>% 
         filter(tile == tile_id)
-    crs_mer <- crs(imgs)
-    road <- roads %>% 
-        st_intersection(tile) %>% 
-        st_cast('MULTILINESTRING') %>% 
-        st_transform(crs = crs_mer)
-    waterbody <- waterbodies %>% 
-        st_intersection(tile) %>% 
-        st_cast('MULTIPOLYGON') %>% 
-        st_transform(crs = crs_mer)
-    building <- buildings %>% 
-        st_intersection(tile) %>% 
-        st_cast('MULTIPOLYGON') %>% 
-        st_transform(crs = crs_mer)
     
     # Loop on sampled sub-tiles to do prediction
     tiles_layout <- aggregate(imgs$os_band1, fact = size_sub_tile)
@@ -70,8 +56,8 @@ make_pred <- function(tile_id,
     # A bit hard coded for default
     skip_class <- paste0('.pred_', skip_class)
     
-    # Make prediction and refine the guess labels
-    lapply(sub_tiles$index, function(index){
+    # Cut image
+    imgs <- lapply(sub_tiles$index, function(index){
         # Make mask
         mask <- copy(tiles_layout)
         mask <- mask == index
@@ -81,13 +67,34 @@ make_pred <- function(tile_id,
         # Subset images
         imgs_sub <- imgs * mask
         imgs_sub <- terra::trim(imgs_sub)
-        rm(mask)
+        rm(mask); imgs_sub
+    })
+    names(imgs) <- sub_tiles$index
+    
+    # Transform vectors
+    crs_mer <- crs(imgs[[1]])
+    road <- road %>% 
+        st_cast('MULTILINESTRING') %>% 
+        st_transform(crs = crs_mer)
+    waterbody <- waterbody %>% 
+        st_cast('MULTIPOLYGON') %>% 
+        st_transform(crs = crs_mer)
+    building <- building %>% 
+        st_cast('MULTIPOLYGON') %>% 
+        st_transform(crs = crs_mer)
+    
+    # Make prediction and refine the guess labels
+    lapply(sub_tiles$index, function(index){
+        message(paste0('----', index))
         
         # Do prediction
+        message('------Make scores and labels')
+        imgs_sub <- imgs[[as.character(index)]]
         scores <- predict(imgs_sub, guess_rf_md, type = "prob", na.rm = T)
         writeRaster(
             scores, 
-            here(glue('{dst_dir}/scores_{tile_id}_{index}.tif')))
+            here(glue('{dst_dir}/scores_{tile_id}_{index}.tif')),
+            overwrite = T)
         scores[[skip_class]] <- 0
         pred <- values(scores); pred[is.na(pred)] <- 0
         pred <- argmax(pred)
@@ -98,13 +105,13 @@ make_pred <- function(tile_id,
         # Add vectors
         # Set up GRASS GIS
         message('------Add OSM layers')
-        crs_mer <- crs(imgs, proj4 = T)
+        crs_mer <- crs(imgs_sub, proj4 = T)
         gisBase <- '/Applications/GRASS-7.9.app/Contents/Resources'
         initGRASS(gisBase = gisBase,
                   home = tempdir(),
                   gisDbase = tempdir(),  
                   mapset = 'PERMANENT', 
-                  location = 'segments', 
+                  location = glue('segments_{tile_id}_{index}'), 
                   override = TRUE)
         execGRASS("g.proj", flags = "c", 
                   proj4 = crs_mer)
@@ -123,7 +130,7 @@ make_pred <- function(tile_id,
                       parameters = list(input = 'roads', 
                                         output = 'roads',
                                         use = 'val',
-                                        value = 7))
+                                        value = 3))
             roads_path <- tempfile()
             execGRASS('r.out.gdal', flags = c("m", "overwrite"),
                       output = roads_path,
@@ -183,10 +190,12 @@ make_pred <- function(tile_id,
         }
         
         # Save out
+        message('------Save out')
         names(classes) <- 'class'
         writeRaster(classes, 
                     file.path(dst_dir, 
                               glue('guess_{tile_id}_{index}.tif')),
+                    overwrite = T,
                     wopt = list(datatype = 'INT1U',
                                 gdal=c("COMPRESS=LZW")))
     })
@@ -198,23 +207,29 @@ make_pred <- function(tile_id,
 message('Step 3: Make prediction')
 
 # Directories
+message("--Set directories")
 stack_dir <- '/Volumes/elephant/pred_stack'
 labels_dir <- here('results/north/guess_labels')
 if (!dir.exists(labels_dir)) dir.create(labels_dir)
 
 # Read vectors
+message("--Read vectors")
 tiles <- read_sf('data/geoms/tiles_nicfi_north.geojson')
 roads <- read_sf(here('data/osm/roads.geojson'))
 roads <- roads %>%
     filter(fclass %in% c('primary', 'secondary', 'tertiary',
                          'trunk', 'primary_link', 'secondary_link',
                          'tertiary_link', 'rail'))
+roads <- st_join(roads, tiles)
 waterbodies <- read_sf(here('data/osm/waterbodies.geojson'))
+waterbodies <- st_join(waterbodies, tiles)
 buildings <- read_sf(here('data/osm/buildings.geojson'))
+buildings <- st_join(buildings, tiles)
 
-# Cut the tiles and make 8 samples
-# 6 for train, 2 for validate
-n_sample <- 6
+# Cut the tiles and make 4 samples
+# 3 for train, 1 for validate
+message('--Generate catalog')
+n_sample <- 4
 indices <- matrix(1:64, 8, 8)
 indices <- indices[, ncol(indices):1]
 sample_tiles <- do.call(rbind, lapply(1:nrow(tiles), function(n){
@@ -231,11 +246,29 @@ sample_tiles <- do.call(rbind, lapply(1:nrow(tiles), function(n){
                comment = '') %>% 
         slice(sample(1:nrow(.), n_sample))
 }))
-st_write(sample_tiles, here('results/north/catalog_sample_tiles.geojson'))
+# st_write(sample_tiles, here('results/north/catalog_sample_tiles.geojson'))
 
-mclapply(unique(sample_tiles$tile), function(tile_id){
+# Filter finished ones [IN CASE]
+# tiles_finished <- list.files(labels_dir, pattern = 'guess')
+# tiles_finished <- str_extract(tiles_finished,
+#                               '[0-9]+-[0-9]+_[0-9]+')
+# sample_tiles <- sample_tiles %>% 
+#     mutate(fname = paste(tile, index, sep = '_')) %>% 
+#     filter(!fname %in% tiles_finished) %>% 
+#     dplyr::select(-fname)
+
+message('--Start generating')
+lapply(unique(sample_tiles$tile), function(tile_id){
+    road <- roads %>% 
+        filter(tile == tile_id)
+    waterbody <- waterbodies %>% 
+        filter(tile == tile_id)
+    building <- buildings %>% 
+        filter(tile == tile_id)
     make_pred(tile_id = tile_id,
               sample_tiles = sample_tiles,
-              tiles = tiles,
+              road = road,
+              waterbody = waterbody,
+              building = building,
               img_dir = stack_dir)
-}, mc.cores = 4)
+})
