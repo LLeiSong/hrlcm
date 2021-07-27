@@ -15,13 +15,14 @@ class Trainer:
     def __init__(self, args):
         self.args = args
 
-    def train(self, model, train_loader, loss_fn, optimizer, writer, step):
+    def train(self, model, train_loader, loss_fn, optimizer, writer, step, weights=None):
         """Train a single model
 
         :param model: the model to train
         :param train_loader: train Dataloader
         :param loss_fn: loss function
         :param optimizer: optimizer for training
+        :param weights: the weights to calculate loss
         :param writer: defined writer for statistics
         :param step: global step so far
         :return: updated model and global step
@@ -32,14 +33,19 @@ class Trainer:
         # Training loop
         pbar = tqdm(total=len(train_loader), desc="[Train]", dynamic_ncols=True)
         loss_total = 0
-        for i, (image, target, _) in enumerate(train_loader):
+        for i, (image, target, indexes) in enumerate(train_loader):
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
                 image, target = image.cuda(), target.cuda()
 
+            if weights is not None:
+                weights_batch = weights[indexes]
+            else:
+                weights_batch = None
+
             # Forward pass
             prediction = model(image)
-            loss = loss_fn(prediction, target)
+            loss = loss_fn(prediction, target, weights_batch)
             loss_total += loss.item()
 
             # Backward pass

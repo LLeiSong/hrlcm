@@ -16,7 +16,7 @@ from models.deeplab import DeepLab
 from models.unet import UNet
 from train import Trainer
 import torch_optimizer as optim
-from loss import BalancedCrossEntropyLoss
+from loss import weighted_loss, BalancedCrossEntropyLoss
 
 
 def main():
@@ -205,7 +205,8 @@ def main():
         model = model.cuda()
 
     # Define loss function
-    loss_fn = BalancedCrossEntropyLoss()
+    loss_fn = weighted_loss
+    loss_fn_valid = BalancedCrossEntropyLoss()
 
     # Define optimizer
     if args.optimizer_name.lower() == 'adabound':
@@ -266,6 +267,7 @@ def main():
 
     # Do loop
     trainer = Trainer(args)
+    weight = torch.from_numpy(train_dataset.weight)
     for epoch in range(epoch + 1, args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(
@@ -273,9 +275,10 @@ def main():
 
         # Run training for one epoch
         model, step = trainer.train(model, train_loader, loss_fn,
-                                    optimizer, writer, step=step)
+                                    optimizer, writer, step=step,
+                                    weights=weight)
         # Run validation
-        trainer.validate(model, validate_loader, step, loss_fn, writer)
+        trainer.validate(model, validate_loader, step, loss_fn_valid, writer)
 
         # Update learning rate
         # Since learning rate is a very important hyper-parameter,

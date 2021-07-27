@@ -47,4 +47,21 @@ class BalancedCrossEntropyLoss(nn.Module):
         return loss(predict, target)
 
 
+def weighted_loss(predict, target, weights=None):
+    """Train a single model
 
+    :param predict: predicts
+    :param target: validate
+    :param weights: weights array
+    :return: mean loss
+    """
+    # Calculate weighted mean loss
+    if weights is None:
+        loss_fn = BalancedCrossEntropyLoss()
+        loss = loss_fn(predict, target)
+    else:
+        loss_fn = BalancedCrossEntropyLoss(reduction='none')
+        loss_per_img = loss_fn(predict, target)
+        loss = torch.mean(loss_per_img * weights)
+
+    return loss
