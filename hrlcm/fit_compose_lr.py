@@ -6,6 +6,7 @@ Maintainer: Lei Song (lsong@clarku.edu)
 """
 
 import argparse
+from math import floor
 from augmentation import *
 from dataset import *
 from torch.utils.data import DataLoader
@@ -33,12 +34,10 @@ def main():
                         help='path to dataset (default: results/north)')
     parser.add_argument('--out_dir', type=str, default="results/dl",
                         help='path to output dir (default: results/dl)')
-    parser.add_argument('--highest_score', type=int, default=10,
-                        help='highest score to subset train dataset (default: 10)')
-    parser.add_argument('--lowest_score', type=int, default=10,
-                        help='lowest score to subset train dataset (default: 10)')
-    parser.add_argument('--noise_ratio', type=float, default=None,
-                        help='ratio of noise to subset train dataset (default: None)')
+    parser.add_argument('--score_factor', type=float, default=0.2,
+                        help='ratio to multiply with score, see details in dataset. (default: 0.2)')
+    parser.add_argument('--hardiness_factor', type=float, default=0.1,
+                        help='ratio to multiply with hardiness, see details in dataset (default: 0.1)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
     parser.add_argument('--rg_rotate', type=str, default='-90, 90',
@@ -141,9 +140,8 @@ def main():
     # Get train dataset
     train_dataset = NFSEN1LC(data_dir=args.data_dir,
                              usage='train',
-                             highest_score=args.highest_score,
-                             lowest_score=args.lowest_score,
-                             noise_ratio=args.noise_ratio,
+                             score_factor=args.score_factor,
+                             hardiness_factor=args.hardiness_factor,
                              label_offset=args.label_offset,
                              sync_transform=sync_transform,
                              img_transform=img_transform,
@@ -184,7 +182,7 @@ def main():
     # Train network
     # Define model
     if args.model == "deeplab":
-        # TODO Not test yet
+        # TODO Not fully test yet
         model = DeepLab(num_classes=args.n_classes,
                         backbone='resnet',
                         pretrained_backbone=False,
