@@ -61,11 +61,12 @@ def weighted_loss(predict, target, weights=None):
         loss = loss_fn(predict, target)
     else:
         loss_total = 0
-        for i in range(32):
+        for i in range(len(weights)):
+            # An arbitrary way to set dims
             loss_each = loss_fn(torch.unsqueeze(predict[i, :, :, :], 0),
                                 torch.unsqueeze(target[i, :, :], 0))
             loss_each = loss_each * weights[i]
             loss_total += loss_each
-        loss = loss_total / 32
+        loss = loss_total / len(weights)
 
     return loss
