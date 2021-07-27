@@ -100,11 +100,11 @@ scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_valid.csv ubunt
 Run models:
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_single_gl --lowest_score 9 --num_workers 32 --gpu_devices '0,1,2,3'
+python hrlcm/fit_step_lr.py --exp_name unet_slr --num_workers 32 --gpu_devices '0,1,2,3'
 ```
 
 ```
-python hrlcm/fit_coteaching.py --exp_name unet_cot_8 --highest_score 8 --lowest_score 8 --num_workers 32 --gpu_devices '0,1,2,3'
+python hrlcm/fit_compose_lr.py --exp_name unet_clr --num_workers 32 --gpu_devices '0,1,2,3'
 ```
   
 #### Tensorboard
