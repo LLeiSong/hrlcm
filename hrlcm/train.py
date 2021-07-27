@@ -34,14 +34,17 @@ class Trainer:
         pbar = tqdm(total=len(train_loader), desc="[Train]", dynamic_ncols=True)
         loss_total = 0
         for i, (image, target, indexes) in enumerate(train_loader):
-            # Move data to gpu if model is on gpu
-            if self.args.use_gpu:
-                image, target = image.cuda(), target.cuda()
 
+            # Get weights
             if weights is not None:
                 weights_batch = weights[indexes]
             else:
                 weights_batch = None
+
+            # Move data to gpu if model is on gpu
+            if self.args.use_gpu:
+                image, target = image.cuda(), target.cuda()
+                weights_batch = weights_batch.cuda()
 
             # Forward pass
             prediction = model(image)

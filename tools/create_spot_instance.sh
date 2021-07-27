@@ -98,7 +98,7 @@ BID_PRICE=$(echo | awk -v a=$MAX_SPOT_PRICE -v b=$OVERFLOW '{print a+b}')
 ## get subnetId of lowest price zone
 SUBNETID=$(aws ec2 describe-subnets \
 		--filter 'Name=availability-zone,Values='$ZONE'' \
-		           'Name=vpc-id,Values=vpc-e48b1a9d' \
+		           'Name=vpc-id,Values=vpc-7292ee1b' \
 		--output text \
 		--query 'Subnets[*].SubnetId')
 
@@ -112,7 +112,7 @@ if [ "$SPOTTYPE" = "persistent" ]; then
     --image-id $AMIID \
     --count 1 \
     --instance-type $ITYPE \
-    # --subnet-id $SUBNETID \
+    --subnet-id $SUBNETID \
     --iam-instance-profile 'Name="activemapper_planet_readwriteS3"' \
     --key-name $KEYNAME \
     --security-group-ids $SECGROUPID \
