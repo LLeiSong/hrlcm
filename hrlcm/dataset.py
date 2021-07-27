@@ -116,7 +116,7 @@ class NFSEN1LC(Dataset):
     def __init__(self, data_dir,
                  usage='train',
                  score_factor=0.2,  # max score is 5, so 2.
-                 hardiness_factor=0.1,
+                 hardiness_max=2,  # must bigger than 1 to make sense.
                  random_state=1,
                  label_offset=1,
                  sync_transform=None,
@@ -129,10 +129,10 @@ class NFSEN1LC(Dataset):
             usage (str): Usage of the dataset : "train", "validate" or "predict"
             score_factor (float): the ratio to multiply with score as weight for loss calculation.
                 E.g. score = 4, then weight = score * score_factor = 4 * 0.2 = 0.8.
-            hardiness_factor (float): the ratio to multiply with hardiness as weight for loss calculation.
+            hardiness_max (float): the rescaled max of hardiness as weight for loss calculation.
                 E.g. score = 4, and hardiness = 3,
-                then weight = score * score_factor * (1 + (hardiness - 1) * hardiness_factor) =
-                4 * 0.2 * (1 + (3 - 1) * 0.1) = 0.96
+                then weight = score * score_factor * ((hardiness_max - 1) * (hardiness - 1) / (max(hardiness) - 1) + 1)
+                = 4 * 0.2 * ((2 - 1) * (4 - 1) / (5 - 1) + 1) = 1.4
             random_state (int): the random state for pandas sampling.
             label_offset (int): the offset of label to minus in order to fit into DL model.
             sync_transform (transform or None): Synthesize Data augmentation methods
@@ -146,7 +146,7 @@ class NFSEN1LC(Dataset):
         self.data_dir = data_dir
         self.usage = usage
         self.score_factor = score_factor
-        self.hardiness_factor = hardiness_factor
+        self.hardiness_max = hardiness_max
         self.random_state = random_state
         self.label_offset = label_offset
         self.sync_transform = sync_transform
@@ -186,7 +186,7 @@ class NFSEN1LC(Dataset):
             self.score = self.catalog['score'].to_numpy()
             self.hardiness = self.catalog['hardiness'].to_numpy()
             self.weight = self.score * self.score_factor * \
-                          (1 + (self.hardiness - 1) * self.hardiness_factor)
+                          ((self.hardiness_max - 1) * (self.hardiness - 1) / (max(self.hardiness) - 1) + 1)
         elif self.usage == 'validate':
             self.catalog = catalog_full
         # Prediction

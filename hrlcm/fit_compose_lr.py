@@ -36,8 +36,8 @@ def main():
                         help='path to output dir (default: results/dl)')
     parser.add_argument('--score_factor', type=float, default=0.2,
                         help='ratio to multiply with score, see details in dataset. (default: 0.2)')
-    parser.add_argument('--hardiness_factor', type=float, default=0.1,
-                        help='ratio to multiply with hardiness, see details in dataset (default: 0.1)')
+    parser.add_argument('--hardiness_max', type=float, default=2,
+                        help='ratio to multiply with hardiness, see details in dataset (default: 2)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
     parser.add_argument('--rg_rotate', type=str, default='-90, 90',
@@ -141,7 +141,7 @@ def main():
     train_dataset = NFSEN1LC(data_dir=args.data_dir,
                              usage='train',
                              score_factor=args.score_factor,
-                             hardiness_factor=args.hardiness_factor,
+                             hardiness_max=args.hardiness_max,
                              label_offset=args.label_offset,
                              sync_transform=sync_transform,
                              img_transform=img_transform,
