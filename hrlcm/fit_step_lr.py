@@ -7,6 +7,9 @@ Maintainer: Lei Song (lsong@clarku.edu)
 
 import argparse
 from math import floor
+
+import torch
+
 from augmentation import *
 from dataset import *
 from torch.utils.data import DataLoader
@@ -34,6 +37,9 @@ def main():
                         help='path to dataset (default: results/north)')
     parser.add_argument('--out_dir', type=str, default="results/dl",
                         help='path to output dir (default: results/dl)')
+    parser.add_argument('--quality_weight', type=int, default=1,
+                        help='whether to use quality as weight to calculate loss '
+                             '(0 for no, 1 for yes). (default: 1)')
     parser.add_argument('--score_factor', type=float, default=0.2,
                         help='ratio to multiply with score, see details in dataset. (default: 0.2)')
     parser.add_argument('--hardiness_max', type=float, default=2,
@@ -84,6 +90,7 @@ def main():
     # Check inputs
     assert args.optimizer_name.lower() in ['adabound', 'amsbound', 'adamp']
     assert args.model in ['deeplab', 'unet']
+    assert args.quality_weight in [0, 1]
 
     # Set directory for saving files
     if args.exp_name:
@@ -248,7 +255,10 @@ def main():
 
     # Do loop
     trainer = Trainer(args)
-    weight = torch.from_numpy(train_dataset.weight)
+    if args.quality_weight == 1:
+        weight = torch.from_numpy(train_dataset.weight)
+    else:
+        weight = torch.from_numpy(np.ones(len(train_dataset.weight)))
     for epoch in range(epoch + 1, args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(
