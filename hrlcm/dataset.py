@@ -116,7 +116,7 @@ class NFSEN1LC(Dataset):
     def __init__(self, data_dir,
                  usage='train',
                  score_factor=0.2,  # max score is 5, so 2.
-                 hardiness_max=2,  # must bigger than 1 to make sense.
+                 hardiness_max=2,
                  random_state=1,
                  label_offset=1,
                  sync_transform=None,
@@ -130,6 +130,7 @@ class NFSEN1LC(Dataset):
             score_factor (float): the ratio to multiply with score as weight for loss calculation.
                 E.g. score = 4, then weight = score * score_factor = 4 * 0.2 = 0.8.
             hardiness_max (float): the rescaled max of hardiness as weight for loss calculation.
+                Must be larger than 1 to be effective, otherwise no weight affect.
                 E.g. score = 4, and hardiness = 3,
                 then weight = score * score_factor * ((hardiness_max - 1) * (hardiness - 1) / (max(hardiness) - 1) + 1)
                 = 4 * 0.2 * ((2 - 1) * (4 - 1) / (5 - 1) + 1) = 1.4
