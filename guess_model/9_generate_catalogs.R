@@ -28,7 +28,7 @@ library(parallel)
 ## it should be roughly balanced and with high quality
 message('Step 2: Select validate dataset')
 
-# Get perfect tiles
+# Get labelled tiles
 tile_nm <- 'catalog_sample_tiles_update.geojson'
 tiles <- here(glue('results/north/{tile_nm}')) %>% 
   read_sf(); rm(tile_nm)

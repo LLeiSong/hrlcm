@@ -115,7 +115,7 @@ class NFSEN1LC(Dataset):
 
     def __init__(self, data_dir,
                  usage='train',
-                 score_factor=0.2,  # max score is 5, so 2.
+                 score_factor=0.8,  # max score is 5, so 2.
                  hardiness_max=2,
                  random_state=1,
                  label_offset=1,

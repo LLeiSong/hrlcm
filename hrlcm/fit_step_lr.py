@@ -7,9 +7,7 @@ Maintainer: Lei Song (lsong@clarku.edu)
 
 import argparse
 from math import floor
-
 import torch
-
 from augmentation import *
 from dataset import *
 from torch.utils.data import DataLoader
@@ -40,8 +38,8 @@ def main():
     parser.add_argument('--quality_weight', type=int, default=1,
                         help='whether to use quality as weight to calculate loss '
                              '(0 for no, 1 for yes). (default: 1)')
-    parser.add_argument('--score_factor', type=float, default=0.2,
-                        help='ratio to multiply with score, see details in dataset. (default: 0.2)')
+    parser.add_argument('--score_factor', type=float, default=0.8,
+                        help='ratio to multiply with score, see details in dataset. (default: 0.8)')
     parser.add_argument('--hardiness_max', type=float, default=2,
                         help='ratio to multiply with hardiness, see details in dataset (default: 2)')
     parser.add_argument('--label_offset', type=int, default=1,
@@ -63,9 +61,9 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     # Training hyper-parameters
-    parser.add_argument('--max_lr', type=float, default=0.001,
+    parser.add_argument('--max_lr', type=float, default=0.0001,
                         help='maximum or initial learning rate for scheduler.')
-    parser.add_argument('--step_size', type=int, default=5,
+    parser.add_argument('--step_size', type=int, default=10,
                         help='step size for scheduler.')
     parser.add_argument('--gamma_lr', type=float, default=0.9,
                         help='gamma for learning rate.')
@@ -80,8 +78,8 @@ def main():
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=32,
                         help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=200,
-                        help='number of training epochs (default: 200)')
+    parser.add_argument('--epochs', type=int, default=300,
+                        help='number of training epochs (default: 300)')
     parser.add_argument('--resume', '-r', type=str, default=None,
                         help='path to the pretrained weights file')
 

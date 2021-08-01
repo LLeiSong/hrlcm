@@ -17,6 +17,7 @@ from models.unet import UNet
 from train import Trainer
 import torch_optimizer as optim
 from loss import weighted_loss, BalancedCrossEntropyLoss
+from lr_scheduler import get_compose_lr
 
 
 def main():
@@ -37,8 +38,8 @@ def main():
     parser.add_argument('--quality_weight', type=int, default=1,
                         help='whether to use quality as weight to calculate loss '
                              '(0 for no, 1 for yes). (default: 1)')
-    parser.add_argument('--score_factor', type=float, default=0.2,
-                        help='ratio to multiply with score, see details in dataset. (default: 0.2)')
+    parser.add_argument('--score_factor', type=float, default=0.8,
+                        help='ratio to multiply with score, see details in dataset. (default: 0.8)')
     parser.add_argument('--hardiness_max', type=float, default=2,
                         help='ratio to multiply with hardiness, see details in dataset (default: 2)')
     parser.add_argument('--label_offset', type=int, default=1,
@@ -60,14 +61,8 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     # Training hyper-parameters
-    parser.add_argument('--base_lr', type=float, default=0.0001,
-                        help='minimum or last learning rate for scheduler.')
-    parser.add_argument('--max_lr', type=float, default=0.001,
+    parser.add_argument('--max_lr', type=float, default=0.0001,
                         help='maximum or initial learning rate for scheduler.')
-    parser.add_argument('--gamma_lr_stage1', type=float, default=0.97,
-                        help='gamma for learning rate of stage 1.')
-    parser.add_argument('--gamma_lr_stage2', type=float, default=0.94,
-                        help='gamma for learning rate of stage 2.')
     parser.add_argument('--optimizer_name', type=str,
                         choices=['AdaBound', 'AmsBound', 'AdamP'],
                         default="AmsBound",
@@ -79,9 +74,9 @@ def main():
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=32,
                         help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=200,
-                        help='number of training epochs (default: 200). '
-                             'NOTE: The scheduler is designed best for 200.')
+    parser.add_argument('--epochs', type=int, default=300,
+                        help='number of training epochs (default: 300). '
+                             'NOTE: The scheduler is designed best for 300.')
     parser.add_argument('--resume', '-r', type=str, default=None,
                         help='path to the pretrained weights file')
 
@@ -208,6 +203,9 @@ def main():
             model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
         model = model.cuda()
 
+    # Get learning rate first
+    learning_rates = get_compose_lr(model, args.epochs)
+
     # Define loss function
     loss_fn = weighted_loss
     loss_fn_valid = BalancedCrossEntropyLoss()
@@ -234,9 +232,6 @@ def main():
     # Start train
     step = 0
     epoch = 0
-    # A bit hardcode here
-    epoch_stage1 = floor(args.epochs * 0.6)
-    epoch_stage2 = floor(args.epochs * 0.85)
 
     # Resume model based on settings
     if args.resume:
@@ -249,22 +244,6 @@ def main():
                 epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            if 30 <= epoch < epoch_stage1:
-                lr_scheduler_1 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.max_lr - 0.0002,
-                                                                   max_lr=args.max_lr + 0.0002,
-                                                                   step_size_up=1, step_size_down=3,
-                                                                   gamma=args.gamma_lr_stage1,
-                                                                   cycle_momentum=False,
-                                                                   mode='exp_range')
-                lr_scheduler_1.load_state_dict(checkpoint['scheduler_state_dict'])
-            elif epoch_stage1 <= epoch < epoch_stage2:
-                lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(args.max_lr - 0.0002) / 2,
-                                                                   max_lr=(args.max_lr + 0.0002) / 2,
-                                                                   step_size_up=1, step_size_down=5,
-                                                                   gamma=args.gamma_lr_stage2,
-                                                                   cycle_momentum=False,
-                                                                   mode='exp_range')
-                lr_scheduler_2.load_state_dict(checkpoint['scheduler_state_dict'])
             print("Load checkpoint '{}' (epoch {})".format(args.resume, epoch))
         else:
             print("No checkpoint found at '{}'".format(args.resume))
@@ -290,41 +269,12 @@ def main():
         # Update learning rate
         # Since learning rate is a very important hyper-parameter,
         # it is recommended to visualize learning rate first.
-        # The first 30 epochs use a constant 0.001 as a start.
-        # The last 30 epochs use a constant 0.0001 as an end.
-        if epoch <= 30:
-            if epoch == 30:
-                lr_scheduler_1 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.max_lr-0.0002,
-                                                                   max_lr=args.max_lr+0.0002,
-                                                                   step_size_up=1, step_size_down=3,
-                                                                   gamma=args.gamma_lr_stage1,
-                                                                   cycle_momentum=False,
-                                                                   mode='exp_range')
-        elif 30 < epoch <= epoch_stage1:
-            lr_scheduler_1.step()
-            if epoch == epoch_stage1:
-                lr_scheduler_2 = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=(args.max_lr-0.0002)/2,
-                                                                   max_lr=(args.max_lr+0.0002)/2,
-                                                                   step_size_up=1, step_size_down=5,
-                                                                   gamma=args.gamma_lr_stage2,
-                                                                   cycle_momentum=False,
-                                                                   mode='exp_range')
-        elif epoch_stage1 < epoch <= epoch_stage2:
-            lr_scheduler_2.step()
-            if epoch == epoch_stage2:
-                for param_group in optimizer.param_groups:
-                    param_group["lr"] = args.base_lr
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = learning_rates[epoch]
 
         # Save checkpoint
         if epoch % args.save_freq == 0:
-            if epoch < 30 or epoch >= epoch_stage2:
-                trainer.export_model(model, optimizer=optimizer, step=step, name='interim')
-            elif 30 <= epoch < epoch_stage1:
-                trainer.export_model(model, optimizer=optimizer,
-                                     scheduler=lr_scheduler_1, step=step, name='interim')
-            else:
-                trainer.export_model(model, optimizer=optimizer,
-                                     scheduler=lr_scheduler_2, step=step, name='interim')
+            trainer.export_model(model, optimizer=optimizer, step=step, name='interim')
 
         # Save learning rate to scalar
         writer.add_scalar("Train/lr",
