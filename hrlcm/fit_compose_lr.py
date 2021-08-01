@@ -204,7 +204,7 @@ def main():
         model = model.cuda()
 
     # Get learning rate first
-    learning_rates = get_compose_lr(model, args.epochs)
+    learning_rates = get_compose_lr(model, args.epochs, args.max_lr)
 
     # Define loss function
     loss_fn = weighted_loss
@@ -232,7 +232,6 @@ def main():
     # Start train
     step = 0
     epoch = 0
-
     # Resume model based on settings
     if args.resume:
         if os.path.isfile(args.resume):
