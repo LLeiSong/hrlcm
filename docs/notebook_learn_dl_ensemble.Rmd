@@ -104,7 +104,7 @@ python hrlcm/fit_step_lr.py --exp_name unet_slr --num_workers 32 --gpu_devices '
 ```
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_clr --num_workers 32 --gpu_devices '0,1,2,3'
+python hrlcm/fit_compose_lr.py --exp_name unet_score08_hardiness2_epoch300 --num_workers 32 --gpu_devices '0,1,2,3'
 ```
   
 #### Tensorboard

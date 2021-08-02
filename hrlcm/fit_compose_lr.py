@@ -61,7 +61,9 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     # Training hyper-parameters
-    parser.add_argument('--max_lr', type=float, default=0.0001,
+    parser.add_argument('--min_lr', type=float, default=0.0001,
+                        help='minimum or last learning rate for scheduler.')
+    parser.add_argument('--max_lr', type=float, default=0.001,
                         help='maximum or initial learning rate for scheduler.')
     parser.add_argument('--optimizer_name', type=str,
                         choices=['AdaBound', 'AmsBound', 'AdamP'],
@@ -204,7 +206,7 @@ def main():
         model = model.cuda()
 
     # Get learning rate first
-    learning_rates = get_compose_lr(model, args.epochs, args.max_lr)
+    learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr)
 
     # Define loss function
     loss_fn = weighted_loss
