@@ -9,7 +9,7 @@ if [ -z "$DIR" ]; then
 fi
 
 echo "Download dataset to $DIR/dl_data.zip"
-curl -o "$DIR/dl_data.zip" https://www.dropbox.com/s/bz3zcomjp6hkshw/dl_data.zip -L
+curl -o "$DIR/dl_data.zip" https://www.dropbox.com/s/u9ef5nb4a9htegc/dl_data.zip -L
 unzip $DIR/dl_data.zip -d $DIR
 rm -rf $DIR/dl_data.zip
 rm -rf $DIR/__MACOSX
