@@ -28,18 +28,32 @@ library(parallel)
 ## it should be roughly balanced and with high quality
 message('Step 2: Select validate dataset')
 
-# Get labelled tiles
+# Get labeled tiles
 tile_nm <- 'catalog_sample_tiles_update.geojson'
 tiles <- here(glue('results/north/{tile_nm}')) %>% 
   read_sf(); rm(tile_nm)
 
+char2seed <- function(x){
+  tmp <- c(0:9,0:25,0:25)
+  names(tmp) <- c(0:9,letters,LETTERS)
+  
+  x <- gsub("[^0-9a-zA-Z]","",as.character(x))
+  
+  xsplit <- tmp[ strsplit(x,'')[[1]] ]
+  
+  seed <- sum(rev( 7^(seq(along=xsplit)-1) ) * xsplit)
+  seed <- as.integer( seed %% (2^31-1) )
+  set.seed(seed)
+}
+
 # Select 1 out of 4 from a tile as validation dataset
 tiles_valid <- do.call(rbind, lapply(unique(tiles$tile), 
                       function(tile_id){
+  char2seed(tile_id)
   tiles %>% 
     filter(tile == tile_id) %>% 
-    arrange(-score, hardiness) %>% 
-    slice(1)
+    filter(score == max(score)) %>% 
+    sample_n(1)
 }))
 
 # Save out

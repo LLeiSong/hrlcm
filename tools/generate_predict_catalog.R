@@ -50,6 +50,17 @@ write.csv(dl_catalog_valid_full,
           here('results/north/dl_catalog_predict.csv'),
           row.names = F)
 
+# A test dataset
+tiles_test <- c('1220-1016', '1221-1013', '1214-998', '1228-1002', 
+                '1233-992', '1235-1005', '1222-994', '1213-1007', 
+                '1225-1010', '1227-1004', '1225-991', '1219-1014')
+dl_catalog_test <- data.frame(tile_id = tiles_test) %>% 
+  mutate(img = file.path('dl_test', 
+                         paste0(tile_id, '.tif')))
+write.csv(dl_catalog_test, 
+          here('results/north/dl_catalog_test.csv'),
+          row.names = F)
+
 ################################################
 ## Part 2: predict other tiles #################
 ## Need to generate image stack to use #########

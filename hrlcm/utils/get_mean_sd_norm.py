@@ -5,6 +5,7 @@ Author: Lei Song
 Maintainer: Lei Song (lsong@clarku.edu)
 """
 
+from tqdm.auto import tqdm
 import pickle as pkl
 from ..augmentation import *
 from ..dataset import *
@@ -14,28 +15,30 @@ from torch.utils.data import DataLoader
 # Define a dummy args for testing
 class args_dummy:
     def __init__(self):
-        self.exp_name = 'unet_norm_calc'
         self.data_dir = 'results/north'
-        self.out_dir = 'results/dl'
-        self.noise_ratio = None
-        self.trans_prob = 0.5
-        self.label_offset = 1
-        self.rg_rotate = '-90, 90'
-        self.model = 'unet'
-        self.train_mode = 'single'
-        self.out_stride = 8
-        self.lr = 0.001
-        self.decay = 1e-5
-        self.save_freq = 20
-        self.log_feq = 20
-        self.train_batch_size = 16
-        self.val_batch_size = 16
-        self.num_workers = 16
-        self.epochs = 100
-        self.optimizer_name = 'Adam'
-        self.resume = None
-        self.checkpoint_dir = os.path.join(self.out_dir, self.exp_name, 'checkpoints')
-        self.logs_dir = os.path.join(self.out_dir, self.exp_name, 'logs')
+        self.catalog = 'dl_catalog_predict.csv'
+
+
+class full_tile(Dataset):
+    def __init__(self,
+                 catalog,
+                 img_transform=None):
+        self.catalog = catalog
+        self.img_transform = img_transform
+
+    def __len__(self):
+        return len(self.catalog)
+
+    def __getitem__(self, idx):
+        # import
+        path = self.catalog.iloc[idx]['img']
+        img = load_sat(path)
+
+        # augmentations
+        if self.img_transform is not None:
+            img = self.img_transform(img)
+
+        return img
 
 
 # Initialize dummy args
@@ -44,24 +47,15 @@ args.stats_dir = os.path.join(args.data_dir, 'norm_stats')
 if not os.path.isdir(args.stats_dir):
     os.makedirs(args.stats_dir)
 
+full_catalog = pd.read_csv(os.path.join(args.data_dir, args.catalog))
+
 # Calculate mean and sd
 # Load dataset
-sync_transform = Compose([
-    SyncToTensor()
+transform = ComposeImg([
+    ImgToTensor()
 ])
-train_set = NFSEN1LC(data_dir=args.data_dir,
-                     usage='train',
-                     label_offset=args.label_offset,
-                     sync_transform=sync_transform,
-                     img_transform=None,
-                     label_transform=None)
-
-valid_set = NFSEN1LC(data_dir=args.data_dir,
-                     usage='validate',
-                     label_offset=args.label_offset,
-                     sync_transform=sync_transform,
-                     img_transform=None,
-                     label_transform=None)
+train_set = full_tile(catalog=full_catalog,
+                      img_transform=transform)
 
 # Fast way with enough RAM
 # loader = DataLoader(train_set, batch_size=len(train_set))
@@ -71,19 +65,15 @@ valid_set = NFSEN1LC(data_dir=args.data_dir,
 # Hard way without enough RAM
 loader = DataLoader(train_set, batch_size=1,
                     shuffle=False, num_workers=0)
-loader_val = DataLoader(valid_set, batch_size=1,
-                        shuffle=False, num_workers=0)
 
 # Initialize
 mean = torch.zeros(14)
 std = torch.zeros(14)
-num_pixel = 512 * 512
-num_img = len(train_set) + len(valid_set)
+num_pixel = 4096 * 4096
+num_img = len(train_set)
 
 # Mean
-for data, _, _ in loader:
-    mean += data.squeeze(0).sum((1, 2)) / num_pixel
-for data, _ in loader_val:
+for data in tqdm(loader):
     mean += data.squeeze(0).sum((1, 2)) / num_pixel
 mean /= num_img
 print(mean)
@@ -92,9 +82,7 @@ pkl.dump(mean.detach().cpu().tolist(),
 
 # SD
 mean = mean.unsqueeze(1).unsqueeze(2)
-for data, _, _ in loader:
-    std += ((data.squeeze(0) - mean) ** 2).sum((1, 2)) / num_pixel
-for data, _ in loader_val:
+for data in tqdm(loader):
     std += ((data.squeeze(0) - mean) ** 2).sum((1, 2)) / num_pixel
 std /= num_img
 std = std.sqrt()
