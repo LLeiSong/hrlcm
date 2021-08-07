@@ -90,17 +90,13 @@ scp -r /Volumes/wildebeest/dl_train ubuntu@ec2-3-19-239-231.us-east-2.compute.am
 
 scp -r /Volumes/wildebeest/dl_valid ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
 
-scp -r /Users/pinot/Dropbox/research/hrlcm/results/north/norm_stats ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
-
-scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train.csv ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
-
-scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_valid.csv ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
+scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_1.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_1.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_2.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_2.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_random_34.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_random_34.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_random_67.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_random_67.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_hori_strip_34.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_hori_strip_34.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_hori_strip_67.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_hori_strip_67.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_vert_strip_34.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_vert_strip_34.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_vert_strip_67.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_vert_strip_67.csv
 ```
 
 Run models:
 
 ```
-python hrlcm/fit_step_lr.py --exp_name unet_slr --num_workers 32 --gpu_devices '0,1,2,3'
+python hrlcm/fit_step_lr.py --exp_name unet_one_tile --num_workers 32 --gpu_devices '0,1,2,3'
 ```
 
 ```
@@ -127,12 +123,19 @@ Do the following steps to use the tensorboard on a remote server (reference: htt
 
 ```
 python hrlcm/predict.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/prediction /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200
 ```
 
 #### Evaluation
 
 ```
+scp /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200/checkpoints/final.pth ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/dl/final.pth;
+scp /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200/checkpoints/args.pkl ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/dl/args.pkl
+
 python hrlcm/evaluate.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/final.pth' --data_dir 'results/north' --out_dir 'results/evaluation' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/evaluation /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200
 ```
 
 #### Other useful commands

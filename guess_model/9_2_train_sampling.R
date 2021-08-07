@@ -23,79 +23,102 @@ tiles <- read_sf(here('data/geoms/tiles_nicfi_north.geojson'))
 trains <- read.csv(here('results/north/dl_catalog_train.csv'))
 valids <- read.csv(here('results/north/dl_catalog_valid.csv'))
 
-# Check number of tiles
-# The ratio is about 0.3, so we start test the sampling ratio from 0.4.
-nrow(valids) / nrow(trains)
+##############################
+##  Step 3: Sampling ratio  ##
+##############################
+# Reduce sub tile number within each tile
+# Still use all tiles over study area
 
-########################
-##  Step 3: Sampling  ##
-########################
+message('--One each tile')
+set.seed(10)
+trains_1 <- trains %>% 
+    group_by(tile) %>% 
+    do(sample_n(., 1)) %>% 
+    ungroup()
+write.csv(
+    trains_1, 
+    here('results/north/dl_catalog_train_1.csv'))
 
-# Random sampling
-message('--Random sampling')
-message('----Ratio 0.4')
+message('--Two each tile')
+set.seed(11)
+trains_2 <- trains %>% 
+    group_by(tile) %>% 
+    do(sample_n(., 2)) %>% 
+    ungroup()
+write.csv(
+    trains_2, 
+    here('results/north/dl_catalog_train_2.csv'))
 
+# Sample tiles, and select 3 sub-tiles from each
+# Sampling tiles is a bit faster to generate guess label
+# and maybe a bit faster for human checking
+# However, might be less representative.
+message('--Sampling tiles')
+
+# Comparing to one from each tile
+message('----Ratio 0.34')
 set.seed(10)
 tiles_selected <- tiles %>% 
-    sample_frac(0.4)
+    sample_frac(0.34)
 trains_selected <- trains %>% 
     filter(tile %in% tiles_selected$tile)
 write.csv(
     trains_selected, 
-    here('results/north/dl_catalog_train_random_04.csv'))
+    here('results/north/dl_catalog_train_random_34.csv'))
 
-message('----Ratio 0.6')
-
+# Comparing to two from each tile
+message('----Ratio 0.67')
 set.seed(11)
 tiles_selected <- tiles %>% 
-    sample_frac(0.6)
+    sample_frac(0.67)
 trains_selected <- trains %>% 
     filter(tile %in% tiles_selected$tile)
 write.csv(
     trains_selected, 
-    here('results/north/dl_catalog_train_random_06.csv'))
+    here('results/north/dl_catalog_train_random_67.csv'))
 
-message('----Ratio 0.8')
-
-set.seed(12)
-tiles_selected <- tiles %>% 
-    sample_frac(0.8)
-trains_selected <- trains %>% 
-    filter(tile %in% tiles_selected$tile)
-write.csv(
-    trains_selected, 
-    here('results/north/dl_catalog_train_random_08.csv'))
-
-# Use a median ratio 0.6 to have distinguish difference
+###############################
+##  Step 3: Sampling method  ##
+###############################
 ids <- strsplit(unique(tiles$tile), "-")
-cols <- unique(unlist(lapply(ids, function(id) id[1])))
-rows <- unique(unlist(lapply(ids, function(id) id[2])))
+cols <- sort(unique(unlist(lapply(ids, function(id) as.integer(id[1])))))
+rows <- sort(unique(unlist(lapply(ids, function(id) as.integer(id[2])))))
 tiles <- tiles %>% 
     mutate(ids = tile) %>% 
-    separate(ids, c('col', 'row'))
+    separate(ids, c('col', 'row')) %>% 
+    mutate(col = as.integer(col),
+           row = as.integer(row))
 
-message('--Horizontal sampling')
-trains_selected <- do.call(rbind, lapply(rows, function(row_id){
-    set.seed(row_id)
-    tiles_selected <- tiles %>% 
-        filter(row == row_id) %>% 
-        sample_frac(0.6)
-    trains %>% 
-        filter(tile %in% tiles_selected$tile)
-}))
+message('--Horizontal strip')
+tiles_selected <- tiles %>% 
+    filter(row %in% rows[!as.logical(seq_len(length(rows)) %% 3)])
+trains_selected <- trains %>% 
+    filter(tile %in% tiles_selected$tile)
 write.csv(
     trains_selected, 
-    here('results/north/dl_catalog_train_hori_06.csv'))
+    here('results/north/dl_catalog_train_hori_strip_34.csv'))
 
-message('--Vertical sampling')
-trains_selected <- do.call(rbind, lapply(cols, function(col_id){
-    set.seed(col_id)
-    tiles_selected <- tiles %>% 
-        filter(col == col_id) %>% 
-        sample_frac(0.6)
-    trains %>% 
-        filter(tile %in% tiles_selected$tile)
-}))
+tiles_selected <- tiles %>% 
+    filter(row %in% rows[as.logical(seq_len(length(rows)) %% 3)])
+trains_selected <- trains %>% 
+    filter(tile %in% tiles_selected$tile)
 write.csv(
     trains_selected, 
-    here('results/north/dl_catalog_train_vert_06.csv'))
+    here('results/north/dl_catalog_train_hori_strip_67.csv'))
+
+message('--Vertical strip')
+tiles_selected <- tiles %>% 
+    filter(col %in% cols[!as.logical(seq_len(length(cols)) %% 3)])
+trains_selected <- trains %>% 
+    filter(tile %in% tiles_selected$tile)
+write.csv(
+    trains_selected, 
+    here('results/north/dl_catalog_train_vert_strip_34.csv'))
+
+tiles_selected <- tiles %>% 
+    filter(col %in% cols[as.logical(seq_len(length(cols)) %% 3)])
+trains_selected <- trains %>% 
+    filter(tile %in% tiles_selected$tile)
+write.csv(
+    trains_selected, 
+    here('results/north/dl_catalog_train_vert_strip_67.csv'))

@@ -25,7 +25,9 @@ var_selected <- data.frame(var = names(forest_vip$fit$variable.importance),
 rm(forest_vip)
 
 img_from <- '/Volumes/elephant/pred_stack'
-img_to <- here('results/north/dl_valid_full')
+img_to <- here('results/north/dl_predict')
+if (!dir.exists(img_to)) dir.create(img_to)
+
 cp_img <- lapply(tile_valid, function(tile_id){
     message(tile_id)
     sat <- rast(
@@ -42,16 +44,16 @@ cp_img <- lapply(tile_valid, function(tile_id){
 
 # Generate catalog
 dl_catalog_valid_full <- data.frame(tile_id = tile_valid) %>% 
-    mutate(img = file.path('dl_valid_full', 
+    mutate(img = file.path('dl_predict', 
                            paste0(tile_id, '.tif')))
 write.csv(dl_catalog_valid_full, 
-          here('results/north/dl_catalog_valid_full.csv'),
+          here('results/north/dl_catalog_predict.csv'),
           row.names = F)
 
-###################################################
-## Part 2: predict all tiles over the study area ##
-###### Need to generate image stack to use ########
-###################################################
+################################################
+## Part 2: predict other tiles #################
+## Need to generate image stack to use #########
+################################################
 tiles_pred_left <- read_sf(
     here('data/geoms/tiles_nicfi_north.geojson')) %>% 
     filter(!tile %in% dl_catalog_valid_full$tile_id)

@@ -457,36 +457,47 @@ library(rasterVis)
 library(ggnewscale)
 library(cowplot)
 
+id_selected <- '1240-995'
 # Read tiles
-guess_tiles <- read_sf(here('results/north/label_check_catalog.geojson')) %>% 
-    pull(tile) %>% unique()
-nicfi_tiles <- read_sf(here('data/geoms/tiles_nicfi_north.geojson')) %>% 
-    mutate(guess = ifelse(tile %in% guess_tiles, 1, 0))
-samples <- read_sf(here('results/north/label_check_catalog.geojson')) %>% 
-    filter(score > 7)
+nicfi_tiles <- read_sf(
+    here('data/geoms/tiles_nicfi_north.geojson'))
 
 # Sub-tiling
 indices <- matrix(1:64, 8, 8)
 indices <- indices[, ncol(indices):1]
 sub_tiling <- nicfi_tiles %>% 
-    filter(tile == '1228-999') %>% 
+    filter(tile == id_selected) %>% 
     st_make_grid(n = c(8, 8)) %>% 
-        st_sf() %>% 
-        mutate(index = as.vector(indices))
-
-# Weak labels
-labels_esb <- raster(here('data/north/lc_labels_north_mask.tif')) %>% 
-    crop( nicfi_tiles %>% filter(tile == '1228-999'))
-labels_guess <- raster(
-    here('results/north/prediction/classed_1228-999.tif'))
+    st_sf() %>% 
+    mutate(index = as.vector(indices))
+trains_inside <- sub_tiling %>% 
+    filter(index %in% (read.csv(
+    here('results/north/dl_catalog_train.csv'),
+    stringsAsFactors = F) %>% 
+    filter(tile == id_selected) %>% 
+    pull(index))) %>% 
+    mutate(Usage = 'Train')
+valids_inside <- sub_tiling %>% 
+    filter(index %in% (read.csv(
+    here('results/north/dl_catalog_valid.csv'),
+    stringsAsFactors = F) %>% 
+    filter(tile == id_selected) %>% 
+    pull(index))) %>% 
+    mutate(Usage = 'Validate')
+# Labels of each sub-tile
+sub_tiles <- rbind(trains_inside, valids_inside) %>% 
+    arrange(index); rm(trains_inside, valids_inside)
 
 # Sub-tiling figure
 sub_tiling_fg <- ggplot(sub_tiling) + 
+    geom_sf(data = sub_tiles, aes(fill = Usage),
+            color = 'blue', lwd = 0.3) +
+    scale_fill_manual(values = c('forestgreen', 'orangered')) +
     geom_sf(color = 'blue', fill = NA, lwd = 0.3) + 
     geom_sf_text(aes(label = index), size = 2.5) +
     theme_minimal() +
-    labs(title = 'B') +
-    theme(axis.title.x = element_blank(),
+    theme(legend.position = 'bottom',
+          axis.title.x = element_blank(),
           axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
           axis.title.y = element_blank(),
@@ -497,90 +508,104 @@ sub_tiling_fg <- ggplot(sub_tiling) +
           plot.title = element_text(hjust = -0.15, vjust = -6),
           plot.margin = unit(rep(0, 4),"cm"))
 
-# Weak ensemble labels
-r_df <- as.data.frame(labels_esb, xy = TRUE) %>%
-    rename(`Weak ensemble label` = lc_labels_north_mask) %>% 
-    mutate(`Weak ensemble label` = factor(`Weak ensemble label`)) %>% 
-    na.omit()
-weak_lb_fg <- ggplot() + 
-    geom_raster(
-        data = r_df, 
-        aes(x = x, y = y, 
-            fill = `Weak ensemble label`)) +
-    scale_fill_manual(
-        values = c('#ff7f00', '#33a02c', '#b2df8a',
-                   '#074702', '#0ea591'), 
-        breaks = c(1, 4, 3, 2, 5),
-        labels = c("Cropland", "Shrubland", 
-                   "Grassland", "Forest", 'Wetland')) +
-    geom_sf(data = sub_tiling, color = 'blue', 
-            fill = NA, lty = 'dotted', lwd = 0.4) +
-    theme_minimal() +
-    theme(legend.position = 'none',
-          axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),
-          plot.margin = unit(rep(0, 4),"cm"))
+# Weak labels
+labels_esb <- lapply(1:nrow(sub_tiles), function(n){
+    raster(here('data/north/lc_labels_north_mask.tif')) %>% 
+        crop(sub_tiles %>% slice(n))
+}); names(labels_esb) <- sub_tiles$index
 
-# RF guessed labels
-r_df <- as.data.frame(labels_guess, xy = TRUE) %>%
-    rename(`RF guess label` = classed_1228.999) %>% 
-    mutate(`RF guess label` = factor(`RF guess label`)) %>% 
-    na.omit()
-guess_lb_fg <- ggplot() + 
-    geom_raster(
-        data = r_df, 
-        aes(x = x, y = y, 
-            fill = `RF guess label`)) +
-    scale_fill_manual(
-        values = c('#ff7f00', '#074702', '#b2df8a',
-                   '#33a02c', '#3347f9', '#5a6057',
-                   '#fdbf6f'), 
-        breaks = 1:7,
-        labels = c("Cropland", 'Forest', "Grassland", 
-                   'Shrubland',  "Water", "Urban/Built-up",
-                   'Bareland')) +
-    geom_sf(data = sub_tiling %>% 
-                st_transform(crs(labels_guess)), 
-            color = 'blue', 
-            fill = NA, lty = 'dotted', lwd = 0.4) +
-    theme_minimal() +
-    theme(legend.position = 'none',
-          axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),
-          plot.margin = unit(rep(0, 4),"cm"))
+labels_guess <- lapply(sub_tiles$index, function(id){
+    prefix <- glue('results/north/guess_labels/guess_{id_selected}')
+    raster(here(glue('{prefix}_{id}.tif')))
+}); names(labels_guess) <- sub_tiles$index
 
-# Sample distribution
+labels_refine <- lapply(sub_tiles$index, function(id){
+    prefix <- glue('results/north/refine_labels/{id_selected}')
+    raster(here(glue('{prefix}_{id}_label.tif')))
+}); names(labels_refine) <- sub_tiles$index
+
+# Plot
+color_tb <- data.frame(
+    id = 1:7,
+    type = c("Cropland", "Forest", 
+             "Grassland", "Shrubland", 
+             "Water", 'Built-up', "Bareland"),
+    color = c('#ff7f00', '#074702', '#b2df8a',
+              '#33a02c', '#3347f9', '#5a6057',
+              '#fdbf6f'))
+plot_rst <- function(rst, bry){
+    r_df <- as.data.frame(rst, xy = TRUE) %>%
+        `colnames<-`(c('x', 'y', 'rst')) %>%
+        mutate(rst = as.factor(rst)) %>% 
+        na.omit()
+    colors <- color_tb %>% filter(id %in% unique(r_df$rst))
+    
+    # plot
+    ggplot() + 
+        geom_raster(
+            data = r_df, 
+            aes(x = x, y = y, 
+                fill = rst)) +
+        scale_fill_manual(
+            values = colors %>% pull(color), 
+            breaks = colors %>% pull(id),
+            labels = colors %>% pull(type)) +
+        geom_sf(data = bry, 
+                color = 'blue', fill = NA,
+                lty = 'dotted', lwd = 0.4) +
+        theme_minimal() +
+        theme(legend.position = 'none',
+              axis.title.x = element_blank(),
+              axis.text.x = element_blank(),
+              axis.ticks.x = element_blank(),
+              axis.title.y = element_blank(),
+              axis.text.y = element_blank(),
+              axis.ticks.y = element_blank(),
+              panel.grid.major = element_blank(), 
+              panel.grid.minor = element_blank(),
+              plot.margin = unit(rep(0, 4),"cm"))
+}
+
+plots_esb <- lapply(1:length(labels_esb), function(n) {
+    nm <- names(labels_guess)[n]
+    bry <- sub_tiles %>% filter(index == nm)
+    plot_rst(labels_esb[[n]], bry)
+})
+
+plots_guess <- lapply(1:length(labels_guess), function(n) {
+    nm <- names(labels_guess)[n]
+    bry <- sub_tiles %>% filter(index == nm) %>% 
+        st_transform(crs = crs(labels_guess[[n]]))
+    plot_rst(labels_guess[[n]], bry)
+})
+
+plots_refine <- lapply(1:length(labels_refine), function(n) {
+    nm <- names(labels_refine)[n]
+    bry <- sub_tiles %>% filter(index == nm) %>% 
+        st_transform(crs = crs(labels_refine[[n]]))
+    plot_rst(labels_refine[[n]], bry)
+})
+
+# Ensemble plots
+## Legend
+r_df <- data.frame(x = 1:7, 
+                   y = 1:7,
+                   rst = as.factor(1:7))
 legend_lc <- ggplot() + 
     geom_raster(
         data = r_df, 
         aes(x = x, y = y, 
-            fill = `RF guess label`)) +
+            fill = rst)) +
     scale_fill_manual('Land cover',
-        values = c('#ff7f00', '#074702', '#b2df8a',
-                   '#33a02c', '#3347f9', '#5a6057',
-                   '#fdbf6f'), 
-        breaks = 1:7,
-        labels = c("Cropland", 'Forest', "Grassland", 
-                   'Shrubland',  "Water", "Built-up",
-                   'Bareland')) +
-    geom_sf(data = sub_tiling %>% 
-                st_transform(crs(labels_guess)), 
-            color = 'blue', 
-            fill = NA, lty = 'dotted', lwd = 0.4) +
+                      values = c('#ff7f00', '#074702', '#b2df8a',
+                                 '#33a02c', '#3347f9', '#5a6057',
+                                 '#fdbf6f'), 
+                      breaks = 1:7,
+                      labels = c("Cropland", 'Forest', "Grassland", 
+                                 'Shrubland',  "Water", "Built-up",
+                                 'Bareland')) +
     theme_minimal() +
-    theme(legend.position = 'left',
+    theme(legend.position = 'right',
           axis.title.x = element_blank(),
           axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
@@ -589,72 +614,117 @@ legend_lc <- ggplot() +
           axis.ticks.y = element_blank(),
           panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
-          plot.margin = unit(rep(0, 4),"cm"))
+          plot.margin = unit(rep(0, 4),"cm"))+
+    guides(fill = guide_legend(ncol = 2))
+
 legend_lc <- get_legend(legend_lc)
+sub_tiling_fg <- ggarrange(NULL, sub_tiling_fg, legend_lc, NULL,
+                           nrow = 4, heights = c(0.3, 2, 1, 0.3))
 
-samples_fg <- ggplot() + 
-    geom_sf(data = nicfi_tiles,
-            aes(color = factor(guess),
-                lty = factor(guess)), 
-            fill = 'white', lwd = 0.4) +
-    scale_linetype_manual('Usage', values = c('solid', 'solid'),
-                          labels = c('Others', 'Guessed tile')) +
-    scale_color_manual('Usage', values = c("grey", "blue"),
-                       labels = c('Others', 'Guessed tile')) +
-    geom_sf(data = samples, aes(fill = factor(score)), color = NA) +
-    scale_fill_manual('Lable score', 
-                      values = c("#00AFBB", "#E7B800", "#FC4E07")) +
-    annotation_custom(grob = ggplotGrob(sub_tiling_fg), 
-                      xmin = 35.8, xmax = 38.2,
-                      ymin = -2.2, ymax = -0.1) +
-    labs(title = 'A') +
-    theme_minimal() +
-    theme(legend.position = 'bottom',
-          legend.box = "vertical",
-          legend.margin = margin(0, 0, 0, 0),
-          legend.box.margin = margin(-20, 2, 2, 2),
-          axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),
-          plot.title = element_text(vjust = -6),
-          plot.margin = unit(c(0, 0, 0, 0.2),"cm"))
-    # guides(fill = guide_legend(nrow = 2, byrow = TRUE),
-    #        color = guide_legend(nrow = 2, byrow = TRUE),
-    #        linetype = guide_legend(nrow = 2, byrow = TRUE))
+esb_fg <- ggarrange(plotlist = plots_esb, ncol = 4,
+                    labels = sub_tiles$index, 
+                    hjust = -2.5)
+guess_fg <- ggarrange(plotlist = plots_guess, ncol = 4)
+refine_fg <- ggarrange(plotlist = plots_refine, ncol = 4)
+fgs <- ggarrange(esb_fg, guess_fg, refine_fg, nrow = 3,
+                 labels = c('A', 'B', 'C'),
+                 hjust = 0.4, vjust = 6,
+                 font.label = list(face = "plain"))
+labels_fg <- ggarrange(NULL, fgs, sub_tiling_fg, 
+                       ncol = 3, widths = c(0.1, 2, 1))
 
-samples_fg <- ggarrange(samples_fg, legend_lc, 
-                        nrow = 1, widths = c(1, 0.2))
-imgs <- ggarrange(weak_lb_fg, guess_lb_fg, 
-                  nrow = 2, labels = c('C', 'D'),
-                  font.label = list(face = "plain"),
-                  hjust = 0, vjust = 2)
-sample_imgs <- ggarrange(samples_fg, imgs, 
-                         ncol = 2,
-                         widths = c(2.5, 1))
-ggsave(here('docs/figures/samples_distribution.png'),
-       sample_imgs,
-       width = 8, height = 4.5, dpi = 600)
+ggsave(here('docs/figures/labels.png'),
+       labels_fg,
+       width = 8, height = 4, dpi = 300)
 ```
 
 ## Workflow
 
 This figure will provide an overall flowchart of methods.
 
-## Metrics
+## Results
+### Learning rate comparison
 
 ```{r}
+library(tidyverse)
+# Define function
+get_curves <- function(experiment_name,
+                       step = 59,
+                       path = here('results/scalar/compare_lr')){
+    # Get file names
+    fns <- list.files(path, 
+                      pattern = experiment_name,
+                      full.names = T)
+    fns <- fns[str_detect(fns, 'Validate')]
+    
+    # Process each csv
+    scalars <- lapply(fns, function(fn){
+        scalar <- read.csv(fn, stringsAsFactors = F) %>% 
+            mutate(Step = Step / step) %>% # step of each epoch
+            dplyr::select(-Wall.time)
+    })
+    names(scalars) <- gsub(
+        '.csv', "", 
+        str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+    
+    scalars
+}
+
+# Clean scalar csvs
+curves_lr_01 <- get_curves('unet_lr_01')
+curves_lr_001 <- get_curves('unet_lr_001')
+curves_lr_0001 <- get_curves('unet_lr_0001')
+curves_lr_00001 <- get_curves('unet_lr_00001')
+curves_lr_000001 <- get_curves('unet_lr_000001')
+
+types <- c('AA', 'IoU', 'Cropland', 'Forest', 
+           'Grassland', 'Shrubland', 'Water', 
+           'Built-up', 'Bareland')
+content <- do.call(rbind, lapply(types, function(type){
+    if (type == 'Built-up') {
+        item <- 'Urban'
+        } else{item <- type}
+    list(curves_lr_01[[item]],
+         curves_lr_001[[item]],
+         curves_lr_0001[[item]],
+         curves_lr_00001[[item]],
+         curves_lr_000001[[item]]) %>% 
+        reduce(left_join, by = "Step") %>% 
+        `colnames<-`(c("Epoch", '0.1', '0.01', 
+                       '0.001', '0.0001', '0.00001')) %>% 
+        mutate(Item = type) %>% 
+        pivot_longer(cols = setdiff(names(.), c("Epoch", 'Item')),
+                     names_to = 'Learning rate', 
+                     values_to = 'Value')
+})) %>% mutate(Item = factor(Item, levels = types))
+
+# Get final plot
+curves_lr <- ggplot(content, aes(x = Epoch, y = Value)) +
+    # geom_line(aes(color = `Learning rate`)) +
+    geom_smooth(aes(color = `Learning rate`), span = 0.2,
+                se = F, size = 0.6) +
+    scale_color_brewer(palette = "Set1") +
+    facet_wrap(~Item, scales = 'free_y') +
+    labs(y = 'Accuracy') +
+    theme_bw() +
+    theme(legend.position = 'top')
+ggsave(here('docs/figures/curves_lr.png'),
+       curves_lr,
+       width = 8, height = 5, dpi = 300)
+```
+
+### Overall results
+#### Metrics
+```{r}
+library(glue)
 # Get file names
-fns <- list.files(here('results/scalars/single_compose_lr'), 
-                  pattern = 'compose_lr',
-                  full.names = T)
+fns <- list.files(here(
+    file.path('results/scalar',
+              'unet_score08_hardiness20_epoch200')), 
+    full.names = T)
 
 # Metrics
-fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
+fns <- fns[str_detect(fns, 'Validate')]
 metrics_last10 <- do.call(cbind, lapply(fns, function(fn){
     read.csv(fn, stringsAsFactors = F) %>% 
         dplyr::select(-c(Wall.time, Step)) %>% 
@@ -662,80 +732,248 @@ metrics_last10 <- do.call(cbind, lapply(fns, function(fn){
 }))
 names(metrics_last10) <- gsub(
     '.csv', "", 
-    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+    str_extract(fns, '[A-Z|a-z]{1}[A-Z|a-z]+.csv'))
 
 # Calculate mean and sd
-items <- c('AA', 'IoU', 'Cropland', 'Forest', 
+items <- c('loss', 'AA', 'mIoU', 'Cropland', 'Forest', 
            'Grassland', 'Shrubland', 'Water', 
            'Urban', 'Bareland')
-options(digits = 3)
+types <- c('Cropland', 'Forest', 
+           'Grassland', 'Shrubland', 'Water', 
+           'Built-up', 'Bareland', 'AA')
+
 tb <- do.call(rbind, lapply(items, function(item){
     vals <- metrics_last10 %>% pull(all_of(item))
     if (item == 'Urban') item <- 'Built-up'
+    if (item == 'loss') item <- 'Loss'
     data.frame(mean = mean(vals),
                sd = sd(vals)) %>% 
-        mutate(metric = item)
+        mutate(Metric = item)
 }))
+
+acc <- tb %>% filter(Metric %in% types) %>% 
+    mutate(mean = round(mean * 100, 2),
+           sd = round(sd * 100, 2),
+           Class = factor(Metric, levels = types),
+           Accuracy = glue(
+               paste0('{format(round(mean, digits = 2), nsmall = 2)}',
+                      '\u00B1{format(round(sd, digits = 2), nsmall = 2)} %'))) %>% 
+    dplyr::select(Class, Accuracy) %>% 
+    arrange(Class)
+write.csv(acc, here('docs/figures/acc_last10epoch.csv'),
+          row.names = F)
 ```
 
-
-## Scalars
+#### Scalars
 
 ```{r}
 library(here)
-
-# Single U-Net model with step learning rate
 # Get file names
-fns <- list.files(here('results/scalars/single_step_lr'), 
-                  pattern = 'step_lr',
-                  full.names = T)
+fns <- list.files(here(
+    file.path('results/scalar',
+              'unet_score08_hardiness20_epoch200')), 
+    full.names = T)
 
+step <- 59
 # Learning rate
-step_lr <- read.csv(fns[2], stringsAsFactors = F) %>% 
-    mutate(Step = Step / 113)
+lr <- read.csv(fns[2], stringsAsFactors = F) %>% 
+    mutate(Epoch = Step / step)
 
 # Scalars
-fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
-unet_step_lr_scalars <- lapply(fns, function(fn){
+fns <- fns[str_detect(fns, 'Validate|Train_lr')]
+final_mod_scalars <- lapply(fns, function(fn){
     scalar <- read.csv(fn, stringsAsFactors = F) %>% 
-        mutate(Step = Step / 113) %>% 
-        dplyr::select(-Wall.time)
+        mutate(Epoch = Step / step) %>% 
+        dplyr::select(-c(Wall.time, Step))
 })
-names(unet_step_lr_scalars) <- gsub(
+names(final_mod_scalars) <- gsub(
     '.csv', "", 
-    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+    str_extract(fns, '[A-Z|a-z]{1}[A-Z|a-z]+.csv'))
 
-# Single U-Net model with compose learning rate
-# Get file names
-fns <- list.files(here('results/scalars/single_compose_lr'), 
-                  pattern = 'compose_lr',
-                  full.names = T)
-
-# Learning rate
-compose_lr <- read.csv(fns[2], stringsAsFactors = F) %>% 
-    mutate(Step = Step / 113)
-
-# Scalars
-fns <- fns[str_detect(fns, 'Validate') & (!str_detect(fns, 'loss'))]
-unet_compose_lr_scalars <- lapply(fns, function(fn){
-    scalar <- read.csv(fn, stringsAsFactors = F) %>% 
-        mutate(Step = Step / 113) %>% 
-        dplyr::select(-Wall.time)
-})
-names(unet_compose_lr_scalars) <- gsub(
-    '.csv', "", 
-    str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+types <- c('Learning rate', 'Loss', 'AA', 'mIoU', 'Cropland', 'Forest', 
+           'Grassland', 'Shrubland', 'Water', 
+           'Built-up', 'Bareland')
+lc <- c('Cropland', 'Forest', 
+        'Grassland', 'Shrubland', 'Water', 
+        'Built-up', 'Bareland', 'AA')
+content <- do.call(rbind, lapply(types, function(type){
+    if (type == 'Built-up') {
+        item <- 'Urban'
+    } else if (type == 'Loss'){
+        item <- 'loss'
+    } else if (type == 'Learning rate'){
+        item <- 'lr'
+    } else {item <- type}
+    final_mod_scalars[[item]] %>% 
+        mutate(Item = type)
+}))
 
 # Plot
-aa <- merge(unet_compose_lr_scalars$AA, 
-            unet_step_lr_scalars$AA, 
-            by = 'Step') %>% 
-    rename(Compose = Value.x, Cot = Value.y) %>% 
-    pivot_longer(cols = c(Compose, Cot),
-                 names_to = 'type', values_to = 'value')
-ggplot(aa, aes(x = Step, y = value)) +
-    geom_line(aes(color = type, lty = type)) +
-    geom_smooth(aes(color = type)) +
+curve_lr <- content %>% 
+    filter(Item == 'Learning rate') %>% 
+    mutate(Value = Value * 1000) %>% 
+    ggplot(., aes(x = Epoch, y = Value)) +
+    geom_line() +
+    labs(y = expression(Learning ~ rate ~ (10^-3)), x = '') +
     theme_bw()
+curve_loss <- content %>% 
+    filter(Item == 'Loss') %>% 
+    ggplot(., aes(x = Epoch, y = Value)) +
+    geom_line() +
+    labs(y = 'Loss', x = '') +
+    theme_bw()
+curve_iou <- content %>% 
+    filter(Item == 'mIoU') %>% 
+    ggplot(., aes(x = Epoch, y = Value)) +
+    geom_line() +
+    labs(y = 'mIoU', x = '') +
+    theme_bw()
+curves_acc <- content %>% 
+    filter(Item %in% lc) %>% 
+    mutate(Item = factor(Item, levels = lc)) %>% 
+    ggplot(aes(x = Epoch, y = Value)) +
+    geom_line() +
+    labs(y = 'Accuracy') +
+    facet_wrap(~Item, scales = 'free_y', 
+               nrow = 2, ncol = 4) +
+    theme_bw()
+curves <- ggarrange(
+    ggarrange(curve_lr, curve_loss, curve_iou, ncol = 3),
+    curves_acc, nrow = 2, heights = c(1, 1.6))
+
+ggsave(here('docs/figures/curves_final_mod.png'),
+       curves,
+       width = 8, height = 5, dpi = 300)
+```
+
+## Sensitivity analysis
+### Quality weights
+#### Score factor
+```{r}
+# Clean scalar csvs
+curves_no_weight <- get_curves(
+    'unet_no_weight',
+    path = here('results/scalar/compare_score'))
+curves_score02 <- get_curves(
+    'unet_score_02',
+    path = here('results/scalar/compare_score'))
+curves_score08 <- get_curves(
+    'unet_score_08',
+    path = here('results/scalar/compare_score'))
+curves_score16 <- get_curves(
+    'unet_score_16',
+    path = here('results/scalar/compare_score'))
+curves_score32 <- get_curves(
+    'unet_score_32',
+    path = here('results/scalar/compare_score'))
+curves_score100 <- get_curves(
+    'unet_score_100',
+    path = here('results/scalar/compare_score'))
+
+types <- c('AA', 'IoU', 'Cropland', 'Forest', 
+           'Grassland', 'Shrubland', 'Water', 
+           'Built-up', 'Bareland')
+content <- do.call(rbind, lapply(types, function(type){
+    if (type == 'Built-up') {
+        item <- 'Urban'
+        } else{item <- type}
+    list(curves_no_weight[[item]],
+         curves_score02[[item]],
+         curves_score08[[item]],
+         curves_score16[[item]],
+         curves_score32[[item]],
+         curves_score100[[item]]) %>% 
+        reduce(left_join, by = "Step") %>% 
+        `colnames<-`(c("Epoch", '0', '0.2', '0.8', 
+                       '1.6', '3.2', '10')) %>% 
+        mutate(Item = type) %>% 
+        pivot_longer(cols = setdiff(names(.), c("Epoch", 'Item')),
+                     names_to = 'Weight factor', 
+                     values_to = 'Value')
+})) %>% mutate(Item = factor(Item, levels = types),
+               `Weight factor` = factor(
+                   `Weight factor`, 
+                   levels = c('0', '0.2', '0.8', 
+                              '1.6', '3.2', '10')))
+
+# Get final plot
+curves_score <- ggplot(content, aes(x = Epoch, y = Value)) +
+    # geom_line(aes(color = `Weight factor`)) +
+    geom_smooth(aes(color = `Weight factor`), span = 0.2,
+                se = F, size = 0.6) +
+    scale_color_manual(
+        values = c('Black', 
+                   RColorBrewer::brewer.pal(5, "Dark2"))) +
+    # scale_color_brewer(palette = "Dark2") +
+    facet_wrap(~Item, scales = 'free_y') +
+    labs(y = 'Accuracy') +
+    theme_bw() +
+    theme(legend.position = 'top') +
+    guides(color = guide_legend(nrow = 1))
+ggsave(here('docs/figures/curves_score.png'),
+       curves_score,
+       width = 8, height = 5, dpi = 300)
+```
+
+#### Hardiness
+```{r}
+# Clean scalar csvs
+curves_score08_nohard <- get_curves(
+    'unet_score_08',
+    path = here('results/scalar/compare_score'))
+curves_hard2 <- get_curves(
+    'unet_score08_hardiness_2',
+    path = here('results/scalar/compare_score'))
+curves_hard4 <- get_curves(
+    'unet_score08_hardiness_4',
+    path = here('results/scalar/compare_score'))
+curves_hard6 <- get_curves(
+    'unet_score08_hardiness_6',
+    path = here('results/scalar/compare_score'))
+
+types <- c('AA', 'IoU', 'Cropland', 'Forest', 
+           'Grassland', 'Shrubland', 'Water', 
+           'Built-up', 'Bareland')
+content <- do.call(rbind, lapply(types, function(type){
+    if (type == 'Built-up') {
+        item <- 'Urban'
+        } else{item <- type}
+    list(curves_score08_nohard[[item]],
+         curves_hard2[[item]],
+         curves_hard4[[item]],
+         curves_hard6[[item]]) %>% 
+        reduce(left_join, by = "Step") %>% 
+        `colnames<-`(c("Epoch", '0', '2', '4', '6')) %>% 
+        mutate(Item = type) %>% 
+        pivot_longer(cols = setdiff(names(.), c("Epoch", 'Item')),
+                     names_to = 'Weight scale', 
+                     values_to = 'Value')
+})) %>% mutate(Item = factor(Item, levels = types),
+               `Weight scale` = factor(
+                   `Weight scale`, 
+                   levels = c('0', '2', '4', '6')))
+
+# Get final plot
+curves_hard <- ggplot(content, aes(x = Epoch, y = Value)) +
+    geom_smooth(aes(color = `Weight scale`), span = 0.2,
+                se = F, size = 0.6) +
+    scale_color_manual(
+        values = c('Black', 
+                   RColorBrewer::brewer.pal(3, "Dark2"))) +
+    # scale_color_brewer(palette = "Dark2") +
+    facet_wrap(~Item, scales = 'free_y') +
+    labs(y = 'Accuracy') +
+    theme_bw() +
+    theme(legend.position = 'top') +
+    guides(color = guide_legend(nrow = 1))
+ggsave(here('docs/figures/curves_hard.png'),
+       curves_hard,
+       width = 8, height = 5, dpi = 300)
+```
+
+### Sampling
+
+```{r}
+
 ```
 

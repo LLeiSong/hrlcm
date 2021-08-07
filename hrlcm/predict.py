@@ -39,6 +39,10 @@ def main():
                         help='number of worker(s) to load dataset (default: 0)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
+    parser.add_argument('--score_type', type=str, default='overall',
+                        help='format of score maps. ["overall", "each", "none"], '
+                             'overall, overall score map; each: score map of each class,'
+                             'none: no score map. (default: overall)')
 
     # Hyper-parameters of GPU
     parser.add_argument('--batch_size', type=int, default=16,
@@ -47,6 +51,8 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     args = parser.parse_args()
+    assert args.score_type in ["overall", "each", "none"]
+
     print("=" * 20, "PREDICTION CONFIG", "=" * 20)
     for arg in vars(args):
         print('{0:20}  {1}'.format(arg, getattr(args, arg)))
@@ -164,24 +170,30 @@ def main():
                     out_predict = out_predict.astype(np.int8)
                     canvas[:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_predict
 
-                    # scores for each non-background class
-                    for n in range(n_class):
-                        out_score = out[:, n, :, :].data[i][:, :].cpu().numpy() * 100
-                        out_score = np.expand_dims(out_score, axis=0).astype(np.int8)
-                        try:
-                            canvas_score_ls[n][:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_score
-                        except:
-                            canvas_score_single = np.zeros((1, meta['height'], meta['width']), dtype=meta['dtype'])
-                            canvas_score_single[:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_score
-                            canvas_score_ls.append(canvas_score_single)
+                    if args.score_type != 'none':
+                        # scores for each non-background class
+                        for n in range(n_class):
+                            out_score = out[:, n, :, :].data[i][:, :].cpu().numpy() * 100
+                            out_score = np.expand_dims(out_score, axis=0).astype(np.int8)
+                            try:
+                                canvas_score_ls[n][:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_score
+                            except:
+                                canvas_score_single = np.zeros((1, meta['height'], meta['width']), dtype=meta['dtype'])
+                                canvas_score_single[:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_score
+                                canvas_score_ls.append(canvas_score_single)
 
         # Save out
         with rasterio.open(name_class, 'w', **meta) as dst:
             dst.write(canvas)
 
-        for n in range(n_class):
-            with rasterio.open('{}_class{}.tif'.format(name_score, n + args.label_offset), 'w', **meta) as dst:
-                dst.write(canvas_score_ls[n])
+        if args.score_type == 'each':
+            for n in range(n_class):
+                with rasterio.open('{}_class{}.tif'.format(name_score, n + args.label_offset), 'w', **meta) as dst:
+                    dst.write(canvas_score_ls[n])
+        elif args.score_type == 'overall':
+            canvas_score = np.amax(np.stack(canvas_score_ls, axis=0), axis=0)
+            with rasterio.open('{}.tif'.format(name_score), 'w', **meta) as dst:
+                dst.write(canvas_score)
 
         del predict_dataset, predict_loader
 
