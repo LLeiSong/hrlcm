@@ -100,7 +100,7 @@ python hrlcm/fit_step_lr.py --exp_name unet_one_tile --num_workers 32 --gpu_devi
 ```
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_score08_hardiness2_epoch300 --num_workers 32 --gpu_devices '0,1,2,3'
+python hrlcm/fit_compose_lr.py --exp_name unet_no_weight_epoch400 --num_workers 32 --gpu_devices '0,1,2,3'
 ```
 
 - Learning rates
@@ -110,7 +110,7 @@ python hrlcm/fit_step_lr.py --exp_name unet_lr_01 --quality_weight 0 --num_worke
 ```
 
 ```
-python hrlcm/predict.py --args_path 'results/dl/unet_lr_00001/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_lr_00001/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/predict.py --args_path 'results/dl/unet_no_weight_epoch400/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_no_weight_epoch400/checkpoints/interim.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 ```
 
 #### Tensorboard

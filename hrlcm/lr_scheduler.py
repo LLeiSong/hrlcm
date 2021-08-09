@@ -2,7 +2,7 @@ import torch
 import torch_optimizer as optim
 
 
-def get_compose_lr(model, epochs, min_lr=0.0001, max_lr=0.001, stage1=60, stage2=260, stage3=340):
+def get_compose_lr(model, epochs, min_lr=0.0001, max_lr=0.001, stage1=60, stage2=150, stage3=200):
     """Util function to customize a learning rate scheduler.
     Note: not a perfect function, user could customize this function based on needs.
         Args:
