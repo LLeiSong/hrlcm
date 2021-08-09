@@ -35,7 +35,7 @@ def main():
                         help='path to dataset (default: results/north)')
     parser.add_argument('--out_dir', type=str, default="results/dl",
                         help='path to output dir (default: results/dl)')
-    parser.add_argument('--quality_weight', type=int, default=1,
+    parser.add_argument('--quality_weight', type=int, default=0,
                         help='whether to use quality as weight to calculate loss '
                              '(0 for no, 1 for yes). (default: 1)')
     parser.add_argument('--score_k', type=float, default=1.5,
@@ -77,9 +77,9 @@ def main():
                         help='batch size for training (default: 16)')
     parser.add_argument('--val_batch_size', type=int, default=32,
                         help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=300,
-                        help='number of training epochs (default: 300). '
-                             'NOTE: The scheduler is designed best for 300.')
+    parser.add_argument('--epochs', type=int, default=400,
+                        help='number of training epochs (default: 400). '
+                             'NOTE: The scheduler is designed best for 400.')
     parser.add_argument('--resume', '-r', type=str, default=None,
                         help='path to the pretrained weights file')
 
@@ -255,7 +255,7 @@ def main():
     if args.quality_weight == 1:
         weight = torch.from_numpy(train_dataset.weight)
     else:
-        weight = torch.from_numpy(np.ones(len(train_dataset.weight)))
+        weight = None
     for epoch in range(epoch + 1, args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(

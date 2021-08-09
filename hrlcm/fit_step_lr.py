@@ -257,7 +257,7 @@ def main():
     if args.quality_weight == 1:
         weight = torch.from_numpy(train_dataset.weight)
     else:
-        weight = torch.from_numpy(np.ones(len(train_dataset.weight)))
+        weight = None
     for epoch in range(epoch + 1, args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(

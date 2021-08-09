@@ -1,6 +1,7 @@
 # Title     : Script to make guess labels
 # Objective : To use random forest guesser
-#             to get new labels.
+#             to get new labels. At this stage,
+#             we used Google Open Buildings as built-up label
 # Created by: Lei Song
 # Created on: 02/24/21
 
@@ -223,8 +224,30 @@ roads <- roads %>%
 roads <- st_join(roads, tiles)
 waterbodies <- read_sf(here('data/osm/waterbodies.geojson'))
 waterbodies <- st_join(waterbodies, tiles)
-buildings <- read_sf(here('data/osm/buildings.geojson'))
-buildings <- st_join(buildings, tiles)
+# buildings <- read_sf(here('data/osm/buildings.geojson'))
+# buildings <- st_join(buildings, tiles)
+# Change to use Open Buildings dataset
+### Follow the tutorial to download Google Open Buildings dataset 
+## https://sites.research.google/open-buildings/ 
+fn <- 'open_buildings_v1_polygons_ne_10m_TZA.csv'
+buildings <- st_read(here(file.path('data/open_buildings', fn)),
+                  int64_as_string = F,
+                  stringsAsFactors = F); rm(fn)
+buildings <- buildings %>% 
+    mutate(latitude = as.numeric(latitude),
+           longitude = as.numeric(longitude),
+           area_in_meters = as.numeric(area_in_meters),
+           confidence = as.numeric(confidence)) %>% 
+    # Buildings with area less than a pixel might not be representative
+    filter(confidence >= 0.75 & area_in_meters > 4.8^2) %>% 
+    mutate(geometry = st_as_sfc(geometry) %>% 
+               st_cast('MULTIPOLYGON')) %>% 
+    st_as_sf() %>% st_set_crs(4326) %>% 
+    st_make_valid()
+
+builds <- st_crop(builds, st_bbox(tiles))
+builds <- st_join(builds, tiles)
+# write_sf(buildings, here('data/open_buildings/buildings_tza.geojson'))
 
 # Cut the tiles and make 4 samples
 # 3 for train, 1 for validate
