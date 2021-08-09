@@ -62,7 +62,7 @@ def weighted_loss(predict, target, weights=None):
     else:
         loss_fn = BalancedCrossEntropyLoss(reduction='none')
         loss = loss_fn(predict, target)
-        loss = torch.sum(loss, (1, 2))
+        loss = torch.mean(loss, (1, 2))
         loss = (loss * weights) / weights.sum()
         loss = loss.mean()
 
