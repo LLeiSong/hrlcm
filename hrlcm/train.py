@@ -44,7 +44,8 @@ class Trainer:
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
                 image, target = image.cuda(), target.cuda()
-                weights_batch = weights_batch.cuda()
+                if weights_batch is not None:
+                    weights_batch = weights_batch.cuda()
 
             # Forward pass
             prediction = model(image)
