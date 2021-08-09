@@ -56,17 +56,14 @@ def weighted_loss(predict, target, weights=None):
     :return: mean loss
     """
     # Calculate weighted mean loss
-    loss_fn = BalancedCrossEntropyLoss()
     if weights is None:
+        loss_fn = BalancedCrossEntropyLoss()
         loss = loss_fn(predict, target)
     else:
-        loss_total = 0
-        for i in range(len(weights)):
-            # An arbitrary way to set dims
-            loss_each = loss_fn(torch.unsqueeze(predict[i, :, :, :], 0),
-                                torch.unsqueeze(target[i, :, :], 0))
-            loss_each *= weights[i]
-            loss_total += loss_each
-        loss = loss_total / sum(weights)
+        loss_fn = BalancedCrossEntropyLoss(reduction='none')
+        loss = loss_fn(predict, target)
+        loss = torch.sum(loss, (1, 2))
+        loss = (loss * weights) / weights.sum()
+        loss = loss.mean()
 
     return loss
