@@ -198,10 +198,10 @@ class NFSEN1LC(Dataset):
 
             # Set score, hardiness and loss weights
             self.score = self.catalog['score'].to_numpy()
-            self.score_weight = logistic_scale(self.score, self.score_k)
+            self.score_weight = logistic_scale(self.score, k=self.score_k)
             self.hardiness = self.catalog['hardiness'].to_numpy()
             self.hardiness_weight = (self.hardiness_max - 1) * (self.hardiness - 1) / (max(self.hardiness) - 1) + 1
-            self.weight = self.score * self.score_weight * self.hardiness_weight
+            self.weight = self.score_weight * self.hardiness_weight
         elif self.usage == 'validate':
             self.catalog = catalog_full
         # Prediction

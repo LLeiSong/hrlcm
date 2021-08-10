@@ -75,10 +75,9 @@ def weighted_loss(predict, target, weights=None, ignore_index=-100):
         loss_fn = BalancedCrossEntropyLoss(ignore_index=ignore_index, reduction='none')
         
         loss = loss_fn(predict, target)
-        # Mean through classes
-        loss = torch.sum(loss, (1, 2)) / lossWeight.sum()
-        # Mean through image
-        loss = (loss * weights) / weights.sum()
-        loss = loss.mean()
+        # Multiply image weights
+        loss = torch.sum(loss, (1, 2)) * weights
+        # Mean through batch
+        loss = loss.sum() / (lossWeight * unique_counts).sum()
 
     return loss

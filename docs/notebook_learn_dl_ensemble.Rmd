@@ -103,14 +103,18 @@ python hrlcm/fit_step_lr.py --exp_name unet_one_tile --num_workers 32 --gpu_devi
 python hrlcm/fit_compose_lr.py --exp_name unet_no_weight_epoch400 --num_workers 32 --gpu_devices '0,1,2,3'
 ```
 
-- Learning rates
+- Weights
 
 ```
-python hrlcm/fit_step_lr.py --exp_name unet_lr_01 --quality_weight 0 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.1 --gamma_lr 1 --epochs 51; python hrlcm/fit_step_lr.py --exp_name unet_lr_001 --quality_weight 0 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.01 --gamma_lr 1 --epochs 51; python hrlcm/fit_step_lr.py --exp_name unet_lr_0001 --quality_weight 0 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.001 --gamma_lr 1 --epochs 51; python hrlcm/fit_step_lr.py --exp_name unet_lr_00001 --quality_weight 0 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 51; python hrlcm/fit_step_lr.py --exp_name unet_lr_000001 --quality_weight 0 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.00001 --gamma_lr 1 --epochs 51
+python hrlcm/fit_step_lr.py --exp_name unet_k05_only --quality_weight 1 --score_k 0.5 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k15_only --quality_weight 1 --score_k 1.5 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k3_only --quality_weight 1 --score_k 3.0 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31
 ```
 
 ```
-python hrlcm/predict.py --args_path 'results/dl/unet_no_weight_epoch400/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_no_weight_epoch400/checkpoints/interim.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/fit_step_lr.py --exp_name unet_k15_only --quality_weight 1 --score_k 1.5 --hardiness_max 1.1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k15_only --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k15_only --quality_weight 1 --score_k 1.5 --hardiness_max 1.4 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31
+```
+
+```
+python hrlcm/predict.py --args_path 'results/dl/unet_k3_only/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k3_only/checkpoints/interim.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 ```
 
 #### Tensorboard

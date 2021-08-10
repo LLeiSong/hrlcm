@@ -51,11 +51,13 @@ write.csv(dl_catalog_valid_full,
           row.names = F)
 
 # A test dataset
-tiles_test <- c('1220-1016', '1221-1013', '1214-998', '1228-1002', 
-                '1233-992', '1235-1005', '1222-994', '1213-1007', 
-                '1225-1010', '1227-1004', '1225-991', '1219-1014')
-dl_catalog_test <- data.frame(tile_id = tiles_test) %>% 
-  mutate(img = file.path('dl_test', 
+set.seed(10)
+tiles_test <- read.csv(here('results/north/dl_catalog_valid.csv'),
+                       stringsAsFactors = F) %>% 
+  group_by(hardiness) %>% 
+  sample_n(2)
+dl_catalog_test <- data.frame(tile_id = tiles_test$tile) %>% 
+  mutate(img = file.path('dl_predict', 
                          paste0(tile_id, '.tif')))
 write.csv(dl_catalog_test, 
           here('results/north/dl_catalog_test.csv'),
