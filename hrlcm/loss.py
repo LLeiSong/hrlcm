@@ -47,7 +47,7 @@ class BalancedCrossEntropyLoss(nn.Module):
         return loss(predict, target)
 
 
-def weighted_loss(predict, target, weights=None):
+def weighted_loss(predict, target, weights=None, ignore_index=-100):
     """Train a single model
 
     :param predict: predicts
@@ -57,12 +57,27 @@ def weighted_loss(predict, target, weights=None):
     """
     # Calculate weighted mean loss
     if weights is None:
-        loss_fn = BalancedCrossEntropyLoss()
+        loss_fn = BalancedCrossEntropyLoss(ignore_index=ignore_index)
         loss = loss_fn(predict, target)
     else:
-        loss_fn = BalancedCrossEntropyLoss(reduction='none')
+        # Get class weights
+        unique, unique_counts = torch.unique(target, return_counts=True)
+        # Calculate weight for only valid indices
+        unique_counts = unique_counts[unique != ignore_index]
+        unique = unique[unique != ignore_index]
+        ratio = unique_counts.float() / torch.numel(target)
+        weight = (1. / ratio) / torch.sum(1. / ratio)
+
+        lossWeight = torch.ones(predict.shape[1]).cuda() * 0.00001
+        for i in range(len(unique)):
+            lossWeight[unique[i]] = weight[i]
+            
+        loss_fn = BalancedCrossEntropyLoss(ignore_index=ignore_index, reduction='none')
+        
         loss = loss_fn(predict, target)
-        loss = torch.mean(loss, (1, 2))
+        # Mean through classes
+        loss = torch.sum(loss, (1, 2)) / lossWeight.sum()
+        # Mean through image
         loss = (loss * weights) / weights.sum()
         loss = loss.mean()
 
