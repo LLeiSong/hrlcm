@@ -89,8 +89,6 @@ Prepare work:
 scp -r /Volumes/wildebeest/dl_train ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
 
 scp -r /Volumes/wildebeest/dl_valid ubuntu@ec2-3-19-239-231.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
-
-scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_1.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_1.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_2.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_2.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_random_34.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_random_34.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_random_67.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_random_67.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_hori_strip_34.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_hori_strip_34.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_hori_strip_67.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_hori_strip_67.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_vert_strip_34.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_vert_strip_34.csv;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_vert_strip_67.csv ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/north/dl_catalog_train_vert_strip_67.csv
 ```
 
 Run models:
@@ -100,21 +98,33 @@ python hrlcm/fit_step_lr.py --exp_name unet_one_tile --num_workers 32 --gpu_devi
 ```
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_no_weight_epoch400 --num_workers 32 --gpu_devices '0,1,2,3'
+python hrlcm/fit_compose_lr.py --exp_name unet_k15_hard12_clr_200epc --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --epochs 201
 ```
 
 - Weights
 
+Score
 ```
-python hrlcm/fit_step_lr.py --exp_name unet_k05_only --quality_weight 1 --score_k 0.5 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k15_only --quality_weight 1 --score_k 1.5 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k3_only --quality_weight 1 --score_k 3.0 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31
+python hrlcm/fit_step_lr.py --exp_name unet_no_weight --quality_weight 0 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k05_only --quality_weight 1 --score_k 0.5 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k15_only --quality_weight 1 --score_k 1.5 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k3_only --quality_weight 1 --score_k 3.0 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31
+```
+
+Hardiness
+```
+python hrlcm/fit_step_lr.py --exp_name unet_k15_hard11 --quality_weight 1 --score_k 1.5 --hardiness_max 1.1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k15_hard12 --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k15_hard14 --quality_weight 1 --score_k 1.5 --hardiness_max 1.4 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31
 ```
 
 ```
-python hrlcm/fit_step_lr.py --exp_name unet_k15_only --quality_weight 1 --score_k 1.5 --hardiness_max 1.1 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k15_only --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; python hrlcm/fit_step_lr.py --exp_name unet_k15_only --quality_weight 1 --score_k 1.5 --hardiness_max 1.4 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31
+python hrlcm/predict.py --args_path 'results/dl/unet_k3_only/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k3_only/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+```
+
+- Sampling
+
+```
+scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_1.csv ubuntu@ec2-3-16-90-184.us-east-2.compute.amazonaws.com:~/hrlcm/results/north;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_2.csv ubuntu@ec2-3-16-90-184.us-east-2.compute.amazonaws.com:~/hrlcm/results/north;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_random_34.csv ubuntu@ec2-3-16-90-184.us-east-2.compute.amazonaws.com:~/hrlcm/results/north;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_random_67.csv ubuntu@ec2-3-16-90-184.us-east-2.compute.amazonaws.com:~/hrlcm/results/north;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_hori_strip_34.csv ubuntu@ec2-3-16-90-184.us-east-2.compute.amazonaws.com:~/hrlcm/results/north;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_hori_strip_67.csv ubuntu@ec2-3-16-90-184.us-east-2.compute.amazonaws.com:~/hrlcm/results/north;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_vert_strip_34.csv ubuntu@ec2-3-16-90-184.us-east-2.compute.amazonaws.com:~/hrlcm/results/north;scp /Users/pinot/Dropbox/research/hrlcm/results/north/dl_catalog_train_vert_strip_67.csv ubuntu@ec2-3-16-90-184.us-east-2.compute.amazonaws.com:~/hrlcm/results/north
 ```
 
 ```
-python hrlcm/predict.py --args_path 'results/dl/unet_k3_only/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k3_only/checkpoints/interim.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/fit_step_lr.py --exp_name unet_one_tile --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; rm results/north/dl_catalog_train.csv; mv results/north/dl_catalog_train_random_34.csv results/north/dl_catalog_train.csv; python hrlcm/fit_step_lr.py --exp_name unet_random_34 --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; rm results/north/dl_catalog_train.csv; mv results/north/dl_catalog_train_hori_strip_34.csv results/north/dl_catalog_train.csv; python hrlcm/fit_step_lr.py --exp_name unet_hori_strip_34 --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; rm results/north/dl_catalog_train.csv; mv results/north/dl_catalog_train_vert_strip_34.csv results/north/dl_catalog_train.csv; python hrlcm/fit_step_lr.py --exp_name unet_vert_strip_34 --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; rm results/north/dl_catalog_train.csv; mv results/north/dl_catalog_train_2.csv results/north/dl_catalog_train.csv; python hrlcm/fit_step_lr.py --exp_name unet_two_tile --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; rm results/north/dl_catalog_train.csv; mv results/north/dl_catalog_train_random_67.csv results/north/dl_catalog_train.csv; python hrlcm/fit_step_lr.py --exp_name unet_random_67 --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; rm results/north/dl_catalog_train.csv; mv results/north/dl_catalog_train_hori_strip_67.csv results/north/dl_catalog_train.csv; python hrlcm/fit_step_lr.py --exp_name unet_hori_strip_67 --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31; rm results/north/dl_catalog_train.csv; mv results/north/dl_catalog_train_vert_strip_67.csv results/north/dl_catalog_train.csv; python hrlcm/fit_step_lr.py --exp_name unet_vert_strip_67 --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --max_lr 0.0001 --gamma_lr 1 --epochs 31
 ```
 
 #### Tensorboard
@@ -136,7 +146,7 @@ Do the following steps to use the tensorboard on a remote server (reference: htt
 #### Prediction
 
 ```
-python hrlcm/predict.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 
 scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/prediction /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200
 ```
@@ -147,7 +157,7 @@ scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results
 scp /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200/checkpoints/final.pth ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/dl/final.pth;
 scp /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200/checkpoints/args.pkl ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/dl/args.pkl
 
-python hrlcm/evaluate.py --args_path 'results/dl/args.pkl' --checkpoint_file 'results/dl/final.pth' --data_dir 'results/north' --out_dir 'results/evaluation' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/evaluate.py --args_path 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/final.pth' --data_dir 'results/north' --out_dir 'results/evaluation' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 
 scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/evaluation /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200
 ```
