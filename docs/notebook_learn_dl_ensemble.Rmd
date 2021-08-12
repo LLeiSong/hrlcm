@@ -151,6 +151,24 @@ python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard12_clr_200epc/check
 scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/prediction /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200
 ```
 
+#### Test
+
+```
+python hrlcm/predict.py --args_path 'results/dl/unet_no_weight/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_no_weight/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_no_weight' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_k05_only/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k05_only/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_k05_only' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_k15_only/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_only/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_k15_only' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_k3_only/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k3_only/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_k3_only' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard11/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard11/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_k15_hard11' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard12/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard12/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_k15_hard12' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard14/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard14/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_k15_hard14' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+```
+
 #### Evaluation
 
 ```
