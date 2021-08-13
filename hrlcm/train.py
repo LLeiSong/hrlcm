@@ -42,7 +42,7 @@ class Trainer:
                 weights_batch = None
             
             # Add replicate padding
-            image = F.pad(image, (4, 4, 4, 4), 'replicate')
+            # image = F.pad(image, (4, 4, 4, 4), 'replicate')
 
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
@@ -99,7 +99,7 @@ class Trainer:
         conf_mat = metrics.ConfMatrix(validate_loader.dataset.n_classes)
         for i, (image, target) in enumerate(validate_loader):
             # Add replicate padding
-            image = F.pad(image, (4, 4, 4, 4), 'replicate')
+            # image = F.pad(image, (4, 4, 4, 4), 'replicate')
             
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:

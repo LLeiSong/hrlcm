@@ -153,7 +153,7 @@ def main():
         with torch.no_grad():
             for m, (img, index_full) in enumerate(predict_loader):
                 # Add replicate padding
-                img = F.pad(img, (4, 4, 4, 4), 'replicate')
+                # img = F.pad(img, (4, 4, 4, 4), 'replicate')
                 
                 # GPU setting
                 if args.use_gpu:
