@@ -98,7 +98,7 @@ python hrlcm/fit_step_lr.py --exp_name unet_one_tile --num_workers 32 --gpu_devi
 ```
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_k15_hard12_clr_200epc --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --epochs 201
+python hrlcm/fit_compose_lr.py --exp_name unet_k15_hard12_clr_rep_pad_220epc --quality_weight 1 --score_k 1.5 --hardiness_max 1.2 --num_workers 32 --gpu_devices '0,1,2,3' --epochs 221 --tain_batch_size 16
 ```
 
 - Weights
@@ -167,6 +167,8 @@ python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard11/checkpoints/args
 python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard12/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard12/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_k15_hard12' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 
 python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard14/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard14/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_k15_hard14' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard12_clr_rep_pad_220epc/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard12_clr_rep_pad_220epc/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/north' --out_dir 'results/test/unet_k15_hard14' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
 ```
 
 #### Evaluation
