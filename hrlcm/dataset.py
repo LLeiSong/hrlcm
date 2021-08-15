@@ -146,7 +146,7 @@ def get_chips(img, dsize, buffer=0):
     Params:
         img (numpy.ndarray): Image or image stack in format of (H,W,C) to be crop
         dsize (int): Cropped chip size
-        buffer (int):Number of overlapping pixels when extracting images chips
+        buffer (int): Number of overlapping pixels when extracting images chips
     Returns:
         list of cropped chips and corresponding coordinates
     """
@@ -176,7 +176,7 @@ class NFSEN1LC(Dataset):
                  hardiness_max=1.2,
                  random_state=1,
                  label_offset=1,
-                 buffer=64,
+                 chip_buffer=64,
                  sync_transform=None,
                  img_transform=None,
                  label_transform=None,
@@ -193,7 +193,7 @@ class NFSEN1LC(Dataset):
                 = 4 * 0.2 * ((2 - 1) * (4 - 1) / (5 - 1) + 1) = 1.4
             random_state (int): the random state for pandas sampling.
             label_offset (int): the offset of label to minus in order to fit into DL model.
-            buffer (int): buffer value to read images.
+            chip_buffer (int): buffer value to read images.
             sync_transform (transform or None): Synthesize Data augmentation methods
             img_transform (transform or None): Image only augmentation methods
             label_transform (transform or None): Label only augmentation methods
@@ -208,7 +208,7 @@ class NFSEN1LC(Dataset):
         self.hardiness_max = hardiness_max
         self.random_state = random_state
         self.label_offset = label_offset
-        self.buffer = buffer
+        self.chip_buffer = chip_buffer
         self.sync_transform = sync_transform
         self.img_transform = img_transform
         self.label_transform = label_transform
@@ -252,7 +252,7 @@ class NFSEN1LC(Dataset):
             self.catalog = catalog_full
         # Prediction
         else:
-            self.chip_size = 512  # image size of train
+            self.chip_size = 512 + self.chip_buffer * 2  # image size of train
             self.tile_id = tile_id
             catalog = catalog_full.loc[catalog_full['tile_id'] == self.tile_id]
             if len(catalog.index) == 0:
@@ -262,9 +262,9 @@ class NFSEN1LC(Dataset):
             else:
                 catalog['img'][catalog.index[0]] = os.path.join(self.data_dir, catalog['img'][catalog.index[0]])
                 self.catalog = catalog.iloc[0]
-                img = load_sat_buf(self.catalog['img'], self.catalog['tiles_relate'], self.buffer)
+                img = load_sat_buf(self.catalog['img'], self.catalog['tiles_relate'], self.chip_buffer)
                 self.meta = get_meta(self.catalog['img'])
-                self.img_ls, self.index_ls = get_chips(img, self.chip_size, self.buffer)
+                self.img_ls, self.index_ls = get_chips(img, self.chip_size, self.chip_buffer)
 
     def __getitem__(self, index):
         """Support dataset indexing and apply transformation

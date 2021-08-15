@@ -163,14 +163,15 @@ def main():
                     img = img.cuda()
 
                 out = F.softmax(model(img), 1)
+                out = out[:, :, buf:-buf, buf:-buf]
                 batch, n_class, width, height = out.size()
-                sw = width - 2 * buf  # score width
-                sh = height - 2 * buf  # score height
+                sw = width  # score width
+                sh = height  # score height
 
                 # for each batch
                 for i in range(batch):
                     index = (index_full[0][i], index_full[1][i])
-                    out_predict = out.max(dim=1)[1][:, buf:-buf, buf:-buf].cpu().numpy()[i, :, :]
+                    out_predict = out.max(dim=1)[1][:, :, :].cpu().numpy()[i, :, :]
                     out_predict = np.expand_dims(out_predict, axis=0)
                     out_predict = out_predict + args.label_offset
                     out_predict = out_predict.astype(np.int8)
@@ -179,7 +180,7 @@ def main():
                     if args.score_type != 'none':
                         # scores for each non-background class
                         for n in range(n_class):
-                            out_score = out[:, n, :, :].data[i][buf:-buf, buf:-buf].cpu().numpy() * 100
+                            out_score = out[:, n, :, :].data[i][:, :].cpu().numpy() * 100
                             out_score = np.expand_dims(out_score, axis=0).astype(np.int8)
                             try:
                                 canvas_score_ls[n][:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_score

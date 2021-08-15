@@ -11,6 +11,7 @@ library(dplyr)
 library(stringr)
 library(terra)
 library(parallel)
+
 tile_valid <- read.csv(here('results/north/dl_catalog_valid.csv'),
                        stringsAsFactors = F) %>% 
     pull(tile) %>% unique()
