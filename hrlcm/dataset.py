@@ -5,6 +5,7 @@ Maintainer: Lei Song (lsong@clarku.edu)
 """
 
 import math
+import copy
 import os
 import sys
 import itertools
@@ -160,7 +161,8 @@ def get_chips(img, dsize, buffer=0):
     img_ls = []
     for i in range(len(index)):
         x, y = index[i]
-        img_ls.append(img[x:x + dsize, y:y + dsize, :])
+        img_each = copy.deepcopy(img[x:x + dsize, y:y + dsize, :])
+        img_ls.append(img_each)
 
     return img_ls, index
 
