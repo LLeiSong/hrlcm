@@ -5,6 +5,7 @@
 
 # Get tile ids
 library(sf)
+library(glue)
 library(here)
 library(dplyr)
 library(stringr)
@@ -43,22 +44,41 @@ cp_img <- lapply(tile_valid, function(tile_id){
 })
 
 # Generate catalog
-dl_catalog_valid_full <- data.frame(tile_id = tile_valid) %>% 
+dl_catalog_full <- data.frame(tile_id = tile_valid) %>% 
     mutate(img = file.path('dl_predict', 
                            paste0(tile_id, '.tif')))
-write.csv(dl_catalog_valid_full, 
+tiles <- read_sf(
+  here('data/geoms/tiles_nicfi_north.geojson'))
+dl_catalog_full <- do.call(rbind, lapply(dl_catalog_full$tile_id, function(id){
+  tile_this <- tiles %>% filter(tile == id)
+  col <- as.integer(unlist(strsplit(tile_this$tile, '-'))[1])
+  row <- as.integer(unlist(strsplit(tile_this$tile, '-'))[2])
+  tiles_const <- sapply(
+    (row + 1):(row - 1), 
+    function(row) {paste((col - 1):(col + 1), row, sep = '-')}) %>%
+    as.vector()
+  tiles_relate <- tiles %>% 
+    slice(st_intersects(tile_this, tiles) %>% 
+            unlist()) %>% pull(tile)
+  tiles_relate <- ifelse(tiles_const %in% tiles_relate, 
+                         glue('dl_predict/{tiles_const}.tif'), 'None')
+  tiles_relate <- paste(tiles_relate, collapse = ',')
+  dl_catalog_full %>% filter(tile_id == id) %>% 
+    mutate(tiles_relate = tiles_relate)
+}))
+
+write.csv(dl_catalog_full, 
           here('results/north/dl_catalog_predict.csv'),
           row.names = F)
 
 # A test dataset
-set.seed(10)
+set.seed(12)
 tiles_test <- read.csv(here('results/north/dl_catalog_valid.csv'),
                        stringsAsFactors = F) %>% 
   group_by(hardiness) %>% 
   sample_n(2)
-dl_catalog_test <- data.frame(tile_id = tiles_test$tile) %>% 
-  mutate(img = file.path('dl_predict', 
-                         paste0(tile_id, '.tif')))
+dl_catalog_test <- dl_catalog_full %>% 
+  filter(tile_id %in% tiles_test$tile)
 write.csv(dl_catalog_test, 
           here('results/north/dl_catalog_test.csv'),
           row.names = F)
@@ -145,5 +165,5 @@ dl_catalog_pred <- data.frame(
     mutate(img = file.path('dl_predict', 
                            paste0(tile_id, '.tif')))
 write.csv(dl_catalog_pred, 
-          here('results/north/dl_catalog_predict.csv'),
+          here('results/north/dl_catalog_predict_others.csv'),
           row.names = F)
