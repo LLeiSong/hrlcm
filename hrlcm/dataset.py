@@ -8,6 +8,7 @@ import math
 import os
 import sys
 import itertools
+import numpy as np
 import pandas as pd
 import rasterio
 from torch.utils.data import Dataset
@@ -39,6 +40,47 @@ def load_sat(path):
         # reshape the image for augmentation
         sat = reshape_as_image(src.read())
     return sat
+
+
+def load_sat_buf(path, paths_relate, buffer):
+    data_dir = os.path.dirname(os.path.dirname(path))
+    paths_split = paths_relate.split(',')
+    with rasterio.open(path, "r") as src:
+        meta = src.meta
+    dst_ids = [[0, buffer, 0, buffer],
+               [0, buffer, buffer, buffer + meta['width']],
+               [0, buffer, buffer + meta['width'], meta['width'] + 2 * buffer],
+               [buffer, buffer + meta['height'], 0, buffer],
+               [buffer, buffer + meta['height'], buffer, buffer + meta['width']],
+               [buffer, buffer + meta['height'], buffer + meta['width'], meta['width'] + 2 * buffer],
+               [buffer + meta['width'], meta['width'] + 2 * buffer, 0, buffer],
+               [buffer + meta['width'], meta['width'] + 2 * buffer, buffer, buffer + meta['width']],
+               [buffer + meta['width'], meta['width'] + 2 * buffer,
+                buffer + meta['width'], meta['width'] + 2 * buffer]]
+    src_ids = [[meta['height'] - buffer, meta['height'], meta['width'] - buffer, meta['width']],
+               [meta['height'] - buffer, meta['height'], 0, meta['width']],
+               [meta['height'] - buffer, meta['height'], 0, buffer],
+               [0, meta['height'], meta['width'] - buffer, meta['width']],
+               [0, meta['height'], 0, meta['width']],
+               [0, meta['height'], 0, buffer],
+               [0, buffer, meta['width'] - buffer, meta['width']],
+               [0, buffer, 0, meta['width']],
+               [0, buffer, 0, buffer]]
+
+    # Read central tile and expand it
+    with rasterio.open(path) as src:
+        # reshape the image for augmentation
+        img_full = np.pad(reshape_as_image(src.read()),
+                          ((buffer, buffer), (buffer, buffer), (0, 0)), mode='edge')
+
+    for i in [1, 3, 5, 7, 0, 2, 6, 8]:  # skip central tile
+        if paths_split[i] != 'None':
+            with rasterio.open(os.path.join(data_dir, paths_split[i]), "r") as src:
+                sat = reshape_as_image(src.read())
+            img_full[dst_ids[i][0]:dst_ids[i][1], dst_ids[i][2]:dst_ids[i][3], :] = \
+                sat[src_ids[i][0]:src_ids[i][1], src_ids[i][2]:src_ids[i][3], :]
+
+    return img_full
 
 
 def load_label(path):
@@ -97,20 +139,21 @@ def get_meta(fname):
     return meta
 
 
-def get_chips(img, dsize):
+def get_chips(img, dsize, buffer=0):
     """
     Generate small chips from input images and the corresponding index of each chip
     The index marks the location of corresponding upper-left pixel of a chip.
     Params:
         img (numpy.ndarray): Image or image stack in format of (H,W,C) to be crop
         dsize (int): Cropped chip size
+        buffer (int):Number of overlapping pixels when extracting images chips
     Returns:
         list of cropped chips and corresponding coordinates
     """
 
     h, w, _ = img.shape
-    x_ls = range(0, h, dsize)
-    y_ls = range(0, w, dsize)
+    x_ls = range(0, h - 2 * buffer, dsize - 2 * buffer)
+    y_ls = range(0, w - 2 * buffer, dsize - 2 * buffer)
 
     index = list(itertools.product(x_ls, y_ls))
 
@@ -133,10 +176,11 @@ class NFSEN1LC(Dataset):
                  hardiness_max=1.2,
                  random_state=1,
                  label_offset=1,
+                 buffer=64,
                  sync_transform=None,
                  img_transform=None,
                  label_transform=None,
-                 tile_id='1207-996_12'):
+                 tile_id='1207-996'):
         """Initialize the dataset
         Args:
             data_dir (str): the directory of all data
@@ -149,6 +193,7 @@ class NFSEN1LC(Dataset):
                 = 4 * 0.2 * ((2 - 1) * (4 - 1) / (5 - 1) + 1) = 1.4
             random_state (int): the random state for pandas sampling.
             label_offset (int): the offset of label to minus in order to fit into DL model.
+            buffer (int): buffer value to read images.
             sync_transform (transform or None): Synthesize Data augmentation methods
             img_transform (transform or None): Image only augmentation methods
             label_transform (transform or None): Label only augmentation methods
@@ -163,6 +208,7 @@ class NFSEN1LC(Dataset):
         self.hardiness_max = hardiness_max
         self.random_state = random_state
         self.label_offset = label_offset
+        self.buffer = buffer
         self.sync_transform = sync_transform
         self.img_transform = img_transform
         self.label_transform = label_transform
@@ -216,9 +262,9 @@ class NFSEN1LC(Dataset):
             else:
                 catalog['img'][catalog.index[0]] = os.path.join(self.data_dir, catalog['img'][catalog.index[0]])
                 self.catalog = catalog.iloc[0]
-                img = load_tile(self.catalog, unlabeled=True)
+                img = load_sat_buf(self.catalog['img'], self.catalog['tiles_relate'], self.buffer)
                 self.meta = get_meta(self.catalog['img'])
-                self.img_ls, self.index_ls = get_chips(img, self.chip_size)
+                self.img_ls, self.index_ls = get_chips(img, self.chip_size, self.buffer)
 
     def __getitem__(self, index):
         """Support dataset indexing and apply transformation

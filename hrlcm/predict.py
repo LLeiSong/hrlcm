@@ -39,6 +39,8 @@ def main():
                         help='number of worker(s) to load dataset (default: 0)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
+    parser.add_argument('--chip_buffer', type=int, default=64,
+                        help='chip buffer to do predict. (default: 64)')
     parser.add_argument('--score_type', type=str, default='overall',
                         help='format of score maps. ["overall", "each", "none"], '
                              'overall, overall score map; each: score map of each class,'
@@ -144,6 +146,7 @@ def main():
         model.eval()
 
         # Create dummy tile
+        buf = args.chip_buffer
         meta = predict_dataset.meta
         n_class = predict_dataset.n_classes
         canvas = np.zeros((1, meta['height'], meta['width']),
@@ -161,13 +164,13 @@ def main():
 
                 out = F.softmax(model(img), 1)
                 batch, n_class, width, height = out.size()
-                sw = width  # score width
-                sh = height  # score height
+                sw = width - 2 * buf  # score width
+                sh = height - 2 * buf  # score height
 
                 # for each batch
                 for i in range(batch):
                     index = (index_full[0][i], index_full[1][i])
-                    out_predict = out.max(dim=1)[1][:, :, :].cpu().numpy()[i, :, :]
+                    out_predict = out.max(dim=1)[1][:, buf:-buf, buf:-buf].cpu().numpy()[i, :, :]
                     out_predict = np.expand_dims(out_predict, axis=0)
                     out_predict = out_predict + args.label_offset
                     out_predict = out_predict.astype(np.int8)
@@ -176,7 +179,7 @@ def main():
                     if args.score_type != 'none':
                         # scores for each non-background class
                         for n in range(n_class):
-                            out_score = out[:, n, :, :].data[i][:, :].cpu().numpy() * 100
+                            out_score = out[:, n, :, :].data[i][buf:-buf, buf:-buf].cpu().numpy() * 100
                             out_score = np.expand_dims(out_score, axis=0).astype(np.int8)
                             try:
                                 canvas_score_ls[n][:, index[0]: index[0] + sw, index[1]: index[1] + sh] = out_score
