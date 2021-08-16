@@ -146,7 +146,7 @@ def main():
         model.eval()
 
         # Create dummy tile
-        buf = args.chip_buffer
+        buf = args.chip_buffer - 4
         meta = predict_dataset.meta
         n_class = predict_dataset.n_classes
         canvas = np.zeros((1, meta['height'], meta['width']),

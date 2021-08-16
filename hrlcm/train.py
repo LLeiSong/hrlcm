@@ -9,7 +9,6 @@ from augmentation import *
 from dataset import *
 from tqdm.auto import tqdm
 import metrics
-import torch.nn.functional as F
 
 
 class Trainer:
@@ -35,6 +34,9 @@ class Trainer:
         pbar = tqdm(total=len(train_loader), desc="[Train]", dynamic_ncols=True)
         loss_total = 0
         for i, (image, target, indexes) in enumerate(train_loader):
+            # Shrink target
+            target = target[:, 4:-4, 4:-4]
+
             # Get weights
             if weights is not None:
                 weights_batch = weights[indexes]
@@ -98,8 +100,8 @@ class Trainer:
         loss_total = 0
         conf_mat = metrics.ConfMatrix(validate_loader.dataset.n_classes)
         for i, (image, target) in enumerate(validate_loader):
-            # Add replicate padding
-            # image = F.pad(image, (4, 4, 4, 4), 'replicate')
+            # Shrink target
+            target = target[:, 4:-4, 4:-4]
             
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
