@@ -30,7 +30,7 @@ class ConfMatrix:
         """ adds one label mask to the confusion matrix """
 
         assert gt.shape == pred.shape
-        assert gt.shape == (512, 512)
+        # assert gt.shape == (512, 512)
 
         gt = gt.flatten()
         pred = pred.flatten()
