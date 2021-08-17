@@ -73,11 +73,11 @@ write.csv(dl_catalog_full,
           row.names = F)
 
 # A test dataset
-set.seed(10)
+set.seed(123)
 tiles_test <- read.csv(here('results/north/dl_catalog_valid.csv'),
                        stringsAsFactors = F) %>% 
   group_by(hardiness) %>% 
-  sample_n(4)
+  sample_n(3)
 dl_catalog_test <- dl_catalog_full %>% 
   filter(tile_id %in% tiles_test$tile)
 write.csv(dl_catalog_test, 

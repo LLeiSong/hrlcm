@@ -203,6 +203,8 @@ def main():
                 dst.write(canvas_score)
 
         del predict_dataset, predict_loader
+        # for fname in catalog.loc[catalog['tile_id'] == tile_id]['tiles_relate'].item().split(','):
+        #     os.remove(os.path.join(args.data_path, fname))
 
 
 if __name__ == "__main__":
