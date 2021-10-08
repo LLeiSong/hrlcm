@@ -20,9 +20,9 @@ library(tidyverse)
 ##########################
 ##  Step 2: Read files  ##
 ##########################
-tiles <- read_sf(here('data/geoms/tiles_nicfi_north.geojson'))
-trains <- read.csv(here('results/north/dl_catalog_train.csv'))
-valids <- read.csv(here('results/north/dl_catalog_valid.csv'))
+tiles <- read_sf(here('data/geoms/tiles_nicfi.geojson'))
+trains <- read.csv(here('results/tanzania/dl_catalog_train.csv'))
+valids <- read.csv(here('results/tanzania/dl_catalog_valid.csv'))
 
 ##############################
 ##  Step 3: Sampling ratio  ##

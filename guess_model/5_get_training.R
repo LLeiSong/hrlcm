@@ -25,11 +25,13 @@ message("Step 2: Load related dataset")
 
 ## Get samples
 samples <- read_sf(
-    here("data/north/samples_all.geojson"))
-tiles_north <- read_sf(
-    here("data/geoms/tiles_nicfi_north.geojson"))
-samples <- st_join(samples, tiles_north)
-save(samples, file = here("data/north/samples.rda"))
+    here("data/tanzania/samples_all.geojson"))
+tiles <- read_sf(
+    here("data/geoms/tiles_nicfi.geojson")) %>% 
+  dplyr::select(tile)
+samples <- st_join(samples, tiles)
+samples <- samples %>% filter(!is.na(tile))
+save(samples, file = here("data/tanzania/samples.rda"))
 
 ## Read file names
 plt_path <- "/Volumes/elephant/plt_nicfi"
@@ -102,9 +104,12 @@ get_img <- function(tile_nm) {
 
 ## Make stacks
 dir.create("/Volumes/elephant/pred_stack")
+tiles_exist <- list.files("/Volumes/elephant/pred_stack") %>% 
+  str_extract('[0-9]+-[0-9]+')
 
 ## batch processing
-mclapply(unique(samples$tile),
+tiles_todo <- setdiff(unique(samples$tile), tiles_exist)
+mclapply(tiles_todo,
   function(tile_nm) {
     # Get imgs and save out
     imgs <- get_img(tile_nm)
@@ -118,6 +123,9 @@ mclapply(unique(samples$tile),
   },
   mc.cores = 3
 )
+
+# Tile 1210-1018 is problematic, but no big deal.
+# It is over deep water area.
 
 ###########################################
 ##  Step 4: Extract values for training  ##
@@ -152,4 +160,4 @@ training <- do.call(
     }, mc.cores = 6)
 )
 save(training, 
-     file = file.path(here("data/north"), "training.rda"))
+     file = file.path(here("data/tanzania"), "training.rda"))

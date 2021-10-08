@@ -25,12 +25,12 @@ library(rgrass7)
 message("Step 2: Sampling from ensemble labels")
 
 # Read the OSM-masked ensemble labels
-lc_labels <- rast(here("data/north/lc_labels_north_mask.tif"))
+lc_labels <- rast(here("data/tanzania/lc_labels_mask.tif"))
 n_labels <- freq(lc_labels)
 sum(n_labels[, 3]) * 0.01 / nrow(n_labels)
 
 ## Use GRASS GIS to sample
-gisBase <- "/Applications/GRASS-7.8.app/Contents/Resources"
+gisBase <- "/Applications/GRASS-7.9.app/Contents/Resources"
 initGRASS(
   gisBase = gisBase,
   home = tempdir(),
@@ -45,7 +45,7 @@ execGRASS("g.proj",
 )
 execGRASS("r.in.gdal",
   flags = c("o", "overwrite"),
-  input = here("data/north/lc_labels_north_mask.tif"),
+  input = here("data/tanzania/lc_labels_mask.tif"),
   band = 1,
   output = "lc_types"
 )
@@ -73,7 +73,7 @@ samples_esm <- readVECT("lc_samples") %>%
   mutate(landcover = lc_types) %>%
   dplyr::select(landcover)
 save(samples_esm, 
-     file = here("data/north/samples_esm.rda"))
+     file = here("data/tanzania/samples_esm.rda"))
 
 #########################################
 ##  Step 3: Sampling from OSM dataset  ##
@@ -85,23 +85,41 @@ nums <- samples_esm %>%
   st_drop_geometry() %>%
   group_by(landcover) %>%
   summarise(n = n())
-save(nums, file = "data/north/nums.rda")
+save(nums, file = "data/tanzania/nums.rda")
 
 ## urban/built-up
 message("--Urban/built-up")
-urbans <- read_sf(
-    here("data/osm/buildings.geojson"))
+
+tiles <- read_sf(
+  here("data/geoms/tiles_nicfi.geojson")) %>% 
+  dplyr::select(tile) %>% st_union()
+fn <- 'open_buildings_v1_polygons_ne_10m_TZA.csv'
+urbans <- st_read(here(file.path('data/open_buildings', fn)),
+                  int64_as_string = F,
+                  stringsAsFactors = F); rm(fn)
+urbans <- urbans %>% 
+  mutate(latitude = as.numeric(latitude),
+         longitude = as.numeric(longitude),
+         area_in_meters = as.numeric(area_in_meters),
+         confidence = as.numeric(confidence)) %>% 
+  # Buildings with area less than 4 pixels might not be representative
+  filter(confidence >= 0.8 & area_in_meters > 10 * 4.8^2) %>% 
+  mutate(geometry = st_as_sfc(geometry) %>% 
+           st_cast('MULTIPOLYGON')) %>% 
+  st_as_sf() %>% st_set_crs(4326) %>% 
+  st_make_valid() %>% 
+  st_intersection(tiles)
 set.seed(103)
 urban_samples <- urbans %>%
   mutate(area = st_area(.) %>% 
-             units::set_units("km2")) %>%
+           units::set_units("km2")) %>%
   arrange(-area) %>%
-  slice(1:40000) %>%
+  slice(1:100000) %>%
   st_centroid() %>%
   st_sf() %>%
   mutate(landcover = 8) %>%
   dplyr::select(landcover)
-rm(urbans)
+rm(urbans, tiles)
 gc()
 
 ## wetlands
@@ -112,7 +130,7 @@ num_sample <- 2e5 -
 ## Might be slow for super large number
 set.seed(104)
 wetlands_samples <- read_sf(
-    here("data/osm/wetlands.geojson")) %>%
+    here("data/vct_tanzania/wetlands.geojson")) %>%
   st_sample(num_sample, exact = T) %>%
   st_cast("POINT") %>%
   st_sf() %>%
@@ -142,7 +160,7 @@ message("--Water")
 ## Might be slow for super large number
 set.seed(105)
 water_samples <- read_sf(
-    here("data/osm/waterbodies.geojson")) %>%
+    here("data/vct_tanzania/waterbodies.geojson")) %>%
   st_sample(2e5, exact = T) %>%
   st_cast("POINT") %>%
   st_sf() %>%
@@ -173,7 +191,7 @@ samples_osm <- rbind(
   water_samples
 )
 save(samples_osm, 
-     file = here("data/north/samples_osm.rda"))
+     file = here("data/tanzania/samples_osm.rda"))
 rm(
   urban_samples,
   wetlands_samples,
@@ -199,6 +217,6 @@ samples_all %>%
   group_by(landcover) %>%
   summarize(n = n())
 save(samples_all, 
-     file = here("data/north/samples_all.rda"))
+     file = here("data/tanzania/samples_all.rda"))
 st_write(samples_all, 
-         here("data/north/samples_all.geojson"))
+         here("data/tanzania/samples_all.geojson"))

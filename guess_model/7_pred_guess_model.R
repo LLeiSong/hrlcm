@@ -30,7 +30,7 @@ message('Step 2: Preparation')
 
 # Load model
 message("--Load model")
-load(here('data/north/guess_rf_md.rda'))
+load(here('data/tanzania/guess_rf_md.rda'))
 
 # Define function to do prediction
 make_pred <- function(tile_id,
@@ -41,7 +41,7 @@ make_pred <- function(tile_id,
                       size_sub_tile = 512,
                       skip_class = 8,
                       img_dir,
-                      dst_dir = 'results/north/guess_labels'){
+                      dst_dir = 'results/tanzania/guess_labels'){
     message(paste0('--', tile_id))
     
     # Get image
@@ -76,13 +76,16 @@ make_pred <- function(tile_id,
     crs_mer <- crs(imgs[[1]])
     road <- road %>% 
         st_cast('MULTILINESTRING') %>% 
-        st_transform(crs = crs_mer)
+        st_transform(crs = crs_mer) %>% 
+        dplyr::select()
     waterbody <- waterbody %>% 
         st_cast('MULTIPOLYGON') %>% 
-        st_transform(crs = crs_mer)
+        st_transform(crs = crs_mer) %>% 
+        dplyr::select()
     building <- building %>% 
         st_cast('MULTIPOLYGON') %>% 
-        st_transform(crs = crs_mer)
+        st_transform(crs = crs_mer) %>% 
+        dplyr::select()
     
     # Make prediction and refine the guess labels
     lapply(sub_tiles$index, function(index){
@@ -101,12 +104,13 @@ make_pred <- function(tile_id,
         pred <- argmax(pred)
         classes <- scores[[1]]
         values(classes) <- pred
+        score <- max(scores)
         rm(scores, pred); gc()
         
         # Add vectors
         # Set up GRASS GIS
         message('------Add OSM layers')
-        crs_mer <- crs(imgs_sub, proj4 = T)
+        crs_mer <- crs(imgs_sub, proj = T)
         gisBase <- '/Applications/GRASS-7.9.app/Contents/Resources'
         initGRASS(gisBase = gisBase,
                   home = tempdir(),
@@ -186,6 +190,7 @@ make_pred <- function(tile_id,
                 mask_vct <- is.na(mask_vct)
                 classes <- classes * mask_vct
                 classes <- cover(classes, fills[[i]], values = 0)
+                score[!mask_vct] <- max(values(score))
                 rm(mask_vct)
             }
         }
@@ -199,6 +204,12 @@ make_pred <- function(tile_id,
                     overwrite = T,
                     wopt = list(datatype = 'INT1U',
                                 gdal=c("COMPRESS=LZW")))
+        
+        names(score) <- 'score'
+        writeRaster(
+            score, 
+            here(glue('{dst_dir}/score_{tile_id}_{index}.tif')),
+            overwrite = T)
     })
 }
 
@@ -210,44 +221,19 @@ message('Step 3: Make prediction')
 # Directories
 message("--Set directories")
 stack_dir <- '/Volumes/elephant/pred_stack'
-labels_dir <- here('results/north/guess_labels')
+labels_dir <- here('results/tanzania/guess_labels')
 if (!dir.exists(labels_dir)) dir.create(labels_dir)
 
 # Read vectors
 message("--Read vectors")
-tiles <- read_sf('data/geoms/tiles_nicfi_north.geojson')
-roads <- read_sf(here('data/osm/roads.geojson'))
-roads <- roads %>%
-    filter(fclass %in% c('primary', 'secondary', 'tertiary',
-                         'trunk', 'primary_link', 'secondary_link',
-                         'tertiary_link', 'rail'))
-roads <- st_join(roads, tiles)
-waterbodies <- read_sf(here('data/osm/waterbodies.geojson'))
-waterbodies <- st_join(waterbodies, tiles)
-# buildings <- read_sf(here('data/osm/buildings.geojson'))
-# buildings <- st_join(buildings, tiles)
-# Change to use Open Buildings dataset
-### Follow the tutorial to download Google Open Buildings dataset 
-## https://sites.research.google/open-buildings/ 
-fn <- 'open_buildings_v1_polygons_ne_10m_TZA.csv'
-buildings <- st_read(here(file.path('data/open_buildings', fn)),
-                  int64_as_string = F,
-                  stringsAsFactors = F); rm(fn)
-buildings <- buildings %>% 
-    mutate(latitude = as.numeric(latitude),
-           longitude = as.numeric(longitude),
-           area_in_meters = as.numeric(area_in_meters),
-           confidence = as.numeric(confidence)) %>% 
-    # Buildings with area less than a pixel might not be representative
-    filter(confidence >= 0.75 & area_in_meters > 4.8^2) %>% 
-    mutate(geometry = st_as_sfc(geometry) %>% 
-               st_cast('MULTIPOLYGON')) %>% 
-    st_as_sf() %>% st_set_crs(4326) %>% 
-    st_make_valid()
-
-builds <- st_crop(builds, st_bbox(tiles))
-builds <- st_join(builds, tiles)
-# write_sf(buildings, here('data/open_buildings/buildings_tza.geojson'))
+tiles <- read_sf('data/geoms/tiles_nicfi.geojson') %>% select(tile)
+# Subset tiles
+tiles_north <- read_sf('data/geoms/tiles_nicfi_north.geojson')
+tiles <- tiles %>% filter(!tile %in% tiles_north$tile)
+## Remove the problematic tile
+tiles <- tiles %>% filter(tile != '1210-1018')
+set.seed(123)
+tiles <- tiles %>% sample_frac(0.5); rm(tiles_north)
 
 # Cut the tiles and make 4 samples
 # 3 for train, 1 for validate
@@ -269,16 +255,56 @@ sample_tiles <- do.call(rbind, lapply(1:nrow(tiles), function(n){
                comment = '') %>% 
         slice(sample(1:nrow(.), n_sample))
 }))
-# st_write(sample_tiles, here('results/north/catalog_sample_tiles.geojson'))
+# st_write(sample_tiles, here('results/tanzania/catalog_sample_tiles.geojson'))
 
 # Filter finished ones [IN CASE]
-# tiles_finished <- list.files(labels_dir, pattern = 'guess')
-# tiles_finished <- str_extract(tiles_finished,
-#                               '[0-9]+-[0-9]+_[0-9]+')
-# sample_tiles <- sample_tiles %>% 
-#     mutate(fname = paste(tile, index, sep = '_')) %>% 
-#     filter(!fname %in% tiles_finished) %>% 
-#     dplyr::select(-fname)
+tiles_finished <- list.files(labels_dir, pattern = 'guess')
+tiles_finished <- str_extract(tiles_finished,
+                              '[0-9]+-[0-9]+_[0-9]+')
+sample_tiles <- sample_tiles %>%
+    mutate(fname = paste(tile, index, sep = '_')) %>%
+    filter(!fname %in% tiles_finished) %>%
+    dplyr::select(-fname); rm(tiles_finished)
+
+# Roads
+## Crop and join with tiles first
+roads <- read_sf(here('data/vct_tanzania/roads.geojson'))
+roads <- roads %>%
+    filter(fclass %in% c('primary', 'secondary', 'tertiary',
+                         'trunk', 'primary_link', 'secondary_link',
+                         'tertiary_link', 'rail'))
+roads <- st_join(
+    roads, 
+    sample_tiles %>% dplyr::select(tile, index)) %>% 
+    filter(!is.na(tile))
+
+# Waterbodies
+## Crop and join first
+waterbodies <- read_sf(here('data/vct_tanzania/waterbodies.geojson'))
+waterbodies <- st_join(
+    waterbodies, sample_tiles %>% dplyr::select(tile, index)) %>% 
+    filter(!is.na(tile))
+
+# Buildings
+fn <- 'open_buildings_v1_polygons_ne_10m_TZA.csv'
+buildings <- st_read(here(file.path('data/open_buildings', fn)),
+                     int64_as_string = F,
+                     stringsAsFactors = F); rm(fn)
+buildings <- buildings %>% 
+    mutate(latitude = as.numeric(latitude),
+           longitude = as.numeric(longitude),
+           area_in_meters = as.numeric(area_in_meters),
+           confidence = as.numeric(confidence)) %>% 
+    # Buildings with area less than a pixel might not be representative
+    filter(confidence >= 0.75 & area_in_meters > 4.8^2) %>% 
+    mutate(geometry = st_as_sfc(geometry) %>% 
+               st_cast('MULTIPOLYGON')) %>% 
+    st_as_sf() %>% st_set_crs(4326) %>% 
+    st_make_valid()
+# st_write(buildings, here('data/open_buildings/buildings_all_filtered.geojson'))
+buildings <- st_join(
+    buildings, sample_tiles %>% dplyr::select(tile, index)) %>% 
+    filter(!is.na(tile))
 
 message('--Start generating')
 lapply(unique(sample_tiles$tile), function(tile_id){
@@ -294,4 +320,8 @@ lapply(unique(sample_tiles$tile), function(tile_id){
               waterbody = waterbody,
               building = building,
               img_dir = stack_dir)
+    
+    # Remove big spat temps
+    file.remove(list.files(tempdir(), pattern = 'spat',
+                           full.names = T))
 })

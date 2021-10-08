@@ -28,7 +28,7 @@ message('Step 2: Load training')
 
 ## Get training
 load(file.path(
-    here('data/north'), 'training.rda'))
+    here('data/tanzania'), 'training.rda'))
 training <- training %>% 
     # wetland is really not accurate. 
     # so we give up this class.
@@ -57,7 +57,7 @@ forest_vip <- rand_forest() %>%
     set_mode("classification") %>% 
     fit(landcover ~ ., data = training)
 save(forest_vip, 
-     file = here('data/north/forest_vip.rda'))
+     file = here('data/tanzania/forest_vip.rda'))
 
 ## Plot
 vip(forest_vip, 
@@ -109,7 +109,7 @@ tune_res <- tune_grid(
     control = control_grid(verbose = TRUE)
 )
 save(tune_res, 
-     file = here('data/north/tune_res.rda'))
+     file = here('data/tanzania/tune_res.rda'))
 
 ## Check the results
 tune_res %>%
@@ -139,7 +139,7 @@ final_wf <- workflow() %>%
 final_res <- final_wf %>%
     last_fit(training_split)
 save(final_res, 
-     file = here('data/north/final_res.rda'))
+     file = here('data/tanzania/final_res.rda'))
 
 #### Evaluation metrics
 final_res %>%
@@ -181,7 +181,7 @@ rm(lc_test, lc_train, training, training_folds,
    training_split); gc()
 
 ### Reload training
-load(file.path(here('data/north'), 'training.rda'))
+load(file.path(here('data/tanzania'), 'training.rda'))
 
 # Or use all features
 training <- training %>%
@@ -194,7 +194,7 @@ guess_rf_md <- final_rf %>%
     set_engine("ranger", num.threads = 11) %>% 
     fit(landcover ~ ., training)
 save(guess_rf_md, 
-     file = here('data/north/guess_rf_md.rda'))
+     file = here('data/tanzania/guess_rf_md.rda'))
 
 ############################################
 ##  Step 5: Predict one tile for example  ##
@@ -206,7 +206,7 @@ library(terra)
 fnames <- list.files(
     '/Volumes/elephant/pred_stack',
     full.names = T)
-set.seed(67)
+set.seed(123)
 img_path <- fnames[sample(length(fnames), 1)]
 
 # Or use all features
@@ -217,5 +217,5 @@ scores <- predict(imgs, guess_rf_md, type = "prob")
 pred <- argmax(values(scores))
 classes <- scores[[1]]
 values(classes) <- pred
-writeRaster(scores, here('data/north/scores.tif'))
-writeRaster(classes, here('data/north/classed.tif'))
+writeRaster(scores, here('data/tanzania/scores.tif'))
+writeRaster(classes, here('data/tanzania/classed.tif'))

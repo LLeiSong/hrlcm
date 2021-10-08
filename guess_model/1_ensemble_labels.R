@@ -20,7 +20,7 @@ library(here)
 message('Step 2: Mosaic and clip the products')
 
 # Tiles
-tiles <- vect(here('data/geoms/tiles_nicfi_north.geojson'))
+tiles <- vect(here('data/geoms/tiles_nicfi.geojson'))
 
 # Data directory
 ext_dir <- '/Volumes/elephant/landcovers'
@@ -164,7 +164,7 @@ esaglc_new <- classify(esaglc, esaglc_rclmat,
                                    gdal=c("COMPRESS=LZW")))
 
 # FROM-GLC reclassification
-message('----ROM-GLC')
+message('----FROM-GLC')
 fromglc_rclmat <- data.frame(from = fromglc_table$id - 1,
                              to = fromglc_table$id, 
                              becomes = fromglc_table$convert) %>% 
@@ -319,11 +319,12 @@ labels <- do.call(c, lapply(1:nrow(lc_types), function(n){
                            '.tif'))
     rast(fn)
 }))
+labels <- sum(labels)
 
 # save out
-dst_path <- here('data/north')
+dst_path <- here('data/interim')
 dir.create(dst_path, showWarnings = F)
-fn <- file.path(dst_path, 'lc_labels_north.tif')
+fn <- file.path(dst_path, 'lc_labels.tif')
 writeRaster(labels, fn, overwrite = TRUE,
             wopt = list(datatype = 'INT1U',
                         gdal=c("COMPRESS=LZW")))

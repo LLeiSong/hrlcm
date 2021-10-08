@@ -18,7 +18,7 @@ library(dplyr)
 library(tidyr)
 
 ## Define the destination folder
-dst_path <- here('data/north')
+dst_path <- here('data/tanzania')
 
 ######################################
 ##  Step 2: Load and download data  ##
@@ -27,7 +27,7 @@ message('Step 2: Load and download data')
 
 ## Get tiles
 select <- dplyr::select
-tiles_north <- st_read(here('data/geoms/tiles_nicfi_north.geojson'))
+tiles_north <- st_read(here('data/geoms/tiles_nicfi.geojson'))
 
 ## Get OSM
 osm_link <- file.path('https://download.geofabrik.de/africa', 
@@ -81,14 +81,33 @@ buildings <- do.call(rbind,
     st_intersection(tiles_north) %>% 
     st_collection_extract('POLYGON')
 
+# Change to use Open Buildings dataset
+### Follow the tutorial to download Google Open Buildings dataset 
+## https://sites.research.google/open-buildings/ 
+fn <- 'open_buildings_v1_polygons_ne_10m_TZA.csv'
+buildings <- st_read(here(file.path('data/open_buildings', fn)),
+                     int64_as_string = F,
+                     stringsAsFactors = F); rm(fn)
+buildings <- buildings %>% 
+    mutate(latitude = as.numeric(latitude),
+           longitude = as.numeric(longitude),
+           area_in_meters = as.numeric(area_in_meters),
+           confidence = as.numeric(confidence)) %>% 
+    # Buildings with area less than 4 pixels might not be representative
+    # filter(confidence >= 0.8 & area_in_meters > 4 * 4.8^2) %>% 
+    mutate(geometry = st_as_sfc(geometry) %>% 
+               st_cast('MULTIPOLYGON')) %>% 
+    st_as_sf() %>% st_set_crs(4326) %>% 
+    st_make_valid()
+
 ## Save out the processed vectors
-dir.create(here('data/osm'))
-st_write(rivers, here('data/osm/rivers.geojson'))
-st_write(waterbodies, here('data/osm/waterbodies.geojson'))
-st_write(wetlands, here('data/osm/wetlands.geojson'))
-st_write(roads, here('data/osm/roads.geojson'))
-st_write(big_roads, here('data/osm/big_roads.geojson'))
-st_write(buildings, here('data/osm/buildings.geojson'))
+dir.create(here('data/vct_tanzania'))
+st_write(rivers, here('data/vct_tanzania/rivers.geojson'))
+st_write(waterbodies, here('data/vct_tanzania/waterbodies.geojson'))
+st_write(wetlands, here('data/vct_tanzania/wetlands.geojson'))
+st_write(roads, here('data/vct_tanzania/roads.geojson'))
+st_write(big_roads, here('data/vct_tanzania/big_roads.geojson'))
+st_write(buildings, here('data/vct_tanzania/buildings.geojson'))
 
 ## Delete temporary files
 unlink(here("data/temp"), recursive = TRUE)

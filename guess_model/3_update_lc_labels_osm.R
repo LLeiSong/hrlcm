@@ -20,7 +20,7 @@ library(stringr)
 library(rgrass7)
 
 ## Define the destination folder
-dst_path <- here('data/north')
+dst_path <- here('data/tanzania')
 
 ##################################
 ##  Step 2: Load and crop data  ##
@@ -29,17 +29,15 @@ message('Step 2: Load and crop data')
 
 ## Get tiles
 select <- dplyr::select
-tiles_north <- st_read(here('data/geoms/tiles_nicfi_north.geojson'))
+tiles <- st_read(here('data/geoms/tiles_nicfi.geojson'))
 
 ## Get the ensemble labels
 lc_labels <- rast(here('data/interim/lc_labels.tif'))
-tiles_north_vect <- vect(tiles_north)
-lc_labels_north <- mask(crop(lc_labels, 
-                             tiles_north_vect), 
-                        tiles_north_vect)
-rm(lc_labels, tiles_north_vect); gc()
-writeRaster(lc_labels_north, 
-            file.path(dst_path, 'lc_labels_north.tif'),
+tiles_vect <- vect(tiles)
+lc_labels <- mask(crop(lc_labels, tiles_vect), tiles_vect)
+rm(tiles_vect); gc()
+writeRaster(lc_labels, 
+            file.path(dst_path, 'lc_labels.tif'),
             wopt = list(datatype = 'INT1U',
                         gdal=c("COMPRESS=LZW")))
 
@@ -49,7 +47,7 @@ writeRaster(lc_labels_north,
 message('Step 3: Prepare OSM masks')
 
 ## Get file names
-fnames <- list.files(here('data/osm'), full.names = T, 
+fnames <- list.files(here('data/vct_tanzania'), full.names = T, 
                      pattern = '.geojson')
 
 ## set up
@@ -63,7 +61,7 @@ initGRASS(gisBase = gisBase,
 execGRASS("g.proj", flags = "c", 
           proj4="+proj=longlat +datum=WGS84 +no_defs")
 execGRASS('r.in.gdal', flags = c("o", "overwrite"),
-          input = file.path(dst_path, 'lc_labels_north.tif'),
+          input = file.path(dst_path, 'lc_labels.tif'),
           band = 1,
           output = "lc_types")
 execGRASS("g.region", raster = "lc_types")
@@ -85,7 +83,7 @@ execGRASS('r.buffer', flags = c("overwrite"),
                             distances = 30))
 execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'rivers_buff', 
-                            output = here('data/osm/rivers.tif')))
+                            output = here('data/vct_tanzania/rivers.tif')))
 
 ### Waterbodies
 message('--Waterbodies')
@@ -102,7 +100,7 @@ execGRASS('r.buffer', flags = c("overwrite"),
                             distances = 30))
 execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'waterbodies_buff', 
-                            output = here('data/osm/waterbodies.tif')))
+                            output = here('data/vct_tanzania/waterbodies.tif')))
 
 ### roads
 message('--Roads')
@@ -119,26 +117,29 @@ execGRASS('r.buffer', flags = c("overwrite"),
                             distances = 30))
 execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'roads_buff', 
-                            output = here('data/osm/roads.tif')))
+                            output = here('data/vct_tanzania/roads.tif')))
 
 ### buildings for urban/built-up
 message('--Buildings')
 
-buildings <- st_read(fnames[str_detect(fnames, 'buildings', )])
-buildings <- st_cast(buildings, "POLYGON")
-ctd_buildings <- st_centroid(buildings)
-ctd_buildings <- ctd_buildings %>% 
-    st_buffer(dist = 0.00025 * 5, endCapStyle = "SQUARE") # save RAM
-ctd_buildings <- ctd_buildings %>% st_union()
-ctd_buildings <- st_sf(ctd_buildings)
-writeVECT(ctd_buildings, 'buildings', v.in.ogr_flags = 'overwrite')
-execGRASS('v.to.rast', flags = c("d", "overwrite"),
-          parameters = list(input = 'buildings', 
-                            output = 'buildings',
-                            use = 'val'))
-execGRASS('r.out.gdal', flags = c("overwrite"),
-          parameters = list(input = 'buildings', 
-                            output = here('data/osm/buildings.tif')))
+# buildings <- st_read(fnames[str_detect(fnames, 'buildings', )])
+# buildings <- st_cast(buildings, "POLYGON")
+# ctd_buildings <- st_centroid(buildings)
+# ctd_buildings <- ctd_buildings %>% 
+#     st_buffer(dist = 0.00025 * 5, endCapStyle = "SQUARE") # save RAM
+# ctd_buildings <- ctd_buildings %>% st_union()
+# ctd_buildings <- st_sf(ctd_buildings)
+# writeVECT(ctd_buildings, 'buildings', v.in.ogr_flags = 'overwrite')
+# execGRASS('v.to.rast', flags = c("d", "overwrite"),
+#           parameters = list(input = 'buildings', 
+#                             output = 'buildings',
+#                             use = 'val'))
+# execGRASS('r.out.gdal', flags = c("overwrite"),
+#           parameters = list(input = 'buildings', 
+#                             output = here('data/vct_tanzania/buildings.tif')))
+
+# It would be slow for large dataset, use the python script under 
+# the same folder to get buildings.tif
 
 ### wetland
 message('--Wetlands')
@@ -155,7 +156,7 @@ execGRASS('r.buffer', flags = c("overwrite"),
                             distances = 30))
 execGRASS('r.out.gdal', flags = c("overwrite"),
           parameters = list(input = 'wetlands_buff', 
-                            output = here('data/osm/wetlands.tif')))
+                            output = here('data/vct_tanzania/wetlands.tif')))
 
 rm(rivers, waterbodies, roads, 
    ctd_buildings, buildings, wetlands); gc()
@@ -166,7 +167,8 @@ rm(rivers, waterbodies, roads,
 message('Step 4: Apply OSM masks')
 
 ## Read the mask
-fnames <- list.files(here('data/osm'), pattern = '.tif', full.names = T)
+fnames <- list.files(here('data/vct_tanzania'), 
+                     pattern = '.tif', full.names = T)
 masks <- do.call(c, lapply(fnames, function(fname){
     rast(fname)
 }))
@@ -174,11 +176,11 @@ mask <- sum(masks, na.rm = T); rm(masks); gc()
 mask[!is.na(mask)] <- 0
 mask[is.na(mask)] <- 1
 
-lc_labels_north_mask <- lc_labels_north * mask
-lc_labels_north_mask[lc_labels_north_mask == 0] <- NA
-lc_labels_north_mask[lc_labels_north_mask == 6] <- NA # remove water
-lc_labels_north_mask[lc_labels_north_mask == 8] <- NA # remove urban
-writeRaster(lc_labels_north_mask, 
-            file.path(dst_path, 'lc_labels_north_mask.tif'),
+lc_labels_mask <- lc_labels * mask
+lc_labels_mask[lc_labels_mask == 0] <- NA
+lc_labels_mask[lc_labels_mask == 6] <- NA # remove water
+lc_labels_mask[lc_labels_mask == 8] <- NA # remove urban 
+writeRaster(lc_labels_mask, 
+            file.path(dst_path, 'lc_labels_mask.tif'),
             wopt = list(datatype = 'INT1U',
                         gdal=c("COMPRESS=LZW")))
