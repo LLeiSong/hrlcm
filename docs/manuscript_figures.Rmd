@@ -643,84 +643,161 @@ ggsave(here('docs/figures/labels.png'),
 This figure will provide an overall flowchart of methods.
 
 ## Results
-### Learning rate comparison
+### Random forest evaluation
+#### Holdout validate
 
 ```{r}
-library(tidyverse)
-# Define function
-get_curves <- function(experiment_name,
-                       step = 59,
-                       path = here('results/scalar/compare_lr')){
-    # Get file names
-    fns <- list.files(path, 
-                      pattern = experiment_name,
-                      full.names = T)
-    fns <- fns[str_detect(fns, 'Validate')]
-    
-    # Process each csv
-    scalars <- lapply(fns, function(fn){
-        scalar <- read.csv(fn, stringsAsFactors = F) %>% 
-            mutate(Step = Step / step) %>% # step of each epoch
-            dplyr::select(-Wall.time)
-    })
-    names(scalars) <- gsub(
-        '.csv', "", 
-        str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
-    
-    scalars
-}
+load(here("data/north/final_res.rda"))
+cf <- confusionMatrix(data = final_res$.predictions[[1]]$.pred_class, 
+                      reference = final_res$.predictions[[1]]$landcover)
+save(cf, file = here('docs/figures/rf_holdout_conf.rda'))
 
-# Clean scalar csvs
-curves_lr_01 <- get_curves('unet_lr_01')
-curves_lr_001 <- get_curves('unet_lr_001')
-curves_lr_0001 <- get_curves('unet_lr_0001')
-curves_lr_00001 <- get_curves('unet_lr_00001')
-curves_lr_000001 <- get_curves('unet_lr_000001')
+conf <- cf$table
+# row is truth, column is predict
+# match with python sklearn
+conf <- matrix(as.numeric(conf), nrow = nrow(conf), ncol = ncol(conf))
+conf <- t(conf)
 
-types <- c('AA', 'IoU', 'Cropland', 'Forest', 
-           'Grassland', 'Shrubland', 'Water', 
-           'Built-up', 'Bareland')
-content <- do.call(rbind, lapply(types, function(type){
-    if (type == 'Built-up') {
-        item <- 'Urban'
-        } else{item <- type}
-    list(curves_lr_01[[item]],
-         curves_lr_001[[item]],
-         curves_lr_0001[[item]],
-         curves_lr_00001[[item]],
-         curves_lr_000001[[item]]) %>% 
-        reduce(left_join, by = "Step") %>% 
-        `colnames<-`(c("Epoch", '0.1', '0.01', 
-                       '0.001', '0.0001', '0.00001')) %>% 
-        mutate(Item = type) %>% 
-        pivot_longer(cols = setdiff(names(.), c("Epoch", 'Item')),
-                     names_to = 'Learning rate', 
-                     values_to = 'Value')
-})) %>% mutate(Item = factor(Item, levels = types))
+# Calculate producer's accuracy
+prac <- sapply(1:7, function(n){
+  conf[n, n] / rowSums(conf)[n]
+})
 
-# Get final plot
-curves_lr <- ggplot(content, aes(x = Epoch, y = Value)) +
-    # geom_line(aes(color = `Learning rate`)) +
-    geom_smooth(aes(color = `Learning rate`), span = 0.2,
-                se = F, size = 0.6) +
-    scale_color_brewer(palette = "Set1") +
-    facet_wrap(~Item, scales = 'free_y') +
-    labs(y = 'Accuracy') +
-    theme_bw() +
-    theme(legend.position = 'top')
-ggsave(here('docs/figures/curves_lr.png'),
-       curves_lr,
-       width = 8, height = 5, dpi = 300)
+acc_test <- data.frame(class = 1:7,
+                       producer_acc = prac)
+write.csv(acc_test, here('docs/figures/rf_holdout_acc.csv'),
+          row.names = F)
+```
+
+#### Independent test
+
+```{r}
+library(terra)
+library(parallel)
+library(ramify)
+library(ranger)
+library(parsnip)
+library(tidymodels)
+library(caret)
+
+tiles <- read_sf(here('data/geoms/tiles_nicfi_north.geojson'))
+imgs <- rast(file.path(
+        "/Volumes/elephant/pred_stack",
+        paste0(tiles$tile[1], ".tif")))
+sample_test <- read_sf(here('data/north/plys_holdout_check.geojson')) %>% 
+  st_join(tiles) %>% st_transform(crs = crs(imgs)) %>% 
+  vect(); rm(imgs)
+
+test_rf_features <- do.call(
+  rbind,
+  mclapply(unique(sample_test$tile),
+    function(tile_nm) {
+      # Get imgs
+      imgs <- rast(file.path(
+        "/Volumes/elephant/pred_stack",
+        paste0(tile_nm, ".tif")
+      ))
+
+      # get samples
+      samples_this <- sample_test[sample_test$tile == tile_nm, ]
+      trainings_this <- do.call(
+          rbind, 
+          lapply(1:nrow(samples_this), function(n){
+          sample_n <- samples_this[n, ]
+          terra::extract(
+              imgs, sample_n) %>%
+              mutate(landcover = sample_n$landcover) %>%
+              dplyr::select(-ID)
+      }))
+      rm(imgs, samples_this)
+      gc()
+      trainings_this
+    }, mc.cores = 4)
+)
+save(test_rf_features, 
+     file = file.path(here("data/north"), 
+                      "test_rf_features.rda"))
+
+load(here("data/north/guess_rf_md.rda"))
+test_rf_features <- test_rf_features %>% na.omit()
+pred <- predict(guess_rf_md$fit, 
+                test_rf_features %>% select(-landcover))
+pred <- argmax(pred$predictions)
+pred <- data.frame(predict = pred,
+                   test = test_rf_features$landcover)
+lc_types <- data.frame(id = 1:7,
+                       type = c('cropland', 'forest', 'grassland',
+                                'shrubland', 'water', 'built-up',
+                                'bareland'))
+pred_eval <- left_join(pred, lc_types, 
+                       by = c('test' = 'type')) %>% 
+    dplyr::select(-test) %>% 
+    rename(test = id) %>% 
+    mutate(predict = as.factor(predict),
+           test = as.factor(test))
+
+cf <- confusionMatrix(data = pred_eval$predict, 
+                      reference = pred_eval$test)
+save(cf, file = here('docs/figures/rf_test_conf.rda'))
+
+acc_test <- cf$byClass
+write.csv(acc_test, here('docs/figures/rf_test_acc.csv'),
+          row.names = F)
+```
+
+#### Human checking
+```{r}
+library(sf)
+library(glue)
+library(here)
+
+tile_nm <- 'catalog_sample_tiles_update.geojson'
+tiles <- here(glue('results/north/{tile_nm}')) %>% 
+  read_sf(); rm(tile_nm)
+tiles <- tiles %>% 
+  mutate(quality = glue("({score}, {hardiness})")) %>% 
+  st_drop_geometry() %>% 
+  mutate(quality = factor(quality))
+
+ggplot(tiles, aes(quality)) +
+  geom_bar(color = 'black',fill = 'cyan3') +
+  xlab('Quality (correctness, difficulty)') +
+  ylab('Count') +
+  theme_bw()
+
+quality_fig <- ggplot(
+  tiles,
+  aes(fill = factor(hardiness), x = score)) + 
+  geom_bar(position = "stack") +
+  scale_fill_brewer('Difficulty', palette = "Dark2") +
+  xlab('Correctness') +
+  ylab('Count') +
+  theme_bw()
+
+ggplot(
+  tiles,
+  aes(fill = factor(hardiness), x = score)) + 
+  geom_bar(position = "stack") +
+  coord_polar("x") +
+  theme_bw()
+
+ggsave(here('docs/figures/humancheck_quality.png'),
+       quality_fig,
+       width = 4, height = 4, dpi = 300)
 ```
 
 ### Overall results
 #### Metrics
 ```{r}
 library(glue)
+library(stringr)
+library(caret)
+
+# Validate
 # Get file names
 fns <- list.files(here(
-    file.path('results/scalar',
-              'unet_score08_hardiness20_epoch200')), 
+    'results/scalar/full_runs'), 
+    pattern = 'unet_k15_only_nopad_clr_200epc',
     full.names = T)
 
 # Metrics
@@ -760,7 +837,36 @@ acc <- tb %>% filter(Metric %in% types) %>%
                       '\u00B1{format(round(sd, digits = 2), nsmall = 2)} %'))) %>% 
     dplyr::select(Class, Accuracy) %>% 
     arrange(Class)
-write.csv(acc, here('docs/figures/acc_last10epoch.csv'),
+write.csv(acc, here('docs/figures/k15_only_acc_last10epoch.csv'),
+          row.names = F)
+
+# Test
+sample_test <- read_sf(here('data/north/plys_holdout_check.geojson'))
+pred <- rast(here(file.path('results/dl/prediction',
+                            'unet_k15_only_clr_200epc',
+                            'landcover_north.tif')))
+sample_test <- vect(sample_test %>% st_transform(crs = crs(pred)))
+pred_eval <- terra::extract(pred, sample_test, list = T)
+pred_eval <- do.call(rbind, lapply(1:length(pred_eval), function(n){
+    rst_vals <- pred_eval[[n]][[1]]
+    data.frame(predict = rst_vals,
+               test = sample_test[n, ]$landcover)
+}))
+
+lc_types <- data.frame(id = 1:7,
+                       type = c('cropland', 'forest', 'grassland',
+                                'shrubland', 'water', 'built-up',
+                                'bareland'))
+pred_eval <- left_join(pred_eval, lc_types, by = c('test' = 'type')) %>% 
+    dplyr::select(-test) %>% 
+    rename(test = id) %>% 
+    mutate(predict = as.factor(predict),
+           test = as.factor(test))
+cf <- confusionMatrix(data=pred_eval$predict, reference = pred_eval$test)
+save(cf, file = here('docs/figures/test_conf.rda'))
+
+acc_test <- cf$byClass
+write.csv(acc_test, here('docs/figures/test_acc.csv'),
           row.names = F)
 ```
 
@@ -768,10 +874,13 @@ write.csv(acc, here('docs/figures/acc_last10epoch.csv'),
 
 ```{r}
 library(here)
+library(ggplot2)
+library(ggpubr)
+
 # Get file names
 fns <- list.files(here(
-    file.path('results/scalar',
-              'unet_score08_hardiness20_epoch200')), 
+    'results/scalar/full_runs'), 
+    pattern = 'unet_k15_only_nopad_clr_200epc', 
     full.names = T)
 
 step <- 59
@@ -841,109 +950,306 @@ curves <- ggarrange(
     ggarrange(curve_lr, curve_loss, curve_iou, ncol = 3),
     curves_acc, nrow = 2, heights = c(1, 1.6))
 
-ggsave(here('docs/figures/curves_final_mod.png'),
+ggsave(here('docs/figures/curves_k15_only_final_mod.png'),
        curves,
        width = 8, height = 5, dpi = 300)
 ```
 
+#### Prediction examples
+
+Provide some prediction examples of different LC types. Then provide an overall map. Could put them together.
+
+```{r, eval=FALSE}
+library(glue)
+
+pred_path <- here(file.path('results/dl/prediction',
+                            'unet_k15_only_clr_200epc',
+                            'landcover_north_withwl.tif'))
+score_path <- here(file.path('results/dl/prediction',
+                             'unet_k15_only_clr_200epc',
+                             'landcover_confidence_north_withwl.tif'))
+# Partial GRASS command to get standard deviation
+execGRASS('r.in.gdal', flags = c("o", "overwrite"),
+          input = score_path,
+          band = 1,
+          output = "score")
+execGRASS('r.in.gdal', flags = c("o", "overwrite"),
+          input = pred_path,
+          band = 1,
+          output = "pred")
+execGRASS("g.region", raster = "score")
+execGRASS('r.stats.zonal', flags = c('overwrite'),
+          base = 'pred',
+          cover = 'score',
+          method = 'stddev',
+          output = 'class_stddev')
+dst_path <- here(file.path('results/dl/prediction',
+                             'unet_k15_only_clr_200epc',
+                             'class_stddev.tif'))
+execGRASS('r.out.gdal', flags = c("overwrite"),
+          parameters = list(input = 'class_stddev', 
+                            output = dst_path,
+                            createopt = "COMPRESS=LZW"))
+
+pred_path <- here(file.path('results/dl/prediction',
+                            'unet_k15_only_clr_200epc',
+                            'landcover_north_withwl.tif'))
+score_path <- here(file.path('results/dl/prediction',
+                             'unet_k15_only_clr_200epc',
+                             'landcover_confidence_north_withwl.tif'))
+pred <- rast(pred_path)
+score <- rast(score_path)
+std <- rast(dst_path)
+means <- zonal(score, pred, "mean", na.rm = TRUE)
+stds <- zonal(std, pred, "mean", na.rm = TRUE)
+
+mean_std <- data.frame(means) %>% 
+  left_join(data.frame(stds)) %>% 
+  `colnames<-`(c('landcover', 'mean', 'std')) %>% 
+  mutate(Confidence = glue(
+               paste0('{format(round(mean, digits = 2), nsmall = 2)}',
+                      '\u00B1{format(round(std, digits = 2), nsmall = 2)}'))) %>% 
+  left_join(color_tb %>% select(id, type), by = c('landcover' = 'id')) %>% 
+  rename(Landcover = type) %>% select(Landcover, Confidence)
+save(mean_std, file = here('docs/figures/conf_mean_std.rda'))
+```
+
+```{r}
+library(terra)
+library(stars)
+library(tmap)
+library(ggpubr)
+library(gridExtra)
+
+load(here('docs/figures/conf_mean_std.rda'))
+pred_path <- here(file.path('results/dl/prediction',
+                           'unet_k15_only_clr_200epc',
+                           'landcover_north_withwl.tif'))
+color_tb <- data.frame(
+    id = 1:8,
+    type = c("Cropland", "Forest", 
+             "Grassland", "Shrubland", 
+             "Water", 'Built-up', "Bareland", 
+             'Wetland'),
+    color = c('#ff7f00', '#074702', '#b2df8a',
+              '#33a02c', '#3347f9', '#5a6057',
+              '#fdbf6f', '#0ea591'))
+# pred <- read_stars(pred_path)
+pred <- rast(pred_path)
+setCats(pred, value = color_tb$type, index = color_tb$id)
+pred <- st_as_stars(pred)
+
+# plot
+# Get examples
+tiles <- read_sf('data/geoms/tiles_nicfi_north.geojson')
+id_selected <- c('1226-1012', '1227-1005', '1209-997', '1219-1017',
+                 '1234-992', '1211-1008', '1236-1007','1220-995')
+tiles <- tiles %>% filter(tile %in% id_selected) %>% 
+    st_transform(crs = crs(rast(pred_path))) %>% 
+    mutate(id = 1:nrow(.))
+rst_tiles <- lapply(1:nrow(tiles), function(n){
+    tm <- st_crop(pred, tiles %>% slice(n)) %>% 
+        tm_shape() + 
+        tm_raster("landcover_north", 
+              n = 8, style = 'cat',
+              labels = color_tb$type,
+              palette = color_tb$color) +
+        tm_layout(frame = F,
+                  legend.show = F,
+                  title.position = c(0, 0.9),
+                  title = tiles %>% slice(n) %>% pull(id))
+     tmap_grob(tm)
+})
+plot_left <- ggarrange(
+    rst_tiles[[1]], rst_tiles[[2]], rst_tiles[[3]], 
+    rst_tiles[[4]], ncol = 1, nrow = 4)
+plot_right <- ggarrange(
+    rst_tiles[[5]], rst_tiles[[6]], rst_tiles[[7]],
+    rst_tiles[[8]], ncol = 1, nrow = 4)
+
+tmap_mode("plot")
+pred_final <- tm_shape(pred) +
+    tm_raster("landcover_north", 
+              title = "Land cover types",
+              n = 8, style = 'cat',
+              labels = color_tb$type,
+              palette = color_tb$color) +
+    tm_shape(tiles) +
+    tm_borders("black", lwd = 1.2) +
+    tm_text("id", col = 'black', fontface = "bold", size = 0.8) +
+    tm_layout(frame = F,
+              legend.show = F,
+              outer.margins = c(0.02, 0.01, 0, 0.01),
+              inner.margins = 0)
+pred_final <- tmap_grob(pred_final)
+
+# Get legend
+r_df <- data.frame(x = 1:8, 
+                   y = 1:8,
+                   rst = as.factor(1:8))
+legend_lc <- ggplot() + 
+    geom_raster(
+        data = r_df, 
+        aes(x = x, y = y, 
+            fill = rst)) +
+    scale_fill_manual('Land cover',
+                      values = color_tb$color, 
+                      breaks = 1:8,
+                      labels = color_tb$type) +
+    theme_minimal() +
+    theme(legend.position = 'right',
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))+
+    guides(fill = guide_legend(ncol = 2))
+legend_lc <- get_legend(legend_lc)
+
+tbl_theme <- gridExtra::ttheme_default(
+    core = list(fg_params=list(cex = 0.6),
+                bg_params = list(fill = 'gray95')),
+    colhead = list(fg_params=list(cex = 0.7)),
+    rowhead = list(fg_params=list(cex = 0.7)))
+tbl_conf <- tableGrob(mean_std, rows = NULL, theme = tbl_theme)
+legend_lc <- ggarrange(NA, tbl_conf, NA, legend_lc, NA,
+                       ncol = 5, widths = c(1, 2, 1, 2, 1))
+
+pred_final_plt <- ggarrange(pred_final, legend_lc, NA,
+                        nrow = 3, heights = c(5, 1, 0.6))
+pred_example <- ggarrange(plot_left, pred_final_plt, plot_right,
+          ncol = 3, widths = c(1, 3, 1))
+ggsave(here('docs/figures/pred_example.png'),
+       pred_example,
+       width = 7, height = 6, dpi = 300)
+```
+
 ## Sensitivity analysis
 ### Quality weights
-#### Score factor
+#### Correctness
 ```{r}
+library(tidyverse)
+library(gridExtra)
+
+# Define function
+get_curves <- function(experiment_name,
+                       step = 59,
+                       path = here('results/scalar/compare_score')){
+    # Get file names
+    fns <- list.files(path, 
+                      pattern = experiment_name,
+                      full.names = T)
+    fns <- fns[str_detect(fns, 'Validate')]
+    
+    # Process each csv
+    scalars <- lapply(fns, function(fn){
+        scalar <- read.csv(fn, stringsAsFactors = F) %>% 
+            mutate(Step = Step / step) %>% # step of each epoch
+            dplyr::select(-Wall.time)
+    })
+    names(scalars) <- gsub(
+        '.csv', "", 
+        str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+    
+    scalars
+}
+
 # Clean scalar csvs
 curves_no_weight <- get_curves(
     'unet_no_weight',
     path = here('results/scalar/compare_score'))
-curves_score02 <- get_curves(
-    'unet_score_02',
+curves_k05 <- get_curves(
+    'unet_k05_only',
     path = here('results/scalar/compare_score'))
-curves_score08 <- get_curves(
-    'unet_score_08',
+curves_k15 <- get_curves(
+    'unet_k15_only',
     path = here('results/scalar/compare_score'))
-curves_score16 <- get_curves(
-    'unet_score_16',
-    path = here('results/scalar/compare_score'))
-curves_score32 <- get_curves(
-    'unet_score_32',
-    path = here('results/scalar/compare_score'))
-curves_score100 <- get_curves(
-    'unet_score_100',
+curves_k30 <- get_curves(
+    'unet_k3_only',
     path = here('results/scalar/compare_score'))
 
-types <- c('AA', 'IoU', 'Cropland', 'Forest', 
+types <- c('AA', 'mIoU', 'Cropland', 'Forest', 
            'Grassland', 'Shrubland', 'Water', 
            'Built-up', 'Bareland')
 content <- do.call(rbind, lapply(types, function(type){
     if (type == 'Built-up') {
         item <- 'Urban'
-        } else{item <- type}
+    } else if (type == 'mIoU'){
+        item <- 'IoU'
+    } else {item <- type}
     list(curves_no_weight[[item]],
-         curves_score02[[item]],
-         curves_score08[[item]],
-         curves_score16[[item]],
-         curves_score32[[item]],
-         curves_score100[[item]]) %>% 
+         curves_k05[[item]],
+         curves_k15[[item]],
+         curves_k30[[item]]) %>% 
         reduce(left_join, by = "Step") %>% 
-        `colnames<-`(c("Epoch", '0', '0.2', '0.8', 
-                       '1.6', '3.2', '10')) %>% 
+        `colnames<-`(c("Epoch", '0', '0.5', '1.5', '3.0')) %>% 
         mutate(Item = type) %>% 
         pivot_longer(cols = setdiff(names(.), c("Epoch", 'Item')),
-                     names_to = 'Weight factor', 
+                     names_to = 'k of logistic function', 
                      values_to = 'Value')
 })) %>% mutate(Item = factor(Item, levels = types),
-               `Weight factor` = factor(
-                   `Weight factor`, 
-                   levels = c('0', '0.2', '0.8', 
-                              '1.6', '3.2', '10')))
+               `k of logistic function` = factor(
+                   `k of logistic function`, 
+                   levels = c('0', '0.5', '1.5', '3.0')))
+
+# Calculate mean and sd of last 10 epochs
+content_plot <- content %>% 
+  filter(Epoch >= 21) %>% 
+  filter(Item %in% c('AA', 'mIoU')) %>% 
+  group_by(Item, `k of logistic function`) %>% 
+  summarise(Mean = mean(Value), 
+            sd = sd(Value))
 
 # Get final plot
-curves_score <- ggplot(content, aes(x = Epoch, y = Value)) +
-    # geom_line(aes(color = `Weight factor`)) +
-    geom_smooth(aes(color = `Weight factor`), span = 0.2,
-                se = F, size = 0.6) +
-    scale_color_manual(
-        values = c('Black', 
-                   RColorBrewer::brewer.pal(5, "Dark2"))) +
-    # scale_color_brewer(palette = "Dark2") +
-    facet_wrap(~Item, scales = 'free_y') +
-    labs(y = 'Accuracy') +
-    theme_bw() +
-    theme(legend.position = 'top') +
-    guides(color = guide_legend(nrow = 1))
-ggsave(here('docs/figures/curves_score.png'),
-       curves_score,
-       width = 8, height = 5, dpi = 300)
+curves_corr <- ggplot(
+  content_plot, 
+  aes(x = `k of logistic function`, y = Mean)) + 
+  geom_point() +
+  geom_errorbar(aes(ymin = Mean - sd, ymax = Mean + sd), width=.2,
+                position = position_dodge(0.05)) +
+  facet_wrap(~Item, scales = 'free_y') +
+  labs(y = 'Value', x = expression(paste(k, ' of logistic function'))) +
+  theme_bw()
+# ggsave(here('docs/figures/sa_correctness.png'),
+#        curves_corr,
+#        width = 6.5, height = 2, dpi = 300)
 ```
 
 #### Hardiness
 ```{r}
 # Clean scalar csvs
-curves_score08_nohard <- get_curves(
-    'unet_score_08',
+curves_k15_nohard <- get_curves(
+    'unet_k15_only',
     path = here('results/scalar/compare_score'))
-curves_hard2 <- get_curves(
-    'unet_score08_hardiness_2',
+curves_k15_h11 <- get_curves(
+    'unet_k15_hard11',
     path = here('results/scalar/compare_score'))
-curves_hard4 <- get_curves(
-    'unet_score08_hardiness_4',
+curves_k15_h12 <- get_curves(
+    'unet_k15_hard12',
     path = here('results/scalar/compare_score'))
-curves_hard6 <- get_curves(
-    'unet_score08_hardiness_6',
+curves_k15_h14 <- get_curves(
+    'unet_k15_hard14',
     path = here('results/scalar/compare_score'))
 
-types <- c('AA', 'IoU', 'Cropland', 'Forest', 
+types <- c('AA', 'mIoU', 'Cropland', 'Forest', 
            'Grassland', 'Shrubland', 'Water', 
            'Built-up', 'Bareland')
 content <- do.call(rbind, lapply(types, function(type){
     if (type == 'Built-up') {
         item <- 'Urban'
-        } else{item <- type}
-    list(curves_score08_nohard[[item]],
-         curves_hard2[[item]],
-         curves_hard4[[item]],
-         curves_hard6[[item]]) %>% 
+    } else if (type == 'mIoU'){
+        item <- 'IoU'
+    } else {item <- type}
+    list(curves_k15_nohard[[item]],
+         curves_k15_h11[[item]],
+         curves_k15_h12[[item]],
+         curves_k15_h14[[item]]) %>% 
         reduce(left_join, by = "Step") %>% 
-        `colnames<-`(c("Epoch", '0', '2', '4', '6')) %>% 
+        `colnames<-`(c("Epoch", '1', '1.1', '1.2', '1.4')) %>% 
         mutate(Item = type) %>% 
         pivot_longer(cols = setdiff(names(.), c("Epoch", 'Item')),
                      names_to = 'Weight scale', 
@@ -951,29 +1257,346 @@ content <- do.call(rbind, lapply(types, function(type){
 })) %>% mutate(Item = factor(Item, levels = types),
                `Weight scale` = factor(
                    `Weight scale`, 
-                   levels = c('0', '2', '4', '6')))
+                   levels = c('1', '1.1', '1.2', '1.4')))
+
+# Calculate mean and sd of last 10 epochs
+content_plot <- content %>% 
+  filter(Epoch >= 21) %>% 
+  filter(Item %in% c('AA', 'mIoU')) %>% 
+  group_by(Item, `Weight scale`) %>% 
+  summarise(Mean = mean(Value), 
+            sd = sd(Value))
 
 # Get final plot
-curves_hard <- ggplot(content, aes(x = Epoch, y = Value)) +
-    geom_smooth(aes(color = `Weight scale`), span = 0.2,
-                se = F, size = 0.6) +
-    scale_color_manual(
-        values = c('Black', 
-                   RColorBrewer::brewer.pal(3, "Dark2"))) +
-    # scale_color_brewer(palette = "Dark2") +
-    facet_wrap(~Item, scales = 'free_y') +
-    labs(y = 'Accuracy') +
-    theme_bw() +
-    theme(legend.position = 'top') +
-    guides(color = guide_legend(nrow = 1))
-ggsave(here('docs/figures/curves_hard.png'),
-       curves_hard,
-       width = 8, height = 5, dpi = 300)
+curves_diff <- ggplot(
+  content_plot, 
+  aes(x = `Weight scale`, y = Mean)) + 
+  geom_point() +
+  geom_errorbar(aes(ymin = Mean - sd, ymax = Mean + sd), width=.2,
+                position = position_dodge(0.05)) +
+  facet_wrap(~Item, scales = 'free_y') +
+  labs(y = 'Value', x = expression(s[max])) +
+  theme_bw()
+# ggsave(here('docs/figures/sa_difficulty.png'),
+#        curves_diff,
+#        width = 6.5, height = 2, dpi = 300)
+
+params_cost <- ggarrange(curves_corr, curves_diff,
+                        nrow = 2)
+ggsave(here('docs/figures/sa_loss_params.png'),
+       params_cost,
+       width = 6.5, height = 4, dpi = 300)
 ```
 
 ### Sampling
 
 ```{r}
+# Clean scalar csvs
+curves_full <- get_curves(
+    'unet_k15_only',
+    path = here('results/scalar/compare_score'))
+curves_one_tile <- get_curves(
+    step = 19, 
+    'unet_one_tile',
+    path = here('results/scalar/compare_sampling'))
+curves_random_34 <- get_curves(
+    step = 19,
+    'unet_random_34',
+    path = here('results/scalar/compare_sampling'))
+curves_hori_strip_34 <- get_curves(
+    step = 19,
+    'unet_hori_strip_34',
+    path = here('results/scalar/compare_sampling'))
+curves_vert_strip_34 <- get_curves(
+    step = 18,
+    'vert_strip_34',
+    path = here('results/scalar/compare_sampling'))
+curves_two_tile <- get_curves(
+    step = 39, 
+    'unet_two_tile',
+    path = here('results/scalar/compare_sampling'))
+curves_random_67 <- get_curves(
+    step = 39,
+    'unet_random_67',
+    path = here('results/scalar/compare_sampling'))
+curves_hori_strip_67 <- get_curves(
+    step = 39,
+    'unet_hori_strip_67',
+    path = here('results/scalar/compare_sampling'))
+curves_vert_strip_67 <- get_curves(
+    step = 39,
+    'vert_strip_67',
+    path = here('results/scalar/compare_sampling'))
 
+types <- c('AA', 'mIoU', 'Cropland', 'Forest', 
+           'Grassland', 'Shrubland', 'Water', 
+           'Built-up', 'Bareland')
+content <- do.call(rbind, lapply(types, function(type){
+    if (type == 'Built-up') {
+        item <- 'Urban'
+    } else if (type == 'mIoU'){
+        item <- 'IoU'
+    } else {item <- type}
+    list(curves_full[[item]],
+         curves_one_tile[[item]],
+         curves_random_34[[item]],
+         curves_hori_strip_34[[item]],
+         curves_vert_strip_34[[item]],
+         curves_two_tile[[item]],
+         curves_random_67[[item]],
+         curves_hori_strip_67[[item]],
+         curves_vert_strip_67[[item]]) %>% 
+        reduce(left_join, by = "Step") %>% 
+        `colnames<-`(c("Epoch", '3 samples/tile', '1 sample/tile', '34% (randomly)', 
+                       '34% (Hori-strip)', '34% (Vert-strip)',
+                       '2 samples/tile', '67% (randomly)', 
+                       '67% (Hori-strip)', '67% (Vert-strip)')) %>% 
+        mutate(Item = type) %>% 
+        pivot_longer(cols = setdiff(names(.), c("Epoch", 'Item')),
+                     names_to = 'Sampling method', 
+                     values_to = 'Value')
+})) %>% mutate(Item = factor(Item, levels = types),
+               `Sampling method` = factor(
+                   `Sampling method`, 
+                   levels = c('3 samples/tile', '1 sample/tile', '34% (randomly)', 
+                       '34% (Hori-strip)', '34% (Vert-strip)',
+                       '2 samples/tile', '67% (randomly)', 
+                       '67% (Hori-strip)', '67% (Vert-strip)')))
+
+# Calculate mean and sd of last 10 epochs
+content_plot <- content %>% 
+  filter(Epoch >= 21) %>% 
+  filter(`Sampling method` %in% 
+           c('1 sample/tile', '34% (randomly)',
+             '2 samples/tile', '67% (randomly)',
+             '3 samples/tile')) %>% 
+  filter(Item %in% c('AA', 'mIoU')) %>% 
+  rename(`Sampling strategy` = `Sampling method`) %>% 
+  group_by(Item, `Sampling strategy`) %>% 
+  summarise(Mean = mean(Value), 
+            sd = sd(Value))
+
+# Get final plot
+curves_sampling <- ggplot(
+  content_plot, aes(x = `Sampling strategy`, y = Mean)) + 
+  geom_point() +
+  geom_errorbar(aes(ymin = Mean - sd, ymax = Mean + sd), 
+                width =.2,
+                position = position_dodge(0.05)) +
+  facet_wrap(~Item, scales = 'free_y') +
+  labs(y = 'Value') +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  NULL + theme_bw()
+ggsave(here('docs/figures/sa_sampling.png'),
+       curves_sampling,
+       width = 6.5, height = 2.5, dpi = 300)
 ```
 
+## Appendix
+### Evaluation of LC products
+
+Use our independent test dataset to evaluate the quality of LC products used in this study.
+
+```{r}
+library(here)
+library(sf)
+library(terra)
+library(caret)
+
+sample_test <- vect(here('data/north/plys_holdout_check.geojson'))
+lc_types <- data.frame(id = 1:10,
+                       type = c('cropland', 'forest', 'grassland',
+                                'shrubland', 'wetland', 'water', 
+                                "tundra", 'built-up',
+                                'bareland', 'snow/ice'))
+tiles <- read_sf(
+    here('data/geoms/tiles_nicfi_north.geojson'),
+    stringsAsFactors = F) %>% vect()
+
+# ESA LC
+esaglc <- rast(here('data/landcovers/esaglc_rcl.tif'))
+esaglc_eval <- terra::extract(esaglc, sample_test, list = T, touches = T)
+esaglc_eval <- do.call(rbind, lapply(1:length(esaglc_eval), function(n){
+    rst_vals <- esaglc_eval[[n]][[1]]
+    data.frame(product = rst_vals,
+               test = sample_test[n, ]$landcover)
+}))
+
+esaglc_eval <- left_join(esaglc_eval, lc_types, 
+                       by = c('test' = 'type')) %>% 
+    dplyr::select(-test) %>% 
+    rename(test = id) %>% 
+    filter(product != 5) %>% 
+    mutate(product = as.factor(product),
+           test = as.factor(test))
+cf <- confusionMatrix(data=esaglc_eval$product, reference = esaglc_eval$test)
+save(cf, file = here('docs/figures/esaglc_test_conf.rda'))
+
+acc_test <- cf$byClass
+write.csv(acc_test, here('docs/figures/esaglc_test_acc.csv'),
+          row.names = F)
+
+# fromglc
+fromglc <- rast(here('data/landcovers/fromglc_rcl.tif'))
+fromglc_eval <- terra::extract(fromglc, sample_test, list = T, touches = T)
+fromglc_eval <- do.call(rbind, lapply(1:length(fromglc_eval), function(n){
+    rst_vals <- fromglc_eval[[n]][[1]]
+    data.frame(product = rst_vals,
+               test = sample_test[n, ]$landcover)
+}))
+
+fromglc_eval <- left_join(fromglc_eval, lc_types, 
+                       by = c('test' = 'type')) %>% 
+    dplyr::select(-test) %>% 
+    rename(test = id) %>% 
+    filter(product != 5) %>% 
+    mutate(product = as.factor(product),
+           test = as.factor(test))
+cf <- confusionMatrix(data=fromglc_eval$product, reference = fromglc_eval$test)
+save(cf, file = here('docs/figures/fromglc_test_conf.rda'))
+
+acc_test <- cf$byClass
+write.csv(acc_test, here('docs/figures/fromglc_test_acc.csv'),
+          row.names = F)
+
+# gfsad
+gfsad <- rast(here('data/landcovers/gfsad_rcl.tif'))
+gfsad_eval <- terra::extract(gfsad, sample_test, list = T, touches = T)
+gfsad_eval <- do.call(rbind, lapply(1:length(gfsad_eval), function(n){
+    rst_vals <- gfsad_eval[[n]][[1]]
+    data.frame(product = rst_vals,
+               test = sample_test[n, ]$landcover)
+}))
+
+gfsad_eval <- left_join(gfsad_eval, lc_types, 
+                       by = c('test' = 'type')) %>% 
+    dplyr::select(-test) %>% 
+    rename(test = id) %>% 
+    mutate(test = ifelse(test == 6, 6, ifelse(test == 1, 1, 0))) %>% 
+    mutate(product = as.factor(product),
+           test = as.factor(test))
+cf <- confusionMatrix(data = gfsad_eval$product, reference = gfsad_eval$test)
+save(cf, file = here('docs/figures/gfsad_test_conf.rda'))
+
+acc_test <- cf$byClass
+write.csv(acc_test, here('docs/figures/gfsad_test_acc.csv'),
+          row.names = F)
+
+# Tansis
+tansis <- rast(list.files(here('data/tansis'), 
+                          full.names = T, pattern = '.tif$'))
+tansis <- tansis$TZ__7
+tansis <- project(tansis, crs(sample_test), method = 'near')
+tansis[is.na(tansis)] <- 0
+
+tansis_eval <- terra::extract(tansis, sample_test, list = T, touches = T)
+tansis_eval <- do.call(rbind, lapply(1:length(tansis_eval), function(n){
+    rst_vals <- tansis_eval[[n]][[1]]
+    data.frame(product = rst_vals,
+               test = sample_test[n, ]$landcover)
+}))
+
+tansis_eval <- left_join(tansis_eval, lc_types, 
+                         by = c('test' = 'type')) %>% 
+  dplyr::select(-test) %>% 
+  rename(test = id) %>% 
+  mutate(test = ifelse(test == 1, 1, 0)) %>% 
+  na.omit() %>% 
+  mutate(product = as.factor(product),
+         test = as.factor(test))
+cf <- confusionMatrix(data = tansis_eval$product, 
+                      reference = tansis_eval$test,
+                      positive = "1")
+save(cf, file = here('docs/figures/tansis_test_conf.rda'))
+
+acc_test <- cf$byClass
+write.csv(acc_test, here('docs/figures/tansis_test_acc.csv'))
+```
+
+### RF tuning
+
+```{r}
+library(here)
+library(dplyr)
+library(ramify)
+library(ranger)
+library(parsnip)
+library(tidymodels)
+library(vip)
+library(dials)
+library(ggplot2)
+library(ggpubr)
+
+load("~/Dropbox/research/hrlcm/data/north/forest_vip.rda")
+vip_figure <- vip(forest_vip, 
+    num_features = forest_vip$fit$num.independent.variables,
+    aesthetics = list(color = "transparent", 
+                      fill = "red")) +
+    theme_light()
+
+load("~/Dropbox/research/hrlcm/data/north/tune_res.rda")
+tune_figure <- tune_res %>%
+    collect_metrics() %>%
+    filter(.metric == "accuracy") %>%
+    mutate(min_n = factor(min_n)) %>%
+    ggplot(aes(mtry, mean, color = min_n)) +
+    geom_line() + geom_point() +
+    scale_color_brewer(palette = "Dark2") +
+    labs(y = "Accuracy") +
+    theme_light()
+
+params_fig <- ggarrange(vip_figure, tune_figure,
+                        ncol = 2, widths = c(1, 1.5))
+ggsave(here('docs/figures/rf_tuning.png'),
+       params_fig,
+       width = 8, height = 4, dpi = 300)
+```
+
+### Confusion matrix heatmap for RF
+
+```{r}
+cm <- pred_eval %>% 
+    conf_mat(truth = test, 
+             estimate = predict)
+cm_figure <- autoplot(cm, type = 'heatmap')
+ggsave(here('docs/figures/rf_cm_heatmap.png'),
+       cm_figure,
+       width = 4, height = 3, dpi = 300)
+```
+
+### Confusion matrix heatmap for U-Net
+```{r}
+cm <- pred_eval %>% 
+    conf_mat(truth = test, 
+             estimate = predict)
+cm_figure <- autoplot(cm, type = 'heatmap')
+ggsave(here('docs/figures/unet_cm_heatmap.png'),
+       cm_figure,
+       width = 4, height = 3, dpi = 300)
+```
+
+### Land cover classification confidence
+```{r}
+library(stars)
+library(tmap)
+library(tmaptools)
+
+pred_path <- here(file.path('results/dl/prediction',
+                            'unet_k15_only_clr_200epc',
+                            'landcover_confidence_north_withwl.tif'))
+pred <- read_stars(pred_path)
+conf_fig <- tm_shape(pred) +
+    tm_raster("landcover_confidence_north_withwl.tif", 
+              title = "Confidence",
+              style = 'cont',
+              palette = rev(
+                  get_brewer_pal('Greys', 
+                                 plot = F, 
+                                 contrast=c(.25, 1)))) +
+    tm_layout(frame = F,
+              legend.position = c(0.8, 0.7))
+tmap_save(conf_fig, 
+          here('docs/figures/conf_figure.png'), 
+          width = 4, height = 4, units = 'in',
+          dpi = 300)
+```
