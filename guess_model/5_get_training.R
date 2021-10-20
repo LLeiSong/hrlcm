@@ -108,7 +108,7 @@ tiles_exist <- list.files("/Volumes/elephant/pred_stack") %>%
   str_extract('[0-9]+-[0-9]+')
 
 ## batch processing
-tiles_todo <- setdiff(unique(samples$tile), tiles_exist)
+tiles_todo <- setdiff(unique(tiles$tile), tiles_exist)
 mclapply(tiles_todo,
   function(tile_nm) {
     # Get imgs and save out
