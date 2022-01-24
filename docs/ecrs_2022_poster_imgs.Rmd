@@ -1,0 +1,304 @@
+---
+title: "ecrs_2022_poster"
+author: "Lei Song"
+date: "1/24/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(here)
+library(terra)
+library(stars)
+library(tmap)
+library(ggpubr)
+library(gridExtra)
+
+pred_path <- here(file.path('results/dl/prediction',
+                           'unet_k15_only_clr_200epc',
+                           'landcover_north_withwl.tif'))
+color_tb <- data.frame(
+    id = 1:8,
+    type = c("Cropland", "Forest", 
+             "Grassland", "Shrubland", 
+             "Water", 'Built-up', "Bareland", 
+             'Wetland'),
+    color = c('#ff7f00', '#074702', '#b2df8a',
+              '#33a02c', '#3347f9', '#5a6057',
+              '#fdbf6f', '#0ea591'))
+pred <- read_stars(pred_path)
+
+# plot
+tmap_mode("plot")
+pred_final <- tm_shape(pred) +
+    tm_raster("landcover_north_withwl.tif", 
+              title = "Land cover types",
+              n = 8, style = 'cat',
+              labels = color_tb$type,
+              palette = color_tb$color) +
+    tm_layout(frame = F,
+              legend.show = F,
+              outer.margins = c(0.02, 0.01, 0, 0.01),
+              inner.margins = 0,
+              bg.color = 'transparent')
+pred_final <- tmap_grob(pred_final)
+
+# Get legend
+r_df <- data.frame(x = 1:8, 
+                   y = 1:8,
+                   rst = as.factor(1:8))
+legend_lc <- ggplot() + 
+    geom_raster(
+        data = r_df, 
+        aes(x = x, y = y, 
+            fill = rst)) +
+    scale_fill_manual('Land cover',
+                      values = color_tb$color, 
+                      breaks = 1:8,
+                      labels = color_tb$type) +
+    theme_minimal() +
+    theme(legend.position = 'right',
+          legend.text = element_text(color = 'black'),
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"),
+          plot.background = element_rect(fill = "transparent"))+
+    guides(fill = guide_legend(ncol = 1))
+legend_lc <- get_legend(legend_lc)
+pred_final_plt <- ggarrange(pred_final, legend_lc, NA,
+                        ncol = 3, widths = c(5, 1, 2))
+ggsave(here('docs/figures/ecrs_results.png'),
+       pred_final_plt, 
+       width = 8, height = 6, dpi = 600)
+```
+
+```{r}
+library(raster)
+library(glue)
+library(here)
+library(sf)
+library(nngeo)
+library(ggplot2)
+library(RColorBrewer)
+library(dplyr)
+library(sf)
+library(rasterVis)
+library(ggnewscale)
+library(cowplot)
+library(ggpubr)
+
+# Read boundaries
+study_area <- read_sf(here('data/geoms/study_area.geojson')) %>% 
+    st_remove_holes()
+nicfi_tiles <- read_sf(here('data/geoms/tiles_nicfi_north.geojson')) %>% 
+    mutate(`NICFI tile` = 1)
+
+# Make the main figure
+main_fg <- ggplot(nicfi_tiles) +
+    geom_sf(fill = NA, 
+            aes(color = "grey"), 
+            lwd = 0.5) +
+    geom_sf(data = study_area, fill = NA, 
+            aes(color = 'red', lty = 'solid')) +
+  scale_color_identity(name = '',
+                         breaks = c('black', 'red'),
+                         labels = c('NICFI tiles', 'Study area'),
+                         guide = 'legend') +
+    scale_linetype_identity(name = '',
+                            breaks = c('dotted', 'solid'),
+                            labels = c('NICFI tiles', 'Study area'),
+                            guide = 'legend') +
+    theme_minimal() + 
+    theme(legend.position = 'none',
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))
+ggsave(here('docs/figures/ecrs_tiling.png'),
+       main_fg, 
+       width = 6, height = 6, dpi = 600)
+
+id_selected <- '1226-999'
+# Read tiles
+nicfi_tiles <- read_sf(
+    here('data/geoms/tiles_nicfi_north.geojson'))
+
+# Sub-tiling
+indices <- matrix(1:64, 8, 8)
+indices <- indices[, ncol(indices):1]
+sub_tiling <- nicfi_tiles %>% 
+    filter(tile == id_selected) %>% 
+    st_make_grid(n = c(8, 8)) %>% 
+    st_sf() %>% 
+    mutate(index = as.vector(indices))
+trains_inside <- sub_tiling %>% 
+    filter(index %in% (read.csv(
+    here('results/north/dl_catalog_train.csv'),
+    stringsAsFactors = F) %>% 
+    filter(tile == id_selected) %>% 
+    pull(index))) %>% 
+    mutate(Usage = 'Train')
+valids_inside <- sub_tiling %>% 
+    filter(index %in% (read.csv(
+    here('results/north/dl_catalog_valid.csv'),
+    stringsAsFactors = F) %>% 
+    filter(tile == id_selected) %>% 
+    pull(index))) %>% 
+    mutate(Usage = 'Validate')
+# Labels of each sub-tile
+sub_tiles <- rbind(trains_inside, valids_inside) %>% 
+    arrange(index); rm(trains_inside, valids_inside)
+
+# Sub-tiling figure
+sub_tiling_fg <- ggplot(sub_tiling) + 
+    geom_sf(data = sub_tiles, aes(fill = Usage),
+            color = 'black', lwd = 0.3) +
+    scale_fill_manual(values = c('forestgreen', 'orangered')) +
+    geom_sf(color = 'black', fill = NA, lwd = 0.3) + 
+    geom_sf_text(aes(label = index), size = 10) +
+    theme_minimal() +
+    theme(legend.position = 'bottom',
+          legend.title = element_blank(),
+          legend.text = element_text(size = 30),
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.title = element_text(hjust = -0.15, vjust = -6),
+          plot.margin = unit(rep(0, 4),"cm"))
+
+ggsave(here('docs/figures/ecrs_subtiling.png'),
+       sub_tiling_fg, 
+       width = 6, height = 6, dpi = 600)
+
+sub_tiles <- sub_tiles %>% filter(index == 12)
+
+# Weak labels
+labels_esb <- raster(here('data/north/lc_labels_north_mask.tif')) %>% 
+        crop(sub_tiles)
+
+labels_guess <- lapply(sub_tiles$index, function(id){
+    prefix <- glue('results/north/guess_labels/guess_{id_selected}')
+    raster(here(glue('{prefix}_{id}.tif')))
+})[[1]]
+
+labels_refine <- lapply(sub_tiles$index, function(id){
+    prefix <- glue('results/north/refine_labels/{id_selected}')
+    raster(here(glue('{prefix}_{id}_label.tif')))
+})[[1]]
+
+labels_dl <- st_crop(pred, st_transform(sub_tiles, 
+                                        crs = st_crs(pred)))
+
+# Plot
+color_tb <- data.frame(
+    id = 1:7,
+    type = c("Cropland", "Forest", 
+             "Grassland", "Shrubland", 
+             "Water", 'Built-up', "Bareland"),
+    color = c('#ff7f00', '#074702', '#b2df8a',
+              '#33a02c', '#3347f9', '#5a6057',
+              '#fdbf6f'))
+plot_rst <- function(rst, bry){
+    r_df <- as.data.frame(rst, xy = TRUE) %>%
+        `colnames<-`(c('x', 'y', 'rst')) %>%
+        mutate(rst = as.factor(rst)) %>% 
+        na.omit()
+    colors <- color_tb %>% filter(id %in% unique(r_df$rst))
+    
+    # plot
+    ggplot() + 
+        geom_raster(
+            data = r_df, 
+            aes(x = x, y = y, 
+                fill = rst)) +
+        scale_fill_manual(
+            values = colors %>% pull(color), 
+            breaks = colors %>% pull(id),
+            labels = colors %>% pull(type)) +
+        geom_sf(data = bry, 
+                color = 'blue', fill = NA,
+                lty = 'dotted', lwd = 0.4) +
+        theme_minimal() +
+        theme(legend.position = 'none',
+              axis.title.x = element_blank(),
+              axis.text.x = element_blank(),
+              axis.ticks.x = element_blank(),
+              axis.title.y = element_blank(),
+              axis.text.y = element_blank(),
+              axis.ticks.y = element_blank(),
+              panel.grid.major = element_blank(), 
+              panel.grid.minor = element_blank(),
+              plot.margin = unit(rep(0, 4),"cm"))
+}
+
+plots_esb <- plot_rst(labels_esb, sub_tiles)
+
+plots_guess <- plot_rst(labels_guess, 
+                        sub_tiles %>% 
+                            st_transform(crs = crs(labels_guess)))
+
+plots_refine <- plot_rst(labels_refine, 
+                        sub_tiles %>% 
+                            st_transform(crs = crs(labels_refine)))
+plots_dl <- plot_rst(labels_dl, sub_tiles %>% 
+                            st_transform(crs = st_crs(labels_dl)))
+
+# Ensemble plots
+labels_fg <- ggarrange(plots_esb, plots_guess, plots_refine, 
+                       plots_dl, ncol = 4)
+ggsave(here('docs/figures/exrs_exp_labels.png'),
+       labels_fg, width = 10, height = 4, dpi = 300)
+```
+
+```{r}
+id_selected <- '1226-1002'
+# Read tiles
+nicfi_tiles <- read_sf(
+    here('data/geoms/tiles_nicfi_north.geojson'))
+
+# Sub-tiling
+indices <- matrix(1:64, 8, 8)
+indices <- indices[, ncol(indices):1]
+sub_tiles <- nicfi_tiles %>% 
+    filter(tile == id_selected) %>% 
+    st_make_grid(n = c(8, 8)) %>% 
+    st_sf() %>% 
+    mutate(index = as.vector(indices)) %>% 
+    filter(index == 44)
+fnames_nicfi <- list.files("/Volumes/elephant/plt_nicfi",
+                           pattern = id_selected,
+                           full.names = T)
+nicfi_s1 <- stack(fnames_nicfi[1]) %>% subset(1:4)
+nicfi_s1 <-  nicfi_s1%>% 
+    crop(sub_tiles %>% st_transform(crs = crs(nicfi_s1)))
+
+s1_fg <- ggRGB(nicfi_s1, r = 4, g = 3, b = 2, 
+               scale = max(values(nicfi_s1)[, 2:4]), 
+               stretch = 'hist') +
+    theme_minimal() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))
+```
+
