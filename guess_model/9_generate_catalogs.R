@@ -29,8 +29,8 @@ library(parallel)
 message('Step 2: Select validate dataset')
 
 # Get labeled tiles
-tile_nm <- 'catalog_sample_tiles_update.geojson'
-tiles <- here(glue('results/north/{tile_nm}')) %>% 
+tile_nm <- 'catalog_sample_tiles.geojson'
+tiles <- here(glue('results/tanzania/{tile_nm}')) %>% 
   read_sf(); rm(tile_nm)
 
 char2seed <- function(x){
@@ -49,11 +49,28 @@ char2seed <- function(x){
 # Select 1 out of 4 from a tile as validation dataset
 tiles_valid <- do.call(rbind, lapply(unique(tiles$tile), 
                       function(tile_id){
-  char2seed(tile_id)
-  tiles %>% 
-    filter(tile == tile_id) %>% 
-    filter(score == max(score)) %>% 
-    sample_n(1)
+  sub_tiles <- tiles %>% filter(tile == tile_id) %>% 
+      st_drop_geometry() %>% 
+      mutate(surfix = paste(tile, index, sep = '_')) %>% 
+      mutate(score_path = file.path(here('results/tanzania/guess_labels'),
+                                    sprintf('score_%s.tif', surfix)))
+  vals <- do.call(rbind, lapply(sub_tiles$surfix, function(sur) {
+      pth <- sub_tiles %>% filter(surfix == sur) %>% 
+          pull(score_path)
+      scores <- values(rast(pth))
+      data.frame(surfix = sur,
+                 mean = mean(scores, na.rm = T),
+                 sd = sd(scores, na.rm = T),
+                 min = min(scores, na.rm = T),
+                 max = max(scores, na.rm = T))
+  }))
+  print(vals)
+  id <- left_join(sub_tiles, vals, by = 'surfix') %>% 
+      select(-score_path) %>% 
+      arrange(desc(mean), sd, desc(min), desc(max)) %>% 
+      slice(1) %>% pull(index)
+  tiles %>% filter(tile == tile_id) %>% 
+      filter(index == id)
 }))
 
 # Save out

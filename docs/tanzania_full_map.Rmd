@@ -1,0 +1,170 @@
+---
+title: "Make the full map of Tanzania"
+author: "Lei Song"
+date: "1/4/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
+
+## Introduction
+
+This document is to record steps for making the full map of Tanzania.
+
+- Generate guessing labels (done)
+- Random select and manually check validate dataset
+- Fine tune a U-Net model for the whole country
+
+### Validate dataset generation
+#### Check the quality of labels
+```{r}
+tiles <- read_sf("results/tanzania/catalog_sample_tiles.geojson")
+library(tidyr)
+# Check labels
+stats_guess_labels <- do.call(
+    rbind, 
+    lapply(unique(tiles$tile), 
+           function(tile_id){
+               sub_tiles <- tiles %>% filter(tile == tile_id) %>% 
+                   st_drop_geometry() %>% 
+                   mutate(surfix = paste(tile, index, sep = '_')) %>% 
+                   mutate(score_path = file.path(here('results/tanzania/guess_labels'),
+                                                 sprintf('score_%s.tif', surfix)))
+               do.call(rbind, lapply(sub_tiles$surfix, function(sur) {
+                   pth <- sub_tiles %>% filter(surfix == sur) %>% 
+                       pull(score_path)
+                   scores <- values(rast(pth))
+                   na_ratio <- sum(is.na(scores))/ length(scores)
+                   data.frame(surfix = sur,
+                              hasna = any(is.na(scores)), 
+                              na_ratio = na_ratio,
+                              mean = mean(scores, na.rm = T),
+                              sd = sd(scores, na.rm = T),
+                              min = min(scores, na.rm = T),
+                              max = max(scores, na.rm = T))}))
+               }
+           )
+    )
+save(stats_guess_labels, file = 'results/tanzania/stats_guess_labels.rda')
+err_labels <- stats_guess_labels %>% filter(hasna == TRUE) %>% 
+    separate(col = surfix, into = c('tile', 'index'), sep = "_")
+```
+
+#### Check the quality of images
+
+```{r}
+# Check images
+stack_dir <- '/Volumes/elephant/pred_stack'
+img_quality <- do.call(
+    rbind, 
+    mclapply(unique(tiles$tile), 
+             function(tile_id){
+                 imgs <- rast(file.path(stack_dir, paste0(tile_id, '.tif')))
+                 nas <- is.na(imgs)
+                 zeros <- imgs == 0
+                 rm(imgs)
+                 nas <- freq(nas) %>% as.data.frame() %>% 
+                     mutate(count = count / (dim(nas)[1] * dim(nas)[2])) %>% 
+                     rename(na_ratio = count) %>% 
+                     mutate(tile_id = tile_id) %>% 
+                     filter(value == 1) %>% select(-value)
+                 zeros <- freq(zeros) %>% as.data.frame() %>% 
+                     mutate(count = count / (dim(zeros)[1] * dim(zeros)[2])) %>% 
+                     rename(zero_ratio = count) %>% 
+                     mutate(tile_id = tile_id) %>% 
+                     filter(value == 1) %>% select(-value)
+                 gc()
+                 full_join(nas, zeros, by = c('tile_id', 'layer')) %>% 
+                     select(tile_id, layer, na_ratio, zero_ratio)
+             }, mc.cores = 6))
+
+imgs <- rast(file.path(stack_dir, paste0(tiles$tile[1], '.tif')))
+layers <- data.frame(layer_name = names(imgs)) %>% 
+    mutate(layer = 1:nrow(.))
+img_quality <- left_join(img_quality, layers, by = 'layer') %>% 
+    select(tile_id, layer_name, na_ratio, zero_ratio); rm(imgs, layers)
+save(img_quality, file = 'results/tanzania/img_quality.rda')
+img_withna <- img_quality %>% filter(!is.na(na_ratio)) %>% 
+    pull(tile_id) %>% unique()
+img_withzero <- img_quality %>% filter(zero_ratio > 0.3) %>% 
+    filter(!grepl("vv|vh", layer_name)) %>% 
+    pull(tile_id) %>% unique()
+```
+
+There are a few problematic images
+
+```{r}
+# 1192-988, water, missing partial image
+# 1207-971, land, missing half image
+# 1229-975, land, seems weird
+# 1234-957, land, missing the whole image
+# 1246-962, land, missing the whole image
+# VH
+# 1200-974, land and water, seems weird
+# 1199-1018, land, seems weird
+# 1245-974, land, a small fragment seems weird
+```
+
+#### Get candidate validation
+
+Get one sub tile from each tile randomly as validation. Not all of them will be used. After manually checking, low quality ones that cannot be fixed easily would be excluded.
+
+Why random ones rather than good ones? To optimize the cooperation of random forest and U-Net. Because if selecting good ones, the results might be biased to easy-to-model instances.
+```{r}
+skip_tile <- err_labels %>% pull(tile) %>% unique()
+stats_guess_labels <- stats_guess_labels %>% 
+    separate(col = surfix, into = c('tile', 'index'), sep = "_") %>% 
+    filter(!tile %in% skip_tile)
+set.seed(124)
+validate_labels <- stats_guess_labels %>% 
+    group_by(tile) %>% 
+    sample_n(1) %>% ungroup() %>% 
+    dplyr::select(tile, index) %>% 
+    mutate(index = as.integer(index))
+
+# Check the validate
+# 1 is TRUE, 0 is FALSE
+tiles_validate <- right_join(tiles, validate_labels, by = c("tile", "index")) %>% 
+    mutate(use = 1, modify = 0)
+plot(tiles_validate$geometry)
+write_sf(tiles_validate, "results/tanzania/catalog_tiles_validate.geojson")
+```
+
+Next, the author manually checked these validation sub-tiles. Only the good ones would be used for validation.
+
+First, move these validation candidate into a separate folder.
+
+```{r}
+copy_from <- here("results/tanzania/guess_labels")
+copy_to <- here('results/tanzania/temp')
+if (!dir.exists(copy_to)) dir.create(copy_to)
+tiles_validate <- tiles_validate %>% 
+    mutate(tile_id = paste(tile, index, sep = "_"))
+cp <- lapply(tiles_validate$tile_id, function(tile_move) {
+    fnames_from <- sprintf("%s/%s_%s.tif", 
+                           copy_from, c("guess", "scores", "score"), tile_move)
+    fnames_to <- sprintf("%s/%s_%s.tif", 
+                         copy_to, c("guess", "scores", "score"), tile_move)
+    file.copy(from = fnames_from, 
+              to = fnames_to)
+})
+```
+
+Next step is to check and fix other labels
+
+```{r}
+tile_index_val <- tiles_validate %>% 
+    mutate(tile_index = paste(tile, index, sep = "_")) %>% 
+    pull(tile_index)
+tile_index_train <- stats_guess_labels %>% 
+    mutate(index = as.integer(index)) %>% 
+    mutate(tile_index = paste(tile, index, sep = "_")) %>% 
+    filter(!tile_index %in% tile_index_val) %>% 
+    dplyr::select(tile, index)
+tiles_train <- right_join(tiles, tile_index_train, by = c("tile", "index")) %>% 
+    mutate(use = 1, modify = 0, comment = NA)
+write_sf(tiles_train, "results/tanzania/catalog_tiles_train.geojson")
+```
+

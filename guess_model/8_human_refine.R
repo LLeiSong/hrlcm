@@ -171,31 +171,55 @@ refine_scores <- function(tile_sf,
 # 9: bareland
 
 # Read vectors
-tiles <- read_sf('results/north/catalog_sample_tiles.geojson')
-tiles_big <- read_sf('data/geoms/tiles_nicfi_north.geojson')
-roads_all <- read_sf(here('data/osm/roads.geojson'))
-roads_all <- st_join(roads_all, tiles_big)
-waterbodies_all <- read_sf(here('data/osm/waterbodies.geojson'))
-waterbodies_all <- st_join(waterbodies_all, tiles_big)
-buildings_all <- read_sf(here('data/osm/buildings.geojson'))
-buildings_all <- st_join(buildings_all, tiles_big)
+tiles <- read_sf('results/tanzania/catalog_tiles_train.geojson')
+tiles_big <- read_sf('data/geoms/tiles_nicfi_others.geojson')
+roads_all <- read_sf(here('data/vct_tanzania/roads.geojson'))
+roads_all <- roads_all %>%
+    filter(fclass %in% c('primary', 'secondary', 'tertiary',
+                         'trunk', 'primary_link', 'secondary_link',
+                         'tertiary_link', 'rail'))
+roads_all <- st_join(roads_all, tiles_big) %>% 
+    filter(!is.na(tile))
+gc()
+waterbodies_all <- read_sf(here('data/vct_tanzania/waterbodies.geojson'))
+waterbodies_all <- st_join(waterbodies_all, tiles_big) %>% 
+    filter(!is.na(tile))
+gc()
+fn <- 'open_buildings_v1_polygons_ne_10m_TZA.csv'
+buildings_all <- st_read(here(file.path('data/open_buildings', fn)),
+                     int64_as_string = F,
+                     stringsAsFactors = F); rm(fn)
+buildings_all <- buildings_all %>% 
+    mutate(latitude = as.numeric(latitude),
+           longitude = as.numeric(longitude),
+           area_in_meters = as.numeric(area_in_meters),
+           confidence = as.numeric(confidence)) %>% 
+    # Buildings with area less than a pixel might not be representative
+    filter(confidence >= 0.75 & area_in_meters > 4.8^2) %>% 
+    mutate(geometry = st_as_sfc(geometry) %>% 
+               st_cast('MULTIPOLYGON')) %>% 
+    st_as_sf() %>% st_set_crs(4326) %>% 
+    st_make_valid()
+buildings_all <- st_join(buildings_all, tiles_big) %>% 
+    filter(!is.na(tile))
+gc()
 
-guess_dir <- here('results/north/guess_labels')
-refine_dir <- here('results/north/refine_labels')
+guess_dir <- here('results/tanzania/guess_labels')
+refine_dir <- here('results/tanzania/train')
 if (!dir.exists(refine_dir)) dir.create(refine_dir)
 
 # Change the parameters correspondingly
-tile_id <- '1219-1017'
-tile_index <- '58'
-convert <- T
-convert_class <- c(8)
-to_class <- c(6)
-touch_scores <- F
-big_road <- T
-apply_mask <- F
+tile_id <- '1221-989'
+tile_index <- '13'
+convert <- F
+convert_class <- c(1)
+to_class <- c(3)
+touch_scores <- T
+big_road <- F
+apply_mask <- T
 apply_line_mask <- F
-reduce_class <- c(1)
-reduce_ratio <- c(0)
+reduce_class <- c(4)
+reduce_ratio <- c(4)
 reduce_class <- c(reduce_class, 8)
 reduce_ratio <- c(reduce_ratio, 0)
 
@@ -224,8 +248,7 @@ if (touch_scores){
                   refine_dir,
                   reduce_class,
                   reduce_ratio)
-} 
-if (convert) {
+} else if (convert) {
     classes <- rast(
         here(glue('{guess_dir}/guess_{tile_id}_{tile_index}.tif')))
     
@@ -244,11 +267,14 @@ if (convert) {
                 overwrite = T,
                 wopt = list(datatype = 'INT1U',
                             gdal=c("COMPRESS=LZW")))
+} else {
+    file.copy(from = here(glue('{guess_dir}/guess_{tile_id}_{tile_index}.tif')), 
+              to = here(glue('{refine_dir}/{tile_id}_{tile_index}_label.tif')))
 }
 
 # Manual fix
 if (apply_mask){
-    mask_vct <- read_sf(here('results/north/mask_vct.geojson'))
+    mask_vct <- read_sf(here('results/tanzania/mask_vct.geojson'))
     tile_sf <- tiles %>% 
         filter(tile == tile_id & index == tile_index) %>% 
         st_buffer(0.01)
@@ -300,13 +326,14 @@ if (apply_mask){
     }; rm(mask_vct)
     
     if (apply_line_mask){
-        mask_line <- read_sf(here('results/north/mask_line.geojson'))
+        mask_line <- read_sf(here('results/tanzania/mask_line.geojson'))
         crs_mer <- crs(classes)
         mask_line <- mask_line %>% 
             st_make_valid() %>% 
             st_intersection(tile_sf) %>%
             st_transform(crs = crs_mer) %>% 
-            dplyr::select(landcover)
+            dplyr::select(landcover) %>% 
+            st_cast('MULTILINESTRING')
         
         writeVECT(mask_line, 'mask', v.in.ogr_flags = 'overwrite')
         execGRASS('v.to.rast', flags = c("overwrite"),
@@ -336,32 +363,34 @@ if (apply_mask){
 
 # After all checks finished, run these lines to 
 # all tiles
-tiles_all <- here('results/north/catalog_sample_tiles.geojson') %>% 
+tiles_all <- here('results/tanzania/catalog_tiles_validate.geojson') %>% 
     read_sf() %>% 
     mutate(name_temp = paste(tile, index, sep = '_'))
 
 # Tiles get modified
-refine_tiles <- list.files(here('results/north/refine_labels')) %>% 
+refine_tiles <- list.files(here('results/tanzania/validation')) %>% 
     str_extract(., '[0-9]+-[0-9]+_[0-9]+')
-
-# Tiles not get modified
-guess_tiles <- list.files(here('results/north/guess_labels'),
-                          pattern = 'guess') %>% 
-    str_extract(., '[0-9]+-[0-9]+_[0-9]+')
-guess_tiles <- setdiff(guess_tiles, refine_tiles)
 
 # modify tiles
 tiles_all <- tiles_all %>% 
-    mutate(modify = ifelse(name_temp %in% refine_tiles, 'yes', 'no')) %>% 
-    select(-name_temp)
-st_write(tiles_all, 
-         here('results/north/catalog_sample_tiles_update.geojson'))
+    mutate(done = ifelse(name_temp %in% refine_tiles, 'yes', 'no')) %>% 
+    filter(done == 'no') %>% 
+    select(-done)
 
 # Copy not modified labels
-lapply(guess_tiles, function(tile_nm){
-    copy_from <- file.path(here('results/north/guess_labels'), 
+lapply(tiles_all$name_temp, function(tile_nm){
+    copy_from <- file.path(here('results/tanzania/guess_labels'), 
                            glue('guess_{tile_nm}.tif'))
-    copy_to <- file.path(here('results/north/refine_labels'), 
+    copy_to <- file.path(here('results/tanzania/validation'), 
                          glue('{tile_nm}_label.tif'))
     file.copy(copy_from, copy_to)
+})
+
+# Remove abandoned ones
+tile_throw <- tiles_all %>% 
+    filter(use ==0)
+lapply(tile_throw$name_temp, function(tile_nm){
+    copy_to <- file.path(here('results/tanzania/validation'), 
+                         glue('{tile_nm}_label.tif'))
+    file.remove(copy_to)
 })

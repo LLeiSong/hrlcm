@@ -63,7 +63,7 @@ make_pred <- function(tile_id,
         mask <- copy(tiles_layout)
         mask <- mask == index
         mask[mask == 0] <- NA
-        mask <- disaggregate(mask, fact = size_sub_tile)
+        mask <- disagg(mask, fact = size_sub_tile)
         
         # Subset images
         imgs_sub <- imgs * mask
@@ -249,10 +249,7 @@ sample_tiles <- do.call(rbind, lapply(1:nrow(tiles), function(n){
         n = c(8, 8)) %>% 
         st_sf() %>% 
         mutate(tile = tile$tile,
-               index = as.vector(indices),
-               score = 0,  hardiness = 1, # 1 - 5
-               pass = 'yes', modify = 'no',
-               comment = '') %>% 
+               index = as.vector(indices)) %>% 
         slice(sample(1:nrow(.), n_sample))
 }))
 # st_write(sample_tiles, here('results/tanzania/catalog_sample_tiles.geojson'))
