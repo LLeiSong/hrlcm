@@ -205,21 +205,23 @@ buildings_all <- st_join(buildings_all, tiles_big) %>%
 gc()
 
 guess_dir <- here('results/tanzania/guess_labels')
+# refine_dir <- here('results/tanzania/validation')
 refine_dir <- here('results/tanzania/train')
+
 if (!dir.exists(refine_dir)) dir.create(refine_dir)
 
 # Change the parameters correspondingly
-tile_id <- '1221-989'
-tile_index <- '13'
+tile_id <- '1236-956'
+tile_index <- '41'
 convert <- F
 convert_class <- c(1)
-to_class <- c(3)
+to_class <- c(7)
 touch_scores <- T
 big_road <- F
 apply_mask <- T
 apply_line_mask <- F
-reduce_class <- c(4)
-reduce_ratio <- c(4)
+reduce_class <- c(1)
+reduce_ratio <- c(0)
 reduce_class <- c(reduce_class, 8)
 reduce_ratio <- c(reduce_ratio, 0)
 
@@ -361,14 +363,14 @@ if (apply_mask){
                             gdal=c("COMPRESS=LZW")))
 }
 
-# After all checks finished, run these lines to 
-# all tiles
-tiles_all <- here('results/tanzania/catalog_tiles_validate.geojson') %>% 
+# After all checks finished, run these lines to all tiles
+## Change validate/validation to train for train labels.
+tiles_all <- here('results/tanzania/catalog_tiles_train.geojson') %>% 
     read_sf() %>% 
     mutate(name_temp = paste(tile, index, sep = '_'))
 
 # Tiles get modified
-refine_tiles <- list.files(here('results/tanzania/validation')) %>% 
+refine_tiles <- list.files(here('results/tanzania/train')) %>% 
     str_extract(., '[0-9]+-[0-9]+_[0-9]+')
 
 # modify tiles
@@ -388,7 +390,7 @@ lapply(tiles_all$name_temp, function(tile_nm){
 
 # Remove abandoned ones
 tile_throw <- tiles_all %>% 
-    filter(use ==0)
+    filter(use == 0)
 lapply(tile_throw$name_temp, function(tile_nm){
     copy_to <- file.path(here('results/tanzania/validation'), 
                          glue('{tile_nm}_label.tif'))

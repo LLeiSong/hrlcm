@@ -14,11 +14,29 @@ knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 This document is to record steps for making the full map of Tanzania.
 
 - Generate guessing labels (done)
-- Random select and manually check validate dataset
-- Fine tune a U-Net model for the whole country
+- Manually check labels (done)
+- Train U-Net model for the whole country
 
-### Validate dataset generation
+## Steps
+### Generate guessing labels
+
+Prepare the needed datasets and install necessary software (e.g. GRASS GIS) and libraries. Run the following scripts under guess_model to get the guessed labels:
+
+- 0_set_up.R
+- 1_ensemble_labels.R
+- 2_get_osm.R
+- 3_update_lc_labels_osm.R
+- 4_sampling.R
+- 5_get_training.R
+- 6_train_guess_model.R
+- 7_pred_guess_model.R
+
+### Manually check labels
+
+Analyze the reliability of labels based on the score of guessed label and the quality of satellite images.
+
 #### Check the quality of labels
+
 ```{r}
 tiles <- read_sf("results/tanzania/catalog_sample_tiles.geojson")
 library(tidyr)
@@ -93,7 +111,7 @@ img_withzero <- img_quality %>% filter(zero_ratio > 0.3) %>%
     pull(tile_id) %>% unique()
 ```
 
-There are a few problematic images
+[*NOTE:*] There are a few problematic images. Skip them for now. These tiles can be fixed after segmentation. 
 
 ```{r}
 # 1192-988, water, missing partial image
@@ -107,12 +125,14 @@ There are a few problematic images
 # 1245-974, land, a small fragment seems weird
 ```
 
-#### Get candidate validation
+#### Get candidate validation and train
 
 Get one sub tile from each tile randomly as validation. Not all of them will be used. After manually checking, low quality ones that cannot be fixed easily would be excluded.
 
 Why random ones rather than good ones? To optimize the cooperation of random forest and U-Net. Because if selecting good ones, the results might be biased to easy-to-model instances.
+
 ```{r}
+# Validation
 skip_tile <- err_labels %>% pull(tile) %>% unique()
 stats_guess_labels <- stats_guess_labels %>% 
     separate(col = surfix, into = c('tile', 'index'), sep = "_") %>% 
@@ -132,29 +152,8 @@ plot(tiles_validate$geometry)
 write_sf(tiles_validate, "results/tanzania/catalog_tiles_validate.geojson")
 ```
 
-Next, the author manually checked these validation sub-tiles. Only the good ones would be used for validation.
-
-First, move these validation candidate into a separate folder.
-
 ```{r}
-copy_from <- here("results/tanzania/guess_labels")
-copy_to <- here('results/tanzania/temp')
-if (!dir.exists(copy_to)) dir.create(copy_to)
-tiles_validate <- tiles_validate %>% 
-    mutate(tile_id = paste(tile, index, sep = "_"))
-cp <- lapply(tiles_validate$tile_id, function(tile_move) {
-    fnames_from <- sprintf("%s/%s_%s.tif", 
-                           copy_from, c("guess", "scores", "score"), tile_move)
-    fnames_to <- sprintf("%s/%s_%s.tif", 
-                         copy_to, c("guess", "scores", "score"), tile_move)
-    file.copy(from = fnames_from, 
-              to = fnames_to)
-})
-```
-
-Next step is to check and fix other labels
-
-```{r}
+# Train
 tile_index_val <- tiles_validate %>% 
     mutate(tile_index = paste(tile, index, sep = "_")) %>% 
     pull(tile_index)
@@ -168,3 +167,127 @@ tiles_train <- right_join(tiles, tile_index_train, by = c("tile", "index")) %>%
 write_sf(tiles_train, "results/tanzania/catalog_tiles_train.geojson")
 ```
 
+#### Manually check
+
+Next, the author manually checked sub-tiles of validation and train. Script `8_human_refine.R` can help to do this step. 
+
+#### Add existing labels of north to use
+
+Add to catalogs
+
+```{r}
+# Get labels from north
+## Randomly get 50% tiles
+## Get two for training
+
+# Read train labels
+num_tiles <- read_sf(here("data/geoms/tiles_nicfi_north.geojson")) %>% nrow()
+north_train <- read.csv(here("results/north/dl_catalog_train.csv"),
+  stringsAsFactors = F)
+
+# Keep two for each tile
+north_train <- do.call(
+  rbind,
+  lapply(
+    unique(north_train$tile),
+    function(this_tile) {
+      north_train %>%
+        filter(tile == this_tile) %>%
+        arrange(desc(score)) %>%
+        slice(1:2)}))
+
+# Read validate labels
+north_valid <- read.csv(here("results/north/dl_catalog_valid.csv"),
+  stringsAsFactors = F)
+
+# Randomly select 50% of tile to use
+set.seed(10)
+tile_to_use <- north_train %>%
+  group_by(tile) %>%
+  summarise(score = sum(score)) %>%
+  filter(score == 10) %>%
+  sample_n(round(num_tiles * 0.5)) %>%
+  pull(tile)
+
+# Finalize train and validate
+train_path <- 'train'
+valid_path <- 'validation'
+north_train <- north_train %>%
+  filter(tile %in% tile_to_use) %>%
+    mutate(
+    label = file.path(
+      train_path,
+      paste0(tile, "_", index, "_label.tif")
+    ),
+    img = file.path(
+      train_path,
+      paste0(tile, "_", index, "_img.tif")
+    )) %>% 
+  dplyr::select(tile_id, tile, index, label, img)
+north_valid <- north_valid %>%
+  filter(tile %in% tile_to_use) %>%
+    mutate(
+    label = file.path(
+      valid_path,
+      paste0(tile, "_", index, "_label.tif")
+    ),
+    img = file.path(
+      valid_path,
+      paste0(tile, "_", index, "_img.tif")
+    )) %>% 
+  dplyr::select(tile_id, tile, index, label, img)
+
+# Add to catalog of full country
+catalog_train <- read.csv(here("results/tanzania/dl_catalog_train.csv"),
+                          stringsAsFactors = FALSE) %>% 
+    rbind(north_train)
+catalog_validate <- read.csv(here("results/tanzania/dl_catalog_valid.csv"),
+                             stringsAsFactors = FALSE) %>% 
+    rbind(north_valid)
+write.csv(catalog_train, 
+          here('results/tanzania/dl_catalog_train.csv'),
+          row.names = F)
+write.csv(catalog_validate, 
+          here('results/tanzania/dl_catalog_valid.csv'),
+          row.names = F)
+```
+
+Double check
+
+```{r}
+catalog_train <- read.csv(here("results/tanzania/dl_catalog_train.csv"),
+                          stringsAsFactors = FALSE)
+files_should <- c(catalog_train$label, catalog_train$img)
+files_have <- file.path("train", list.files(here("results/tanzania/train")))
+setdiff(files_should, files_have)
+
+catalog_validate <- read.csv(here("results/tanzania/dl_catalog_valid.csv"),
+                             stringsAsFactors = FALSE)
+files_should <- c(catalog_validate$label, catalog_validate$img)
+files_have <- file.path("validation", list.files(here("results/tanzania/validation")))
+setdiff(files_should, files_have)
+```
+
+Move images
+
+```{r}
+move_train <- lapply(1:nrow(north_train), function(n) {
+    things_to <- unlist(north_train[n, c("label", 'img')])
+    things_from <- gsub("train", "dl_train", things_to)
+    things_to <- file.path(here("results/tanzania"), things_to)
+    things_from <- file.path(here("results/north"), things_from)
+    file.copy(things_from, things_to)
+})
+
+move_valid <- lapply(1:nrow(north_valid), function(n) {
+    things_to <- unlist(north_valid[n, c("label", 'img')])
+    things_from <- gsub("validation", "dl_valid", things_to)
+    things_to <- file.path(here("results/tanzania"), things_to)
+    things_from <- file.path(here("results/north"), things_from)
+    file.copy(things_from, things_to)
+})
+```
+
+### Train U-Net model for the whole country
+
+The scripts used for training U-Net are under directory hrlcm.

@@ -19,93 +19,29 @@ library(tidyr)
 library(purrr)
 library(parallel)
 
-#######################################
-##  Step 2: Select validate dataset  ##
-#######################################
-# Arbitrarily select out validate tiles
-## Due to the importance of validation dataset, 
-## it should be selected carefully.
-## it should be roughly balanced and with high quality
-message('Step 2: Select validate dataset')
-
-# Get labeled tiles
-tile_nm <- 'catalog_sample_tiles.geojson'
-tiles <- here(glue('results/tanzania/{tile_nm}')) %>% 
-  read_sf(); rm(tile_nm)
-
-char2seed <- function(x){
-  tmp <- c(0:9,0:25,0:25)
-  names(tmp) <- c(0:9,letters,LETTERS)
-  
-  x <- gsub("[^0-9a-zA-Z]","",as.character(x))
-  
-  xsplit <- tmp[ strsplit(x,'')[[1]] ]
-  
-  seed <- sum(rev( 7^(seq(along=xsplit)-1) ) * xsplit)
-  seed <- as.integer( seed %% (2^31-1) )
-  set.seed(seed)
-}
-
-# Select 1 out of 4 from a tile as validation dataset
-tiles_valid <- do.call(rbind, lapply(unique(tiles$tile), 
-                      function(tile_id){
-  sub_tiles <- tiles %>% filter(tile == tile_id) %>% 
-      st_drop_geometry() %>% 
-      mutate(surfix = paste(tile, index, sep = '_')) %>% 
-      mutate(score_path = file.path(here('results/tanzania/guess_labels'),
-                                    sprintf('score_%s.tif', surfix)))
-  vals <- do.call(rbind, lapply(sub_tiles$surfix, function(sur) {
-      pth <- sub_tiles %>% filter(surfix == sur) %>% 
-          pull(score_path)
-      scores <- values(rast(pth))
-      data.frame(surfix = sur,
-                 mean = mean(scores, na.rm = T),
-                 sd = sd(scores, na.rm = T),
-                 min = min(scores, na.rm = T),
-                 max = max(scores, na.rm = T))
-  }))
-  print(vals)
-  id <- left_join(sub_tiles, vals, by = 'surfix') %>% 
-      select(-score_path) %>% 
-      arrange(desc(mean), sd, desc(min), desc(max)) %>% 
-      slice(1) %>% pull(index)
-  tiles %>% filter(tile == tile_id) %>% 
-      filter(index == id)
-}))
-
-# Save out
-### Relatively pure tiles with high quality
-st_write(tiles_valid,
-         here('results/north/tiles_validate.geojson'))
-
-#################################
-##  Step 3: Get train dataset  ##
-#################################
-message('Step 3: Get train dataset')
-
-# All other tiles with different levels of quality
-tiles_train <- tiles %>% 
-  mutate(id = paste0(tile, index)) %>% 
-  filter(!id %in% paste0(tiles_valid$tile, tiles_valid$index)) %>% 
-  dplyr::select(-id)
-st_write(tiles_train,
-         here('results/north/tiles_train.geojson'))
+##################################################
+##  Step 2: Read tiles of train and validation  ##
+##################################################
+message('Step 2: Read tiles')
+tiles_train <- read_sf(here("results/tanzania/catalog_tiles_train.geojson"))
+tiles_valid <- read_sf(here("results/tanzania/catalog_tiles_validate.geojson"))
 
 #################################
 ##  Step 4: Generate catalogs  ##
 #################################
-message('Step 4: Generate catalogs')
+message('Step 3: Generate catalogs')
 
 # Set path
 # Replace these path based on your own needs
-train_path <- 'dl_train'
-valid_path <- 'dl_valid'
+train_path <- 'train'
+valid_path <- 'validation'
 
 # Train catalog
 message('--Catalog of training')
 catalog_train <- tiles_train %>%
   st_drop_geometry() %>%
-  dplyr::select(tile, index, score, hardiness) %>%
+    filter(use == 1) %>% 
+  dplyr::select(tile, index) %>%
   mutate(
     label = file.path(
       train_path,
@@ -117,17 +53,17 @@ catalog_train <- tiles_train %>%
     ),
     tile_id = paste(tile, index, sep = '_')
   ) %>% 
-  dplyr::select(tile_id, tile, index, 
-                score, hardiness, label, img)
+  dplyr::select(tile_id, tile, index, label, img)
 write.csv(catalog_train, 
-          here('results/north/dl_catalog_train.csv'),
+          here('results/tanzania/dl_catalog_train.csv'),
           row.names = F)
 
 # Validate catalog
 message('--Catalog of validation')
 catalog_valid <- tiles_valid %>%
-  st_drop_geometry() %>%
-  dplyr::select(tile, index, score, hardiness) %>%
+    st_drop_geometry() %>%
+    filter(use == 1) %>% 
+    dplyr::select(tile, index) %>%
   mutate(
     label = file.path(
       valid_path,
@@ -139,49 +75,45 @@ catalog_valid <- tiles_valid %>%
     ),
     tile_id = paste(tile, index, sep = '_')
   ) %>% 
-  dplyr::select(tile_id, tile, index, 
-                score, hardiness, label, img)
+  dplyr::select(tile_id, tile, index, label, img)
 write.csv(catalog_valid, 
-          here('results/north/dl_catalog_valid.csv'),
+          here('results/tanzania/dl_catalog_valid.csv'),
           row.names = F)
 
 #################################
 ##  Step 5: Reorganize images  ##
 #################################
-message('Step 5: Reorganize images')
+message('Step 4: Reorganize images')
 
 # Set paths
-train_path <- here('results/north/dl_train')
-valid_path <- here('results/north/dl_valid')
+train_path <- here('results/tanzania/train')
+valid_path <- here('results/tanzania/validation')
 img_from <- '/Volumes/elephant/pred_stack'
-label_from <- here('results/north/refine_labels')
-if (!dir.exists(train_path)) dir.create(train_path)
-if (!dir.exists(valid_path)) dir.create(valid_path)
 
-# Labels
-message('--Prepare labels')
-## Train
-message('----Labels for train')
-copy_to <- catalog_train$label
-invisible(mclapply(copy_to, function(x){
-  file.copy(
-    file.path(label_from, basename(x)),
-    file.path(train_path, basename(x)))
-}, mc.cores = 8))
-
-## Validation
-message('----Labels for validation')
-copy_to <- catalog_valid$label
-invisible(mclapply(copy_to, function(x){
-  file.copy(
-    file.path(label_from, basename(x)),
-    file.path(valid_path, basename(x)))
-}, mc.cores = 8))
+# # Labels
+# message('--Prepare labels')
+# ## Train
+# message('----Labels for train')
+# copy_to <- catalog_train$label
+# invisible(mclapply(copy_to, function(x){
+#   file.copy(
+#     file.path(label_from, basename(x)),
+#     file.path(train_path, basename(x)))
+# }, mc.cores = 8))
+# 
+# ## Validation
+# message('----Labels for validation')
+# copy_to <- catalog_valid$label
+# invisible(mclapply(copy_to, function(x){
+#   file.copy(
+#     file.path(label_from, basename(x)),
+#     file.path(valid_path, basename(x)))
+# }, mc.cores = 8))
 
 # Satellite images
 message('--Prepare satellite images')
 # Select features
-load(here('data/north/forest_vip.rda'))
+load(here('data/tanzania/forest_vip.rda'))
 var_selected <- data.frame(var = names(forest_vip$fit$variable.importance),
                            imp = forest_vip$fit$variable.importance) %>% 
   filter(str_detect(var, c('band')) | # remove indices
