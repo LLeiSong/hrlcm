@@ -1,5 +1,5 @@
 ---
-title: "Make the full map of Tanzania"
+title: "Make the full map of Tanzania land cover"
 author: "Lei Song"
 date: "1/4/2022"
 output: html_document
@@ -290,65 +290,12 @@ move_valid <- lapply(1:nrow(north_valid), function(n) {
 
 ### Train U-Net model for the whole country
 
-The scripts used for training U-Net are under directory hrlcm.
+The scripts used for training U-Net are under directory hrlcm. Multiple type of models will be trained:
 
-#### Preparation
-
-**[Launch AWS instance]** a few instance could be used for different needs.
-
-  - `g3.8xlarge`, 2 GPU, 16G GPU memory, $0.684/hr for SPOT instance.
-  - `g3.16xlarge`, 4 GPU, 32G GPU memory, $1.368/hr for SPOT instance.
-  - `g4dn.8xlarge`, 1 GPU, 16G GPU memory, $0.6528/hr for SPOT instance.
-  - `g4dn.12xlarge`, 4 GPU, 64G GPU memory, $1.1819/hr for SPOT instance.
-  
-**[Clean and organize directories]** pull branch `full_country` of `hrlcm` to the instance, and create relative folders for dataset.
-
-**[Parse dataset from Dropbox]** run script `hrlcm/utils/parse_dataset.sh` to parse dataset into the instance.
-
-The instance should be ready to run training for now.
-
-#### Training
-
-Multiple type of models will be trained:
 - Using all bands and image standardization
 - Using all bands without image standardization
 - Using only NICFI bands with image standardization
 - Using only NICFI bands without image standardization
 
-Run models:
+Please reference to tutorial [Introduction of using AWS instance to run experiments](run_experiments.Rmd) for how to run experiments.
 
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_clr_200epc --num_workers 32 --gpu_devices '0,1,2,3' --epochs 201
-```
-
-Evaluation:
-
-```
-python hrlcm/evaluate.py --args_path 'results/tanzania/unet_clr_200epc/checkpoints/args.pkl' --checkpoint_file 'results/tanzania/unet_clr_200epc/checkpoints/final.pth' --data_dir 'results/tanzania' --out_dir 'results/tanzania/evaluation' --stats_dir 'results/tanzania/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
-
-scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/evaluation /Users/pinot/Dropbox/research/hrlcm/results/tanzania/unet_clr_200epc
-```
-
-Prediction
-
-```
-python hrlcm/predict.py --args_path 'results/tanzania/unet_clr_200epc/checkpoints/args.pkl' --checkpoint_file 'results/tanzania/unet_clr_200epc/checkpoints/final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/tanzania' --out_dir 'results/tanzania/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
-
-scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/prediction /Users/pinot/Dropbox/research/hrlcm/results/tanzania
-```
-
-#### Tensorboard
-
-If download log file to local machine, then it is easy to check the training loss curves.
-
-`tensorboard --logdir='./tensorboard_dirs' --port=16007`
-
-Do the following steps to use the tensorboard on a remote server (reference: https://blog.yyliu.net/remote-tensorboard/):
-
-1. You need to start SSH with transfer the remote server’s port to your local PC:
-
-    (on your local PC) `ssh -L 16007:127.0.0.1:16007 username@server_ip`
-
-2. Then you may start the tensorboard on the remote server with the specific port we want to transfer:
-
-    (on the remote server) `tensorboard --logdir='./tensorboard_dirs' --port=16007`

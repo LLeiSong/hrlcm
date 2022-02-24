@@ -1,0 +1,182 @@
+---
+title: "Introduction of using AWS instance to run experiments"
+author: "Lei Song"
+date: "`r Sys.Date()`"
+output: 
+  rmdformats::readthedown:
+    highlight: pygments
+    toc_depth: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
+
+## Set up GPU environment
+### AWS based method
+#### Launch AWS instance
+If you decide to use AWS instance, here are some basic steps.
+The information of instance that we used:
+
+- AMI ID: `ami-0643df3b347740189`, which is our customized deep learning AWS instance. Or this one `ami-005050e76c11b3b16`, which includes datasets already.
+- Instance type: a few instance could use based on different needs.
+
+  - `g3.8xlarge`, 2 GPU, 16G GPU memory, $0.684/hr for SPOT instance.
+  - `g3.16xlarge`, 4 GPU, 32G GPU memory, $1.368/hr for SPOT instance.
+  - `g4dn.8xlarge`, 1 GPU, 16G GPU memory, $0.6528/hr for SPOT instance.
+  - `g4dn.12xlarge`, 4 GPU, 64G GPU memory, $1.1819/hr for SPOT instance.
+    
+- Security group: `labeller-security`.
+
+Before run this script, do the following steps. Just need step one for Linux machine. Didn't test Windows machine.
+
+1. `brew install awscli`, then `aws configure` to configure AWS credential.
+2. `brew install jq`
+3. `brew install coreutils`. to use gdata on macOS.
+
+Then:
+```
+cd tools
+chmod 777 create_spot_instance.sh
+create_spot_instance.sh <ami_id> <instance_type> <security_group_id> <new_instance_name> <spot_type> <valid_until> <key_name> <volume_size>
+```
+For example:
+```
+cd tools
+chmod 777 create_spot_instance.sh
+create_spot_instance.sh ami-0643df3b347740189 g3.16xlarge sg-0a8bbc91697d6a76b lc_dl_tz persistent 2021-01-22T23:00:00 lsong-keypair 200
+```
+
+#### Instance setting
+After successfully launched the instance, then it is ready to get into the instance to work.
+
+The most essential work are arguably to clone project and set jupyter notebook:
+
+- STEP 1: Set up GitHub token (because the repo is private). More details could be found in this [tutorial](https://docs.github.com/en/free-pro-team@latest/github/authenticating-to-github/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
+  ```
+  ssh-keygen -t ed25519 -C "your_email@example.com"
+  eval "$(ssh-agent -s)"
+  ssh-add ~/.ssh/id_ed25519
+  vim ~/.ssh/id_ed25519.pub
+  ```
+  Copy out the ssh key, and type `:q` to exit, and then go to GitHub page to add into the records.
+    
+- STEP 2: Clone the repo into instance:
+  
+  ```
+  git clone git@github.com:LLeiSong/hrlcm.git
+  ```
+  
+  If necessary, use `git checkout` to switch branch and use `git pull` to grab the updates.
+  
+- STEP 3: Set up jupyter notebook
+
+  ```
+  jupyter notebook password
+  ```
+  to set a log in password for jupyter notebook, then
+  ```
+  jupyter notebook
+  ```
+  replace the private IP with the public IP to open it in browser. If you can log in without issues, then it is ready to go.
+  
+### Other cloud computing platform
+
+The users could set up the deep learning environment with similar steps used on AWS. For example, Colab can be used as long as the GPU power is enough for your computation.
+  
+## Run experiments
+
+### Parse dataset
+
+```
+cd path/of/hrlcm
+./hrlcm/utils/parse_dataset.sh path/to/save
+```
+
+### Run models
+
+```
+cd path/of/hrlcm
+python hrlcm/fit_step_lr.py --arg arg_value
+```
+Check arguments:
+```
+python hrlcm/fit_step_lr.py --help
+```
+
+For example:
+```
+python hrlcm/fit_step_lr.py --exp_name unet_one_tile --num_workers 32 --gpu_devices '0,1,2,3'
+```
+
+```
+python hrlcm/fit_compose_lr.py --exp_name unet_k15_only_clr_220epc --quality_weight 1 --score_k 1.5 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --epochs 201
+```
+
+### Tensorboard
+
+If download log file to local machine, then it is easy to check the training loss curves.
+
+`tensorboard --logdir='./tensorboard_dirs' --port=16007`
+
+Do the following steps to use the tensorboard on a remote server (reference: https://blog.yyliu.net/remote-tensorboard/):
+
+1. You need to start SSH with transfer the remote server’s port to your local PC:
+
+    (on your local PC) `ssh -L 16007:127.0.0.1:16007 username@server_ip`
+
+2. Then you may start the tensorboard on the remote server with the specific port we want to transfer:
+
+    (on the remote server) `tensorboard --logdir='./tensorboard_dirs' --port=16007`
+    
+### Prediction
+
+```
+cd path/of/hrlcm
+python hrlcm/predict.py --arg arg_value
+```
+Check arguments:
+```
+python hrlcm/predict.py --help
+```
+
+For example:
+```
+python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/prediction /Users/pinot/Dropbox/research/hrlcm/results/dl
+```
+
+### Evaluation
+
+```
+cd path/of/hrlcm
+python hrlcm/evaluate.py --arg arg_value
+```
+Check arguments:
+```
+python hrlcm/evaluate.py --help
+```
+
+For example:
+```
+python hrlcm/evaluate.py --args_path 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/final.pth' --data_dir 'results/north' --out_dir 'results/evaluation' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+
+scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/evaluation /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200
+```
+
+## Other useful commands
+
+### Check disk space and clean trash
+
+```bash
+df -H
+cd ~/.local/share/Trash/
+rm -rf *
+```
+### Check the RAM usage in M
+
+```bash
+free -m
+```
