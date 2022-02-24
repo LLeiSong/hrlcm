@@ -4,7 +4,6 @@ Author: Lei Song
 Maintainer: Lei Song (lsong@clarku.edu)
 """
 
-import math
 import copy
 import os
 import sys
@@ -14,19 +13,6 @@ import pandas as pd
 import rasterio
 from torch.utils.data import Dataset
 from rasterio.plot import reshape_as_image
-
-
-def logistic_scale(x, L=1, k=1.5, x0=2.5):
-    """Util function to scale data using logistic
-    Args:
-        x (numpy.ndarray): the array to scale
-        L (float): the curve's maximum value
-        k (float): logistic growth rate
-        x0 (float): the x value of the sigmoid midpoint
-    Returns:
-        numpy.ndarray: the array of image values
-    """
-    return L / (1 + math.e ** (-k * (x - x0)))
 
 
 def load_sat(path):
@@ -174,8 +160,6 @@ class NFSEN1LC(Dataset):
 
     def __init__(self, data_dir,
                  usage='train',
-                 score_k=1.5,
-                 hardiness_max=1.2,
                  random_state=1,
                  label_offset=1,
                  chip_buffer=64,
@@ -187,12 +171,6 @@ class NFSEN1LC(Dataset):
         Args:
             data_dir (str): the directory of all data
             usage (str): Usage of the dataset : "train", "validate" or "predict"
-            score_k (float): the k param of logistic scale to calculate weight of score.
-            hardiness_max (float): the rescaled max of hardiness as weight for loss calculation.
-                Must be larger than 1 to be effective, otherwise no weight affect.
-                E.g.hardiness = 3,
-                then weight = ((hardiness_max - 1) * (hardiness - 1) / (max(hardiness) - 1) + 1)
-                = 4 * 0.2 * ((2 - 1) * (4 - 1) / (5 - 1) + 1) = 1.4
             random_state (int): the random state for pandas sampling.
             label_offset (int): the offset of label to minus in order to fit into DL model.
             chip_buffer (int): buffer value to read images.
@@ -206,8 +184,6 @@ class NFSEN1LC(Dataset):
         super(NFSEN1LC, self).__init__()
         self.data_dir = data_dir
         self.usage = usage
-        self.score_k = score_k
-        self.hardiness_max = hardiness_max
         self.random_state = random_state
         self.label_offset = label_offset
         self.chip_buffer = chip_buffer
@@ -243,13 +219,6 @@ class NFSEN1LC(Dataset):
         # Shrink the catalog based on noise ratio
         if self.usage == 'train':
             self.catalog = catalog_full
-
-            # Set score, hardiness and loss weights
-            self.score = self.catalog['score'].to_numpy()
-            self.score_weight = logistic_scale(self.score, k=self.score_k)
-            self.hardiness = self.catalog['hardiness'].to_numpy()
-            self.hardiness_weight = (self.hardiness_max - 1) * (self.hardiness - 1) / (max(self.hardiness) - 1) + 1
-            self.weight = self.score_weight * self.hardiness_weight
         elif self.usage == 'validate':
             self.catalog = catalog_full
         # Prediction

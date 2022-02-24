@@ -53,6 +53,7 @@ def weighted_loss(predict, target, weights=None, ignore_index=-100):
     :param predict: predicts
     :param target: validate
     :param weights: weights array
+    :param ignore_index: the ignored index in labels
     :return: mean loss
     """
     # Calculate weighted mean loss

@@ -15,14 +15,13 @@ class Trainer:
     def __init__(self, args):
         self.args = args
 
-    def train(self, model, train_loader, loss_fn, optimizer, writer, step, weights=None):
+    def train(self, model, train_loader, loss_fn, optimizer, writer, step):
         """Train a single model
 
         :param model: the model to train
         :param train_loader: train Dataloader
         :param loss_fn: loss function
         :param optimizer: optimizer for training
-        :param weights: the weights to calculate loss
         :param writer: defined writer for statistics
         :param step: global step so far
         :return: updated model and global step
@@ -36,12 +35,6 @@ class Trainer:
         for i, (image, target, indexes) in enumerate(train_loader):
             # Shrink target
             target = target[:, 4:-4, 4:-4]
-
-            # Get weights
-            if weights is not None:
-                weights_batch = weights[indexes]
-            else:
-                weights_batch = None
             
             # Add replicate padding
             # image = F.pad(image, (4, 4, 4, 4), 'replicate')
@@ -49,12 +42,10 @@ class Trainer:
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
                 image, target = image.cuda(), target.cuda()
-                if weights_batch is not None:
-                    weights_batch = weights_batch.cuda()
 
             # Forward pass
             prediction = model(image)
-            loss = loss_fn(prediction, target, weights_batch)
+            loss = loss_fn(prediction, target)
             loss_total += loss.item()
 
             # Backward pass

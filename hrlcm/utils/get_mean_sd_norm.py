@@ -15,15 +15,17 @@ from torch.utils.data import DataLoader
 # Define a dummy args for testing
 class args_dummy:
     def __init__(self):
-        self.data_dir = 'results/north'
+        self.data_dir = '/Volumes/elephant'
         self.catalog = 'dl_catalog_predict.csv'
 
 
 class full_tile(Dataset):
     def __init__(self,
                  catalog,
+                 data_dir,
                  img_transform=None):
         self.catalog = catalog
+        self.data_dir = data_dir
         self.img_transform = img_transform
 
     def __len__(self):
@@ -32,7 +34,7 @@ class full_tile(Dataset):
     def __getitem__(self, idx):
         # import
         path = self.catalog.iloc[idx]['img']
-        img = load_sat(path)
+        img = load_sat(os.path.join(self.data_dir, path))
 
         # augmentations
         if self.img_transform is not None:
@@ -55,6 +57,7 @@ transform = ComposeImg([
     ImgToTensor()
 ])
 train_set = full_tile(catalog=full_catalog,
+                      data_dir=args.data_dir,
                       img_transform=transform)
 
 # Fast way with enough RAM
@@ -67,14 +70,14 @@ loader = DataLoader(train_set, batch_size=1,
                     shuffle=False, num_workers=0)
 
 # Initialize
-mean = torch.zeros(14)
-std = torch.zeros(14)
+mean = torch.zeros(12)
+std = torch.zeros(12)
 num_pixel = 4096 * 4096
 num_img = len(train_set)
 
 # Mean
 for data in tqdm(loader):
-    mean += data.squeeze(0).sum((1, 2)) / num_pixel
+    mean += data.squeeze(0).nansum((1, 2)) / num_pixel
 mean /= num_img
 print(mean)
 pkl.dump(mean.detach().cpu().tolist(),
@@ -83,7 +86,7 @@ pkl.dump(mean.detach().cpu().tolist(),
 # SD
 mean = mean.unsqueeze(1).unsqueeze(2)
 for data in tqdm(loader):
-    std += ((data.squeeze(0) - mean) ** 2).sum((1, 2)) / num_pixel
+    std += ((data.squeeze(0) - mean) ** 2).nansum((1, 2)) / num_pixel
 std /= num_img
 std = std.sqrt()
 print(std)

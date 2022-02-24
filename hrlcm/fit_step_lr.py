@@ -7,7 +7,6 @@ Maintainer: Lei Song (lsong@clarku.edu)
 
 import argparse
 from math import floor
-import torch
 from augmentation import *
 from dataset import *
 from torch.utils.data import DataLoader
@@ -35,14 +34,6 @@ def main():
                         help='path to dataset (default: results/north)')
     parser.add_argument('--out_dir', type=str, default="results/dl",
                         help='path to output dir (default: results/dl)')
-    parser.add_argument('--quality_weight', type=int, default=1,
-                        help='whether to use quality as weight to calculate loss '
-                             '(0 for no, 1 for yes). (default: 1)')
-    parser.add_argument('--score_k', type=float, default=1.5,
-                        help='k param of logistic scale to calculate score weight, '
-                             'see details in dataset. (default: 1.5)')
-    parser.add_argument('--hardiness_max', type=float, default=2,
-                        help='ratio to multiply with hardiness, see details in dataset (default: 2)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
     parser.add_argument('--rg_rotate', type=str, default='-90, 90',
@@ -143,8 +134,6 @@ def main():
     # Get train dataset
     train_dataset = NFSEN1LC(data_dir=args.data_dir,
                              usage='train',
-                             score_k=args.score_k,
-                             hardiness_max=args.hardiness_max,
                              label_offset=args.label_offset,
                              sync_transform=sync_transform,
                              img_transform=img_transform,
@@ -208,7 +197,7 @@ def main():
         model = model.cuda()
 
     # Define loss function
-    loss_fn = weighted_loss
+    loss_fn = BalancedCrossEntropyLoss()
     loss_fn_valid = BalancedCrossEntropyLoss()
 
     # Define optimizer
@@ -254,10 +243,6 @@ def main():
 
     # Do loop
     trainer = Trainer(args)
-    if args.quality_weight == 1:
-        weight = torch.from_numpy(train_dataset.weight)
-    else:
-        weight = None
     for epoch in range(epoch + 1, args.epochs):
         # Update info
         print("[Epoch {}] lr: {}".format(
@@ -265,8 +250,7 @@ def main():
 
         # Run training for one epoch
         model, step = trainer.train(model, train_loader, loss_fn,
-                                    optimizer, writer, step=step,
-                                    weights=weight)
+                                    optimizer, writer, step=step)
         # Run validation
         trainer.validate(model, validate_loader, step, loss_fn_valid, writer)
 
