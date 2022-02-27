@@ -271,20 +271,51 @@ setdiff(files_should, files_have)
 Move images
 
 ```{r}
+library(terra)
+# Select features
+load(here('data/tanzania/forest_vip.rda'))
+var_selected <- data.frame(var = names(forest_vip$fit$variable.importance),
+                           imp = forest_vip$fit$variable.importance) %>% 
+  filter(str_detect(var, c('band')) | # remove indices
+           str_detect(var, c('vv')) |
+           str_detect(var, c('vh'))) %>% 
+  filter(imp > 1000) # remove less important ones
+
 move_train <- lapply(1:nrow(north_train), function(n) {
-    things_to <- unlist(north_train[n, c("label", 'img')])
+    # Label, directly copy
+    things_to <- north_train[n, 'label']
     things_from <- gsub("train", "dl_train", things_to)
     things_to <- file.path(here("results/tanzania"), things_to)
     things_from <- file.path(here("results/north"), things_from)
     file.copy(things_from, things_to)
+    
+    # Image, subset it
+    things_to <- north_train[n, 'img']
+    things_from <- gsub("train", "dl_train", things_to)
+    things_to <- file.path(here("results/tanzania"), things_to)
+    things_from <- file.path(here("results/north"), things_from)
+    
+    sat <- rast(things_from)
+    sat <- subset(sat, var_selected$var)
+    writeRaster(sat, things_to, overwrite = TRUE)
 })
 
 move_valid <- lapply(1:nrow(north_valid), function(n) {
-    things_to <- unlist(north_valid[n, c("label", 'img')])
+    # Label, directly copy
+    things_to <- north_valid[n, "label"]
     things_from <- gsub("validation", "dl_valid", things_to)
     things_to <- file.path(here("results/tanzania"), things_to)
     things_from <- file.path(here("results/north"), things_from)
     file.copy(things_from, things_to)
+    
+    # Image, subset it
+    things_to <- north_valid[n, "img"]
+    things_from <- gsub("validation", "dl_valid", things_to)
+    things_to <- file.path(here("results/tanzania"), things_to)
+    things_from <- file.path(here("results/north"), things_from)
+    sat <- rast(things_from)
+    sat <- subset(sat, var_selected$var)
+    writeRaster(sat, things_to, overwrite = TRUE)
 })
 ```
 
