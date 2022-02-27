@@ -39,6 +39,10 @@ def main():
                         help='number of worker(s) to load dataset (default: 0)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
+    parser.add_argument('--img_bands', type=str, choices=['all', 'nicfi'],
+                        help='bands of satellite images to use. \
+                        all means all bands, including RGB, NIR of NICFI tiles, intercept,  \
+                        cos(2t) of VV and VH. (default: all)')
     parser.add_argument('--chip_buffer', type=int, default=64,
                         help='chip buffer to do predict. (default: 64)')
     parser.add_argument('--score_type', type=str, default='overall',
@@ -54,6 +58,7 @@ def main():
 
     args = parser.parse_args()
     assert args.score_type in ["overall", "each", "none"]
+    assert args.img_bands in ['all', 'nicfi']
 
     print("=" * 20, "PREDICTION CONFIG", "=" * 20)
     for arg in vars(args):
@@ -109,14 +114,17 @@ def main():
 
     # Predict
     # Image transform
+    id_bands = list(range(1, 13)) if args.img_bands == "all" else list(range(1, 9))
     # Load mean and sd for normalization
     with open(os.path.join(args.stats_dir,
                            "means.pkl"), "rb") as input_file:
         mean = tuple(pkl.load(input_file))
+        mean = mean[0:len(id_bands)]
 
     with open(os.path.join(args.stats_dir,
                            "stds.pkl"), "rb") as input_file:
         std = tuple(pkl.load(input_file))
+        std = std[0:len(id_bands)]
     pred_transform = ComposeImg([
         ImgToTensor(),
         ImgNorm(mean, std)
@@ -126,7 +134,9 @@ def main():
     for tile_id in catalog['tile_id']:
         print('Do prediction for {}'.format(tile_id))
         # Get predict dataset
+
         predict_dataset = NFSEN1LC(data_dir=args.data_dir,
+                                   bands=id_bands,
                                    usage='predict',
                                    sync_transform=None,
                                    img_transform=pred_transform,

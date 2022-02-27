@@ -37,6 +37,10 @@ def main():
                         help='path to output dir (default: results/dl)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
+    parser.add_argument('--img_bands', type=str, choices=['all', 'nicfi'],
+                        help='bands of satellite images to use. \
+                        all means all bands, including RGB, NIR of NICFI tiles, intercept,  \
+                        cos(2t) of VV and VH. (default: all)')
     parser.add_argument('--rg_rotate', type=str, default='-90, 90',
                         help='ratio of noise to subset train dataset (default: -90, 90)')
     parser.add_argument('--trans_prob', type=float, default=0.5,
@@ -80,7 +84,7 @@ def main():
     # Check inputs
     assert args.optimizer_name.lower() in ['adabound', 'amsbound', 'adamp']
     assert args.model in ['deeplab', 'unet']
-    assert args.quality_weight in [0, 1]
+    assert args.img_bands in ['all', 'nicfi']
 
     # Set directory for saving files
     if args.exp_name:
@@ -121,18 +125,22 @@ def main():
     ])
 
     # Image transform
+    id_bands = list(range(1, 13)) if args.img_bands == "all" else list(range(1, 9))
     # Load mean and sd for normalization
     with open(os.path.join(args.stats_dir,
                            "means.pkl"), "rb") as input_file:
         mean = tuple(pkl.load(input_file))
+        mean = mean[0:len(id_bands)]
 
     with open(os.path.join(args.stats_dir,
                            "stds.pkl"), "rb") as input_file:
         std = tuple(pkl.load(input_file))
+        std = std[0:len(id_bands)]
     img_transform = ImgNorm(mean, std)
 
     # Get train dataset
     train_dataset = NFSEN1LC(data_dir=args.data_dir,
+                             bands=id_bands,
                              usage='train',
                              label_offset=args.label_offset,
                              sync_transform=sync_transform,
@@ -148,6 +156,7 @@ def main():
 
     # Get validate dataset
     validate_dataset = NFSEN1LC(data_dir=args.data_dir,
+                                bands=id_bands,
                                 usage='validate',
                                 label_offset=args.label_offset,
                                 sync_transform=sync_transform_val,

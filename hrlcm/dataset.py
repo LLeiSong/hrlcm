@@ -15,21 +15,22 @@ from torch.utils.data import Dataset
 from rasterio.plot import reshape_as_image
 
 
-def load_sat(path):
+def load_sat(path, bands):
     """Util function to load satellite image
     Args:
         path (str): the satellite image path
+        bands (list): the bands to read.
     Returns:
         numpy.ndarray: the array of image values
     """
     # path = 'results/north/dl_train/1239-996_64_img.tif'
     with rasterio.open(path) as src:
         # reshape the image for augmentation
-        sat = reshape_as_image(src.read())
+        sat = reshape_as_image(src.read(bands))
     return sat
 
 
-def load_sat_buf(path, paths_relate, buffer):
+def load_sat_buf(path, bands, paths_relate, buffer):
     data_dir = os.path.dirname(os.path.dirname(path))
     paths_split = paths_relate.split(',')
     with rasterio.open(path, "r") as src:
@@ -57,13 +58,13 @@ def load_sat_buf(path, paths_relate, buffer):
     # Read central tile and expand it
     with rasterio.open(path) as src:
         # reshape the image for augmentation
-        img_full = np.pad(reshape_as_image(src.read()),
+        img_full = np.pad(reshape_as_image(src.read(bands)),
                           ((buffer, buffer), (buffer, buffer), (0, 0)), mode='edge')
 
     for i in [1, 3, 5, 7, 0, 2, 6, 8]:  # skip central tile
         if paths_split[i] != 'None':
             with rasterio.open(os.path.join(data_dir, paths_split[i]), "r") as src:
-                sat = reshape_as_image(src.read())
+                sat = reshape_as_image(src.read(bands))
             img_full[dst_ids[i][0]:dst_ids[i][1], dst_ids[i][2]:dst_ids[i][3], :] = \
                 sat[src_ids[i][0]:src_ids[i][1], src_ids[i][2]:src_ids[i][3], :]
 
@@ -83,17 +84,18 @@ def load_label(path):
     return label
 
 
-def load_tile(tile_info, unlabeled=False, offset=1):
+def load_tile(tile_info, bands, unlabeled=False, offset=1):
     """Util function for reading data from single sample
     Args:
         tile_info (pandas.DataFrame): the tile info
         unlabeled (bool): the flag of this tile has label or not
+        bands (list): the bands to read.
         offset (int): the offset to load label in order to start with 0.
     Returns:
         list or numpy.ndarray: the list of tile (satellite image, label and tile index)
     """
     # Load satellite image
-    img = load_sat(tile_info["img"])
+    img = load_sat(tile_info["img"], bands)
 
     # load label
     if unlabeled:
@@ -159,8 +161,8 @@ class NFSEN1LC(Dataset):
     """
 
     def __init__(self, data_dir,
+                 bands,
                  usage='train',
-                 random_state=1,
                  label_offset=1,
                  chip_buffer=64,
                  sync_transform=None,
@@ -170,8 +172,9 @@ class NFSEN1LC(Dataset):
         """Initialize the dataset
         Args:
             data_dir (str): the directory of all data
+            bands (list): The id of bands to use. 1:12 for all, 1:8 for NICFI only.
+                The default is all.
             usage (str): Usage of the dataset : "train", "validate" or "predict"
-            random_state (int): the random state for pandas sampling.
             label_offset (int): the offset of label to minus in order to fit into DL model.
             chip_buffer (int): buffer value to read images.
             sync_transform (transform or None): Synthesize Data augmentation methods
@@ -184,7 +187,7 @@ class NFSEN1LC(Dataset):
         super(NFSEN1LC, self).__init__()
         self.data_dir = data_dir
         self.usage = usage
-        self.random_state = random_state
+        self.bands = bands
         self.label_offset = label_offset
         self.chip_buffer = chip_buffer
         self.sync_transform = sync_transform
@@ -199,7 +202,7 @@ class NFSEN1LC(Dataset):
                          6: 'urban',
                          7: 'bareland'}
         self.n_classes = len(self.lc_types)
-        self.n_channels = 14  # hardcoded
+        self.n_channels = len(self.bands)
 
         # Check inputs
         assert usage in ['train', 'validate', 'predict']
@@ -223,7 +226,7 @@ class NFSEN1LC(Dataset):
             self.catalog = catalog_full
         # Prediction
         else:
-            self.chip_size = 512 + self.chip_buffer * 2  # image size of train
+            self.chip_size = 512 + self.chip_buffer * 2  # image size of train, hardcoded
             self.tile_id = tile_id
             catalog = catalog_full.loc[catalog_full['tile_id'] == self.tile_id]
             if len(catalog.index) == 0:
@@ -233,7 +236,7 @@ class NFSEN1LC(Dataset):
             else:
                 catalog['img'][catalog.index[0]] = os.path.join(self.data_dir, catalog['img'][catalog.index[0]])
                 self.catalog = catalog.iloc[0]
-                img = load_sat_buf(self.catalog['img'], self.catalog['tiles_relate'], self.chip_buffer)
+                img = load_sat_buf(self.catalog['img'], self.bands, self.catalog['tiles_relate'], self.chip_buffer)
                 self.meta = get_meta(self.catalog['img'])
                 self.img_ls, self.index_ls = get_chips(img, self.chip_size, self.chip_buffer)
 
@@ -250,7 +253,7 @@ class NFSEN1LC(Dataset):
                                           os.path.join(self.data_dir, tile_info["img"]))
             tile_info = tile_info.replace(tile_info['label'],
                                           os.path.join(self.data_dir, tile_info["label"]))
-            img, label = load_tile(tile_info, offset=self.label_offset)
+            img, label = load_tile(tile_info, bands=self.bands, offset=self.label_offset)
 
             # Transform
             if self.sync_transform is not None:
