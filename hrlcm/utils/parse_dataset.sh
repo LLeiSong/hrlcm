@@ -9,7 +9,7 @@ if [ -z "$DIR" ]; then
 fi
 
 echo "Download dataset to $DIR/tanzania_train_valid.zip"
-curl -o "$DIR/tanzania_train_valid.zip" https://www.dropbox.com/s/1xvtyyx2a6jdovi/tanzania_train_valid.zip -L
+curl -o "$DIR/tanzania_train_valid.zip" https://www.dropbox.com/s/569x4r1iz2376q2/tanzania_train_valid.zip -L
 unzip $DIR/tanzania_train_valid.zip -d $DIR
 rm -rf $DIR/tanzania_train_valid.zip
 rm -rf $DIR/__MACOSX
