@@ -21,10 +21,15 @@ The information of instance that we used:
 - AMI ID: `ami-0643df3b347740189`, which is our customized deep learning AWS instance. Or this one `ami-005050e76c11b3b16`, which includes datasets already.
 - Instance type: a few instance could use based on different needs.
 
-  - `g3.8xlarge`, 2 GPU, 16G GPU memory, $0.684/hr for SPOT instance.
-  - `g3.16xlarge`, 4 GPU, 32G GPU memory, $1.368/hr for SPOT instance.
-  - `g4dn.8xlarge`, 1 GPU, 16G GPU memory, $0.6528/hr for SPOT instance.
-  - `g4dn.12xlarge`, 4 GPU, 64G GPU memory, $1.1819/hr for SPOT instance.
+  - `g3.8xlarge`, 2 GPU, 16G GPU memory, 32 CPUs, 244 GB CPU memory, $0.684/hr for SPOT instance.
+  - `g3.16xlarge`, 4 GPU, 32G GPU memory, 64 CPUs, 488 GB CPU memory, $1.368/hr for SPOT instance.
+  - `g4dn.8xlarge`, 1 GPU, 16G GPU memory, 32 CPUs, 128 GB CPU memory, $0.6528/hr for SPOT instance.
+  - `g4dn.12xlarge`, 4 GPUs, 64G GPU memory, 48 CPUs, 192 GB CPU memory, $1.1819/hr for SPOT instance.
+  - `g5.xlarge`, 1 GPU, 24 GPU memory, 4 CPUs, 16 GB CPU memory (on-demand $1.212/hr, spot 0.3018/hr).
+  - `g5.2xlarge`, 1 GPU, 24 GPU memory, 8 CPUs, 32 GB CPU memory (on-demand $1.624/hr, spot 0.3636/hr).
+  - `g5.4xlarge`, 1 GPU, 24 GPU memory, 16 CPUs, 64 GB CPU memory (on-demand $2.448/hr, spot 0.4872/hr).
+  - `g5.8xlarge`, 1 GPU, 24 GPU memory, 32 CPUs, 128 GB CPU memory (on-demand $4.096/hr, spot 0.967/hr).
+  - `g5.12xlarge`, 4 GPUs, 96 GPU memory, 48 CPUs, 192 GB CPU memory (on-demand $5.672/hr, 1.7016/hr).
     
 - Security group: `labeller-security`.
 
