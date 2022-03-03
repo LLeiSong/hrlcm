@@ -210,7 +210,7 @@ def main():
     learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr)
 
     # Define loss function
-    loss_fn = weighted_loss
+    loss_fn = BalancedCrossEntropyLoss()
     loss_fn_valid = BalancedCrossEntropyLoss()
 
     # Define optimizer
