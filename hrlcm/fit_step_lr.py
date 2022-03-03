@@ -58,11 +58,11 @@ def main():
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
     # Training hyper-parameters
-    parser.add_argument('--max_lr', type=float, default=0.0001,
+    parser.add_argument('--max_lr', type=float, default=0.001,
                         help='maximum or initial learning rate for scheduler.')
     parser.add_argument('--step_size', type=int, default=10,
                         help='step size for scheduler.')
-    parser.add_argument('--gamma_lr', type=float, default=0.9,
+    parser.add_argument('--gamma_lr', type=float, default=0.8,
                         help='gamma for learning rate.')
     parser.add_argument('--optimizer_name', type=str,
                         choices=['AdaBound', 'AmsBound', 'AdamP'],
@@ -72,11 +72,11 @@ def main():
                         help='training state will be saved every save_freq \
                         batches during training')
     parser.add_argument('--train_batch_size', type=int, default=32,
-                        help='batch size for training (default: 16)')
+                        help='batch size for training (default: 32)')
     parser.add_argument('--val_batch_size', type=int, default=32,
-                        help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=300,
-                        help='number of training epochs (default: 300)')
+                        help='batch size for validation (default: 32)')
+    parser.add_argument('--epochs', type=int, default=201,
+                        help='number of training epochs (default: 200)')
     parser.add_argument('--resume', '-r', type=str, default=None,
                         help='path to the pretrained weights file')
 

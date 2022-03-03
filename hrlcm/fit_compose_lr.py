@@ -71,12 +71,12 @@ def main():
                         help='training state will be saved every save_freq \
                         batches during training')
     parser.add_argument('--train_batch_size', type=int, default=32,
-                        help='batch size for training (default: 16)')
+                        help='batch size for training (default: 32)')
     parser.add_argument('--val_batch_size', type=int, default=32,
-                        help='batch size for validation (default: 16)')
-    parser.add_argument('--epochs', type=int, default=400,
-                        help='number of training epochs (default: 400). '
-                             'NOTE: The scheduler is designed best for 400.')
+                        help='batch size for validation (default: 32)')
+    parser.add_argument('--epochs', type=int, default=201,
+                        help='number of training epochs (default: 200). '
+                             'NOTE: The scheduler is designed best for 200.')
     parser.add_argument('--resume', '-r', type=str, default=None,
                         help='path to the pretrained weights file')
 

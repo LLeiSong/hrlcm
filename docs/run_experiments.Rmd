@@ -101,6 +101,25 @@ cd path/of/hrlcm
 
 ### Run models
 
+Before official running, test a bit about the largest values of `num_worker`, `train_batch_size`, `val_batch_size` that could be used. For `g5.12xlarge`, these values could be:
+
+- `num_worker`:48
+- `train_batch_size`: 32 (could be a bit bigger, but it is recommended to use $2^n$)
+- `val_batch_size`: 32
+
+Also, test the optimal learning rate and scheduler to use:
+
+- 0.1 is too large.
+- 0.01 is too large.
+- 0.001 is a good start point.
+- 0.00001 is a good end point.
+
+`final_lr` for `optim.AdaBound`:
+
+- 0.01 still works fine.
+
+Syntax:
+
 ```
 cd path/of/hrlcm
 python hrlcm/fit_step_lr.py --arg arg_value
@@ -116,7 +135,7 @@ python hrlcm/fit_step_lr.py --exp_name unet_one_tile --num_workers 32 --gpu_devi
 ```
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_k15_only_clr_220epc --quality_weight 1 --score_k 1.5 --hardiness_max 1 --num_workers 32 --gpu_devices '0,1,2,3' --epochs 201
+python hrlcm/fit_compose_lr.py --exp_name unet_all_norm_200 --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.000001 --max_lr 0.00001 --save_freq 20 --epochs 201
 ```
 
 ### Tensorboard
