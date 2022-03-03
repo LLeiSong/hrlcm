@@ -217,11 +217,11 @@ def main():
     if args.optimizer_name.lower() == 'adabound':
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
-                                   final_lr=0.01)  # use constant final_lr 0.01
+                                   final_lr=0.0001)  # use constant final_lr 0.0001
     elif args.optimizer_name.lower() == 'amsbound':
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
-                                   final_lr=0.01,
+                                   final_lr=0.0001,
                                    amsbound=True)
     elif args.optimizer_name.lower() == 'adamp':
         optimizer = optim.AdamP(model.parameters(),
