@@ -16,7 +16,7 @@ from models.deeplab import DeepLab
 from models.unet import UNet
 from train import Trainer
 import torch_optimizer as optim
-from loss import weighted_loss, BalancedCrossEntropyLoss
+from loss import BalancedCrossEntropyLoss
 from lr_scheduler import get_compose_lr
 
 

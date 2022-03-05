@@ -259,7 +259,7 @@ class LabelToTensor(object):
 
 
 class ImgNorm(object):
-    """Normalize image layers."""
+    """Dataset based normalize image layers. This indicates a general standardization."""
 
     def __init__(self, bands_mean, bands_std):
         """Initialize the object.
@@ -273,9 +273,9 @@ class ImgNorm(object):
     def __call__(self, img):
         """Define the call.
         Params:
-            img (numpy.ndarray): Concatenated variables or brightness value with a dimension of (H, W, C)
+            img (torch.tensor): Concatenated variables or brightness value with a dimension of (H, W, C)
         Returns:
-            (numpy.ndarray) tuple of rescaled image, and label.
+            (torch.tensor) tensor of rescaled image, and label.
         """
         for t, m, s in zip(img, self.mean, self.std):
             t.sub_(m).div_(s)
@@ -283,3 +283,40 @@ class ImgNorm(object):
         # img /= self.std
 
         return img
+
+
+class SingleImgNorm(object):
+    """Image-based normalize image layers. This indicates a general standardization."""
+
+    def __call__(self, img):
+        """Define the call.
+        Params:
+            img (torch.tensor): Concatenated variables or brightness value with a dimension of (H, W, C)
+        Returns:
+            (torch.tensor) tensor of rescaled image, and label.
+        """
+        means = torch.mean(img, dim=(1, 2))
+        stds = torch.std(img, dim=(1, 2))
+        for t, m, s in zip(img, means, stds):
+            t.sub_(m).div_(s)
+
+        return img
+
+
+class ImgMinMaxScaler(object):
+    """Normalize image layers. This indicates a general normalization."""
+
+    def __call__(self, img):
+        """Define the call.
+        Params:
+            img (torch.tensor): Concatenated variables or brightness value with a dimension of (H, W, C)
+        Returns:
+            (torch.tensor) tensor of rescaled image, and label.
+        """
+        max_bands = torch.amax(img, dim=(1, 2))
+        min_bands = torch.amin(img, dim=(1, 2))
+        for t, a, b in zip(img, max_bands, min_bands):
+            t.sub_(b).div_(a.sub_(b))
+
+        return img
+

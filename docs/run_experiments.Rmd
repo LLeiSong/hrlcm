@@ -101,25 +101,6 @@ cd path/of/hrlcm
 
 ### Run models
 
-Before official running, test a bit about the largest values of `num_worker`, `train_batch_size`, `val_batch_size` that could be used. For `g5.12xlarge`, these values could be:
-
-- `num_worker`:48
-- `train_batch_size`: 32 (could be a bit bigger, but it is recommended to use $2^n$)
-- `val_batch_size`: 32
-
-Also, test the optimal learning rate and scheduler to use:
-
-- 0.1 is too large.
-- 0.01 is too large.
-- 0.001 is a good start point.
-- 0.00001 is a good end point.
-
-`final_lr` for `optim.AdaBound`:
-
-- 0.01 still works fine.
-
-Syntax:
-
 ```
 cd path/of/hrlcm
 python hrlcm/fit_step_lr.py --arg arg_value
@@ -135,7 +116,7 @@ python hrlcm/fit_step_lr.py --exp_name unet_one_tile --num_workers 32 --gpu_devi
 ```
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_all_norm_200 --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.000001 --max_lr 0.00001 --save_freq 20 --epochs 201
+python hrlcm/fit_compose_lr.py --exp_name unet_all_norm_200 --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 201
 ```
 
 ### Tensorboard
@@ -154,6 +135,35 @@ Do the following steps to use the tensorboard on a remote server (reference: htt
 
     (on the remote server) `tensorboard --logdir='./tensorboard_dirs' --port=16007`
     
+### Hyperparameter tunning
+#### Network parameter
+
+Before official running, test a bit about the largest values of `num_worker`, `train_batch_size`, `val_batch_size` that could be used. For `g5.12xlarge`, these values can be:
+
+- `num_worker`:48 (CPU cores)
+- `train_batch_size`: 32 (could be a bit bigger, but it is recommended to use $2^n$)
+- `val_batch_size`: 32
+
+#### Learning rate
+Also, test the optimal learning rate and scheduler to use:
+
+- 0.001 is a good start point.
+- 0.00001 is a good end point with middle value of 0.0001.
+
+`final_lr` for `optim.AdaBound`:
+
+- 0.01 still works fine. The default value is robust for many cases.
+
+#### Augmentation
+
+- Random scale
+- Random flip (always use)
+- Random center rotate
+- Normalization
+    - Dataset based standardization
+    - Image based standardization
+    - Image based min-max scaler
+    
 ### Prediction
 
 ```
@@ -167,7 +177,7 @@ python hrlcm/predict.py --help
 
 For example:
 ```
-python hrlcm/predict.py --args_path 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/predict.py --args_path 'results/dl/unet_all_norm_200/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_all_norm_200/checkpoints/final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/north' --out_dir 'results/prediction' --stats_dir 'results/north/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3'
 
 scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/prediction /Users/pinot/Dropbox/research/hrlcm/results/dl
 ```
@@ -185,7 +195,7 @@ python hrlcm/evaluate.py --help
 
 For example:
 ```
-python hrlcm/evaluate.py --args_path 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_k15_hard12_clr_200epc/checkpoints/final.pth' --data_dir 'results/north' --out_dir 'results/evaluation' --stats_dir 'results/north/norm_stats' --num_workers 32 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/evaluate.py --args_path 'results/dl/unet_all_norm_200/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_all_norm_200/checkpoints/final.pth' --data_dir 'results/north' --out_dir 'results/evaluation' --stats_dir 'results/north/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3'
 
 scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/evaluation /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200
 ```
