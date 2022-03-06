@@ -323,10 +323,8 @@ move_valid <- lapply(1:nrow(north_valid), function(n) {
 
 The scripts used for training U-Net are under directory hrlcm. Multiple type of models will be trained:
 
-- Using all bands and image standardization
-- Using all bands without image standardization
-- Using only NICFI bands with image standardization
-- Using only NICFI bands without image standardization
+- Using all bands with image augmentation including image standardization
+- Using only NICFI bands with image augmentation including image standardization （* This provides option of prediction for other years, it is much faster to prepare satellite images).
 
 Please reference to tutorial [Introduction of using AWS instance to run experiments](run_experiments.Rmd) for how to run experiments.
 

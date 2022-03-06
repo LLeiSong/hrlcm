@@ -113,10 +113,10 @@ def main():
 
     # synchronize transform for train dataset
     sync_transform = Compose([
-        # RandomScale(prob=args.trans_prob),
+        RandomScale(prob=args.trans_prob),
         RandomFlip(prob=args.trans_prob),
-        # RandomCenterRotate(degree=args.rg_rotate,
-        #                    prob=args.trans_prob),
+        RandomCenterRotate(degree=args.rg_rotate,
+                           prob=args.trans_prob),
         SyncToTensor()
     ])
 

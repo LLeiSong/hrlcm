@@ -112,7 +112,6 @@ if [ "$SPOTTYPE" = "persistent" ]; then
     --image-id $AMIID \
     --count 1 \
     --instance-type $ITYPE \
-    --subnet-id $SUBNETID \
     --iam-instance-profile 'Name="activemapper_planet_readwriteS3"' \
     --key-name $KEYNAME \
     --security-group-ids $SECGROUPID \
@@ -120,8 +119,7 @@ if [ "$SPOTTYPE" = "persistent" ]; then
     "[ { \"DeviceName\": \"/dev/sda1\", \"Ebs\": { \"VolumeSize\": $SDASIZE } } ]" \
     --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value='$NEWINAME'}]' \
     --instance-market-options 'MarketType=spot,
-          SpotOptions={MaxPrice='$BID_PRICE',
-          SpotInstanceType='$SPOTTYPE',
+          SpotOptions={SpotInstanceType='$SPOTTYPE',
           ValidUntil='$VALIDUNTIL',
           InstanceInterruptionBehavior=stop}'
 else
@@ -136,8 +134,7 @@ else
     "[ { \"DeviceName\": \"/dev/sda1\", \"Ebs\": { \"VolumeSize\": $SDASIZE } } ]" \
     --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value='$NEWINAME'}]' \
     --instance-market-options 'MarketType=spot,
-          SpotOptions={MaxPrice='$BID_PRICE',
-          SpotInstanceType='$SPOTTYPE',
+          SpotOptions={SpotInstanceType='$SPOTTYPE',
           InstanceInterruptionBehavior=terminate}'
 fi
 
@@ -148,5 +145,5 @@ NEWIID=$(aws ec2 describe-instances \
 
 echo $NEWIID
 
-# ./tools/create_spot_instance.sh ami-021ccd558170ad2bb g4dn.12xlarge \
-# sg-0a8bbc91697d6a76b tzlcm one-time 2021-05-15T23:00:00 lsong-keypair 200
+# ./tools/create_spot_instance.sh ami-0db6cdf40b45578e3 g5.12xlarge \
+# sg-0a8bbc91697d6a76b tzlcm persistent 2022-03-10T23:00:00 lsong-keypair 200

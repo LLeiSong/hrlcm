@@ -286,7 +286,10 @@ class ImgNorm(object):
 
 
 class SingleImgNorm(object):
-    """Image-based normalize image layers. This indicates a general standardization."""
+    """Image-based normalize image layers. This indicates a general standardization.
+    Problematic when some bands have constant values. This is not common but it could 
+    happen for many cases.
+    """
 
     def __call__(self, img):
         """Define the call.
@@ -295,13 +298,13 @@ class SingleImgNorm(object):
         Returns:
             (torch.tensor) tensor of rescaled image, and label.
         """
-        means = torch.mean(img, dim=(1, 2))
-        stds = torch.std(img, dim=(1, 2))
+        means = torch.mean(img, dim=(1, 2)).cpu().detach().numpy()
+        stds = torch.std(img, dim=(1, 2)).cpu().detach().numpy()
+        print(stds)
         for t, m, s in zip(img, means, stds):
             t.sub_(m).div_(s)
 
         return img
-
 
 class ImgMinMaxScaler(object):
     """Normalize image layers. This indicates a general normalization."""
@@ -313,10 +316,13 @@ class ImgMinMaxScaler(object):
         Returns:
             (torch.tensor) tensor of rescaled image, and label.
         """
-        max_bands = torch.amax(img, dim=(1, 2))
-        min_bands = torch.amin(img, dim=(1, 2))
+        max_bands = torch.amax(img, dim=(1, 2)).cpu().detach().numpy()
+        min_bands = torch.amin(img, dim=(1, 2)).cpu().detach().numpy()
         for t, a, b in zip(img, max_bands, min_bands):
-            t.sub_(b).div_(a.sub_(b))
+            if a == b:
+                t.sub_(b)
+            else:
+                t.sub_(b).div_(a - b)
 
         return img
 
