@@ -169,7 +169,7 @@ Also, test the optimal learning rate and scheduler to use:
 Records:
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_all_norm_200 --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 201
+python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 121
 ```
     
 ### Prediction
