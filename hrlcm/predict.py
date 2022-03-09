@@ -40,6 +40,7 @@ def main():
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
     parser.add_argument('--img_bands', type=str, choices=['all', 'nicfi'],
+                        default='all',
                         help='bands of satellite images to use. \
                         all means all bands, including RGB, NIR of NICFI tiles, intercept,  \
                         cos(2t) of VV and VH. (default: all)')

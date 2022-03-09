@@ -270,7 +270,8 @@ def main():
         # Save checkpoint
         if epoch % args.save_freq == 0:
             trainer.export_model(model, optimizer=optimizer,
-                                 scheduler=lr_scheduler, name='interim')
+                                 scheduler=lr_scheduler, name='interim',
+                                 step=step)
 
         # Save learning rate to scalar
         writer.add_scalar("Train/lr",
@@ -280,7 +281,7 @@ def main():
         writer.flush()
 
     # Export final set of weights
-    trainer.export_model(model, optimizer, name="final")
+    trainer.export_model(model, optimizer, name="final", step=step)
 
 
 if __name__ == "__main__":
