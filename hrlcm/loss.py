@@ -41,7 +41,10 @@ class BalancedCrossEntropyLoss(nn.Module):
 
         lossWeight = torch.ones(predict.shape[1]).cuda() * 0.00001
         for i in range(len(unique)):
-            lossWeight[unique[i]] = weight[i]
+            if unique[i] == 0:
+                lossWeight[unique[i]] = 2 * weight[i]
+            else:
+                lossWeight[unique[i]] = weight[i]
         loss = nn.CrossEntropyLoss(weight=lossWeight, ignore_index=self.ignore_index, reduction=self.reduction)
 
         return loss(predict, target)

@@ -208,6 +208,9 @@ def main():
 
     # Get learning rate first
     learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr)
+    
+    # Save learning rate scheduler
+    pkl.dump(learning_rates, open(os.path.join(args.checkpoint_dir, "lrs.pkl"), "wb"))
 
     # Define loss function
     loss_fn = BalancedCrossEntropyLoss()
