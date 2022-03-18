@@ -111,6 +111,11 @@ def main():
                         help='path of normalization params (default: ./norm_stats)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
+    parser.add_argument('--img_bands', type=str, choices=['all', 'nicfi'],
+                        default='all',
+                        help='bands of satellite images to use. \
+                        all means all bands, including RGB, NIR of NICFI tiles, intercept,  \
+                        cos(2t) of VV and VH. (default: all)')
     parser.add_argument('--num_workers', type=int, default=0,
                         help='number of worker(s) to load dataset (default: 0)')
 
@@ -146,18 +151,22 @@ def main():
     ])
 
     # Image transform
+    id_bands = list(range(1, 13)) if args.img_bands == "all" else list(range(1, 9))
     # Load mean and sd for normalization
     with open(os.path.join(args.stats_dir,
                            "means.pkl"), "rb") as input_file:
         mean = tuple(pkl.load(input_file))
+        mean = mean[0:len(id_bands)]
 
     with open(os.path.join(args.stats_dir,
                            "stds.pkl"), "rb") as input_file:
         std = tuple(pkl.load(input_file))
+        std = std[0:len(id_bands)]
     img_transform = ImgNorm(mean, std)
 
     # Get validate dataset
     validate_dataset = NFSEN1LC(data_dir=args.data_dir,
+                                bands=id_bands,
                                 usage='validate',
                                 label_offset=args.label_offset,
                                 sync_transform=val_transform,
@@ -215,6 +224,9 @@ def main():
     with torch.no_grad():
         for i, (image, labels) in enumerate(
                 tqdm(validate_loader, desc="Evaluate", dynamic_ncols=True)):
+            # Shrink labels
+            labels = labels[:, 4:-4, 4:-4]
+            
             # Move data to gpu if model is on gpu
             if args.use_gpu:
                 image = image.to(torch.device("cuda"))

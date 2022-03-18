@@ -84,7 +84,7 @@ The most essential work are arguably to clone project and set jupyter notebook:
   ```
   jupyter notebook
   ```
-  replace the private IP with the public IP to open it in browser. If you can log in without issues, then it is ready to go.
+Replace the private IP with the public IP to open it in browser. If you can log in without issues, then it is ready to go.
   
 ### Other cloud computing platform
 
@@ -105,6 +105,7 @@ cd path/of/hrlcm
 cd path/of/hrlcm
 python hrlcm/fit_step_lr.py --arg arg_value
 ```
+
 Check arguments:
 ```
 python hrlcm/fit_step_lr.py --help
@@ -114,7 +115,7 @@ For example:
 ```
 python hrlcm/fit_step_lr.py --exp_name unet_one_tile --num_workers 32 --gpu_devices '0,1,2,3'
 ```
-
+Or
 ```
 python hrlcm/fit_compose_lr.py --exp_name unet_all_norm_200 --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 201
 ```
@@ -171,49 +172,85 @@ According to the experiments, balanced cross entropy loss performs well. In summ
 
 #### Loss weights
 
-According to some experiments, the accuracy of cropland is relatively low. One reason is that the farming condition over Tanzania is complex and thus hard to model. Another reason is the validation of this class has relatively low quality as well. There are limited things we could do for these reasons. But we can let the model to consider more about cropland when training. The strategy can be increasing the loss weight of cropland class. However, the effect is not conclusive.
+According to some previous experiments, the accuracy of cropland is relatively low. One reason is that the farming condition over Tanzania is complex and thus hard to model. Another reason is the validation of this class has relatively low quality as well. There are limited things we could do for these reasons. But we can let the model to consider more about cropland when training. The strategy can be increasing the loss weight of cropland class. However, the effect is not conclusive.
 
-#### Ensemble training
+Hum... Using a bigger weight for cropland in loss calculation increased the accuracy significantly.
+
+#### "Hierachical" training
 
 When training a full model using the whole dataset, the main problem is cropland. One reason is that
-cropland highly relies on local climate and cultivating conditions and Tanzania is a large country.
+cropland highly relies on local climate and cultivating conditions and Tanzania is a large country. To reduce this impact, we could shrink the study area gradually into each agro-ecological zone.
 
-- Train multiple models with subset of labels.
+- Modeling structure:
 
-  - Zone 1, 2, 3, 4, 5 (composite learning rate)
-  - Zone 1, 2, 3, 4
-  - Zone 1, 2, 3, 5
-  - Zone 1, 2, 4, 5
-  - Zone 1, 3, 4, 5
-  - Zone 2, 3, 4, 5
+```
+1, 2, 4, 5 -> 1, 2, 5 -> 1, 2 -> 1
+                      -> 2, 5 -> 2
+                              -> 5
+2, 3, 4, 5 -> 2, 3, 4 -> 2, 3 -> 3
+                      -> 2, 4 -> 4
+```
 
-- Ensemble these models by voting, possibly at segment level.
+Within all groups, 1, 2, 4, 5/2, 3, 4, 5, and 1, 2, 5/2, 3, 4 update all weights. 1, 2/2, 5/2, 3/2, 4 update weights of last few layers.
 
-Records:
+Update all weights:
 
 Zone 1, 2, 3, 4, 5
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 151
+python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 121
 ```
-Zone 1, 2, 3, 4
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 151
-```
-Zone 1, 2, 3, 5
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 151
-```
+
+Then, comment out line 247 - 249 in `fit_compose_lr.py`, and modify `lr_scheduler.py` correspondingly. The learning rate scheduler is saved as a pickle as well.
+
 Zone 1, 2, 4, 5
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 151
+python hrlcm/fit_compose_lr.py --exp_name unet_z1245_12bs_4augs_ft_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_full_12bs_4augs_120epochs/checkpoints/final.pth'
 ```
-Zone 1, 3, 4, 5
+
+Zone 1, 2, 5
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 151
+python hrlcm/fit_compose_lr.py --exp_name unet_z125_12bs_4augs_ft_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z1245_12bs_4augs_ft_80epochs/checkpoints/final.pth'
 ```
+
 Zone 2, 3, 4, 5
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 151
+python hrlcm/fit_compose_lr.py --exp_name unet_z2345_12bs_4augs_ft_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_full_12bs_4augs_120epochs/checkpoints/final.pth'
+```
+
+Zone 2, 3, 4
+```
+python hrlcm/fit_compose_lr.py --exp_name unet_z234_12bs_4augs_ft_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z2345_12bs_4augs_ft_80epochs/checkpoints/final.pth'
+```
+
+Freeze some layers, only update weights of last few layers: 
+
+1 * 8 (initial) + 4 * 8 (down) + 4 * 8 (up) + 2 = 74 layers
+
+- 40: freeze all down layers
+- 56: freeze all down and the first two up blocks (works the best)
+- 64: freeze all down and the first three up blocks
+- 72: freeze all down and up blocks, just update the last two layers
+
+To ensure the class balance, we decided to use two zones together.
+
+Zone 1, 2 (For zone 1)
+```
+python hrlcm/fit_compose_lr.py --exp_name unet_z12_12bs_4augs_ft_fz56_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z125_12bs_4augs_ft_80epochs/checkpoints/final.pth'
+```
+
+Zone 2, 5 (For zone 2 & 5)
+```
+python hrlcm/fit_compose_lr.py --exp_name unet_z25_12bs_4augs_ft_fz56_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z125_12bs_4augs_ft_80epochs/checkpoints/final.pth'
+```
+
+Zone 2, 3 (For zone 3)
+```
+python hrlcm/fit_compose_lr.py --exp_name unet_z23_12bs_4augs_ft_fz56_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z234_12bs_4augs_ft_80epochs/checkpoints/final.pth'
+```
+
+Zone 2, 4 (For zone 4)
+```
+python hrlcm/fit_compose_lr.py --exp_name unet_z24_12bs_4augs_ft_fz56_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z234_12bs_4augs_ft_80epochs/checkpoints/final.pth'
 ```
     
 ### Prediction
@@ -229,10 +266,52 @@ python hrlcm/predict.py --help
 
 For example:
 ```
-python hrlcm/predict.py --args_path 'results/dl/unet_zone1_12bs_4augs_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_zone1_12bs_4augs_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/predict.py --args_path 'results/dl/unet_z12_12bs_4augs_ft_fz56_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z12_12bs_4augs_ft_fz56_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_test.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction_z12' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3'
 
-scp -r ubuntu@ec2-54-163-146-125.compute-1.amazonaws.com:~/hrlcm/results/prediction /Users/pinot/Dropbox/research/hrlcm/results/tanzania/prediction/unet_zone1_12bs_4augs_80epochs
+scp -r ubuntu@ec2-3-88-131-12.compute-1.amazonaws.com:~/hrlcm/results/prediction_z12 /Users/pinot/Dropbox/research/hrlcm/results/tanzania/prediction/z12
 ```
+
+Records:
+
+```
+python hrlcm/predict.py --args_path 'results/dl/unet_z12_12bs_4augs_ft_fz56_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z12_12bs_4augs_ft_fz56_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone1.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 16 --batch_size 16 --gpu_devices '0'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_z25_12bs_4augs_ft_fz56_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z25_12bs_4augs_ft_fz56_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone2.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 16 --batch_size 16 --gpu_devices '0'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_z25_12bs_4augs_ft_fz56_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z25_12bs_4augs_ft_fz56_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone5.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 16 --batch_size 16 --gpu_devices '0'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_z23_12bs_4augs_ft_fz56_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z23_12bs_4augs_ft_fz56_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone3.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 16 --batch_size 16 --gpu_devices '0'
+
+python hrlcm/predict.py --args_path 'results/dl/unet_z24_12bs_4augs_ft_fz56_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z24_12bs_4augs_ft_fz56_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone4.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 16 --batch_size 16 --gpu_devices '0'
+```
+
+```{r}
+# Get imgs in S3
+library(aws.s3)
+library(dplyr)
+library(parallel)
+items <- get_bucket(bucket = "activemapper", 
+                    prefix = "leisong/predict", 
+                    max = Inf)
+keys <- unlist(lapply(c(2: length(items)), function(i) {
+    gsub("leisong/", "", items[[i]]$Key)
+}))
+
+catalog_pred <- read.csv("results/tanzania/dl_catalog_predict.csv", 
+                         stringsAsFactors = FALSE)
+fns <- catalog_pred$img %>% unique()
+
+fns <- setdiff(fns, keys)
+pth_from <- '/Volumes/elephant'
+pth_to <- 's3://activemapper/leisong'
+mclapply(fns, function(tile_pth) {
+    print(tile_pth)
+    cmd <- sprintf('aws s3 cp %s/%s %s/%s',
+                   pth_from, tile_pth, pth_to, tile_pth)
+    system(cmd, intern = TRUE)
+}, mc.cores = 10)
+```
+
 
 ### Evaluation
 
@@ -247,10 +326,15 @@ python hrlcm/evaluate.py --help
 
 For example:
 ```
-python hrlcm/evaluate.py --args_path 'results/dl/unet_all_norm_200/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_all_norm_200/checkpoints/final.pth' --data_dir 'results/north' --out_dir 'results/evaluation' --stats_dir 'results/north/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3'
+python hrlcm/evaluate.py --args_path 'results/dl/unet_z12_12bs_4augs_ft_fz56_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z12_12bs_4augs_ft_fz56_80epochs/checkpoints/final.pth' --data_dir 'results/tanzania' --out_dir 'results/evaluation' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3'
 
 scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/evaluation /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200
 ```
+
+#### Post-cleaning
+
+- Cropland/Water: Object fixing
+- Grassland/Shrubland/Forest/Build-up/Bareland: No fix
 
 ## Other useful commands
 
@@ -265,4 +349,14 @@ rm -rf *
 
 ```bash
 free -m
+```
+
+### Copy files from/in S3
+
+```
+while true; do aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone1; sleep 50m; done
+```
+
+```
+aws s3 cp --recursive s3://activemapper/leisong/unet_z1245_12bs_4augs_ft_80epochs/ $HOME/hrlcm/results/dl/unet_z1245_12bs_4augs_ft_80epochs
 ```

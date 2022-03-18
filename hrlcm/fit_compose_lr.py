@@ -207,6 +207,11 @@ def main():
             model = torch.nn.DataParallel(model, device_ids=args.gpu_devices)
         model = model.cuda()
 
+    # Get learning rate first
+    learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr)
+    # Save learning rate scheduler
+    pkl.dump(learning_rates, open(os.path.join(args.checkpoint_dir, "lrs.pkl"), "wb"))
+
     # Define loss function
     loss_fn = BalancedCrossEntropyLoss()
     loss_fn_valid = BalancedCrossEntropyLoss()
@@ -242,20 +247,11 @@ def main():
             if checkpoint['step'] > step:
                 step = checkpoint['step']
                 epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
-                # Get learning rate first
-                learning_rates = get_compose_lr(model, args.epochs - epoch, args.min_lr, args.max_lr)
-                # Save learning rate scheduler
-                pkl.dump(learning_rates, open(os.path.join(args.checkpoint_dir, "lrs.pkl"), "wb"))
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             print("Load checkpoint '{}' (epoch {})".format(args.resume, epoch))
         else:
             sys.exit("No checkpoint found at '{}'".format(args.resume))
-    else:
-        # Get learning rate first
-        learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr)
-        # Save learning rate scheduler
-        pkl.dump(learning_rates, open(os.path.join(args.checkpoint_dir, "lrs.pkl"), "wb"))
 
     # Do loop
     trainer = Trainer(args)

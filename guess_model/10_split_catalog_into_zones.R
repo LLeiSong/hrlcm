@@ -24,12 +24,15 @@ catalog_train <- read.csv('results/tanzania/dl_catalog_train.csv',
                           stringsAsFactors = FALSE)
 catalog_valid <- read.csv('results/tanzania/dl_catalog_valid.csv',
                          stringsAsFactors = FALSE)
-zone_groups <- list(c(1, 2, 3, 4, 5), 
-                    c(1, 2, 3, 4),
-                    c(1, 2, 3, 5),
-                    c(1, 2, 4, 5),
-                    c(1, 3, 4, 5),
-                    c(2, 3, 4, 5))
+
+# Split into groups
+zone_groups <- list(c(1, 2, 4, 5),
+                    c(1, 2, 5),
+                    c(1, 2),
+                    c(2, 5),
+                    c(2, 3, 4, 5),
+                    c(2, 3, 4),
+                    c(2, 3), c(2, 4))
 invisible(lapply(zone_groups, function(zone_ids) {
     tile_ids <- tiles %>% filter(zone %in% zone_ids) %>% pull(tile)
     catalog_train_zone <- catalog_train %>% filter(tile %in% tile_ids)
@@ -42,4 +45,34 @@ invisible(lapply(zone_groups, function(zone_ids) {
               sprintf('results/tanzania/dl_catalog_valid_zone%s.csv', 
                       paste0(zone_ids, collapse = "")),
               row.names = FALSE)
+}))
+
+# Split predict tiles
+catalog_predict <- read.csv('results/tanzania/dl_catalog_predict.csv',
+                            stringsAsFactors = FALSE)
+zone_groups <- c(1:5)
+invisible(lapply(zone_groups, function(zone_ids) {
+    tile_ids <- tiles %>% filter(zone %in% zone_ids) %>% 
+        pull(tile) %>% unique()
+    catalog_pred_zone <- catalog_predict %>% filter(tile_id %in% tile_ids)
+    
+    if (zone_ids %in% c(1, 4)) {
+        catalog_pred_zone1 <- catalog_pred_zone %>% 
+            slice(1:(nrow(.) %/% 2))
+        catalog_pred_zone1 <- catalog_pred_zone %>% 
+            filter(!tile_id %in% catalog_pred_zone1$tile_id)
+        write.csv(catalog_pred_zone1, 
+                  sprintf('results/tanzania/dl_catalog_predict_zone%s_1.csv', 
+                          paste0(zone_ids, collapse = "")),
+                  row.names = FALSE)
+        write.csv(catalog_pred_zone2, 
+                  sprintf('results/tanzania/dl_catalog_predict_zone%s_2.csv', 
+                          paste0(zone_ids, collapse = "")),
+                  row.names = FALSE)
+    } else {
+        write.csv(catalog_pred_zone, 
+                  sprintf('results/tanzania/dl_catalog_predict_zone%s.csv', 
+                          paste0(zone_ids, collapse = "")),
+                  row.names = FALSE)
+    }
 }))
