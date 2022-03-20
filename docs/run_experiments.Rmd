@@ -174,7 +174,7 @@ According to the experiments, balanced cross entropy loss performs well. In summ
 
 According to some previous experiments, the accuracy of cropland is relatively low. One reason is that the farming condition over Tanzania is complex and thus hard to model. Another reason is the validation of this class has relatively low quality as well. There are limited things we could do for these reasons. But we can let the model to consider more about cropland when training. The strategy can be increasing the loss weight of cropland class. However, the effect is not conclusive.
 
-Hum... Using a bigger weight for cropland in loss calculation increased the accuracy significantly.
+Hum... Using a bigger weight for cropland in loss calculation increased the overall accuracy a bit. However, the cost is the overestimation of cropland over sparse vegetation area.
 
 #### "Hierachical" training
 
@@ -197,7 +197,7 @@ Update all weights:
 
 Zone 1, 2, 3, 4, 5
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 121
+python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_ew_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 121
 ```
 
 Then, comment out line 247 - 249 in `fit_compose_lr.py`, and modify `lr_scheduler.py` correspondingly. The learning rate scheduler is saved as a pickle as well.
@@ -253,6 +253,22 @@ Zone 2, 4 (For zone 4)
 python hrlcm/fit_compose_lr.py --exp_name unet_z24_12bs_4augs_ft_fz56_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z234_12bs_4augs_ft_80epochs/checkpoints/final.pth'
 ```
     
+#### "Hierarchical" training with dynamic loss function
+
+First, train a general model with relatively large learning rate (0.001 - 0.0001), balanced cross entropy loss function, and full training dataset for 80 epochs:
+
+```
+python hrlcm/fit_compose_lr.py --exp_name unet_full_12bs_4augs_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0001 --max_lr 0.001 --save_freq 20 --epochs 81
+```
+
+Then, transfer with updating weights of all layers. It uses relatively small learning rate (0.0001 - 0.000001) with a dynamic loss that is a weighted average of BCE and Lovász-Softmax.
+
+Take zone1 as an example:
+
+```
+python hrlcm/fit_compose_lr.py --exp_name unet_z1_12bs_4augs_ft_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.000001 --max_lr 0.0001 --save_freq 20 --epochs 121 --resume 'results/dl/unet_full_12bs_4augs_80epochs/checkpoints/final.pth'
+```
+
 ### Prediction
 
 ```
@@ -354,9 +370,9 @@ free -m
 ### Copy files from/in S3
 
 ```
-while true; do aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone1; sleep 50m; done
+while true; do aws s3 cp --recursive $HOME/hrlcm/results/prediction_zone1 s3://activemapper/leisong/prediction/zone1_only; sleep 50m; done
 ```
 
 ```
-aws s3 cp --recursive s3://activemapper/leisong/unet_z1245_12bs_4augs_ft_80epochs/ $HOME/hrlcm/results/dl/unet_z1245_12bs_4augs_ft_80epochs
+aws s3 cp --recursive s3://activemapper/leisong/unet_full_12bs_4augs_120epochs/ $HOME/hrlcm/results/dl/unet_full_12bs_4augs_120epochs
 ```

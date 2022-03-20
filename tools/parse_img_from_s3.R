@@ -9,7 +9,7 @@ fns <- unlist(lapply(catalog_pred$tiles_relate, function(relates) {
     strsplit(relates, ",")[[1]]})) %>% unique()
 fns <- fns[fns != "None"]
 
-pth_to <- 'ubuntu@:/home/ubuntu/hrlcm/results/tanzania'
+pth_to <- '/home/ubuntu/hrlcm/results/tanzania'
 pth_from <- 's3://activemapper/leisong'
 mclapply(fns, function(tile_pth) {
     print(tile_pth)
