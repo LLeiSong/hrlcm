@@ -302,44 +302,17 @@ python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoint
 aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction
 ```
 
+`tools/parse_img_from_s3.R` is a script to grab image stacks from S3 to local machine.
+
 Steps in production:
 
 ```
+aws s3 cp --recursive s3://activemapper/leisong/model $HOME/hrlcm/results/dl
 
-python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone1_1.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3'
+cd ~/hrlcm
 
-aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone1
-
-rm -rf results/prediction
+Rscript tools/parse_img_from_s3.R -z 1 -s 1;python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone1_1.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone1;rm -rf results/prediction;rm -rf results/predict;Rscript tools/parse_img_from_s3.R -z 1 -s 2;python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone1_2.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone1;rm -rf results/prediction;rm -rf results/predict;Rscript tools/parse_img_from_s3.R -z 2;python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone2.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone2;rm -rf results/prediction;rm -rf results/predict;Rscript tools/parse_img_from_s3.R -z 5;python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone5.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone5;rm -rf results/prediction;rm -rf results/predict;Rscript tools/parse_img_from_s3.R -z 3;python hrlcm/predict.py --args_path 'results/dl/unet_z234_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z234_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone3.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone3;rm -rf results/prediction;rm -rf results/predict;Rscript tools/parse_img_from_s3.R -z 4 -s 1;python hrlcm/predict.py --args_path 'results/dl/unet_z234_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z234_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone4_1.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone4;rm -rf results/prediction;rm -rf results/predict;Rscript tools/parse_img_from_s3.R -z 4 -s 2;python hrlcm/predict.py --args_path 'results/dl/unet_z234_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z234_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone4_2.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone4;rm -rf results/prediction;rm -rf results/predict
 ```
-
-```{r}
-# Get imgs in S3
-library(aws.s3)
-library(dplyr)
-library(parallel)
-items <- get_bucket(bucket = "activemapper", 
-                    prefix = "leisong/predict", 
-                    max = Inf)
-keys <- unlist(lapply(c(2: length(items)), function(i) {
-    gsub("leisong/", "", items[[i]]$Key)
-}))
-
-catalog_pred <- read.csv("results/tanzania/dl_catalog_predict.csv", 
-                         stringsAsFactors = FALSE)
-fns <- catalog_pred$img %>% unique()
-
-fns <- setdiff(fns, keys)
-pth_from <- '/Volumes/elephant'
-pth_to <- 's3://activemapper/leisong'
-mclapply(fns, function(tile_pth) {
-    print(tile_pth)
-    cmd <- sprintf('aws s3 cp %s/%s %s/%s',
-                   pth_from, tile_pth, pth_to, tile_pth)
-    system(cmd, intern = TRUE)
-}, mc.cores = 10)
-```
-
 
 ### Evaluation
 

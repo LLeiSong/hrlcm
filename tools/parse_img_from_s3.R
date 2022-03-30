@@ -3,7 +3,6 @@ library(aws.s3)
 library(dplyr)
 library(parallel)
 library(optparse)
-library(here)
 
 # Get command inputs
 option_list <- list(
@@ -16,9 +15,17 @@ option_list <- list(
 parms <- parse_args(OptionParser(option_list = option_list))
 
 # Do process
-pth <- file.path('/home/ubuntu/hrlcm/results/tanzania',
-                 sprintf('/dl_catalog_predict_zone%d_%d.csv',
-                         parms$zone, parms$sub_index))
+if (is.null(parms$sub_index)) {
+    pth <- file.path('/home/ubuntu/hrlcm/results/tanzania',
+                     sprintf('/dl_catalog_predict_zone%d.csv',
+                             parms$zone))
+} else {
+    pth <- file.path('/home/ubuntu/hrlcm/results/tanzania',
+                     sprintf('/dl_catalog_predict_zone%d_%d.csv',
+                             parms$zone, parms$sub_index))
+}
+
+message(pth)
 catalog_pred <- read.csv(pth, stringsAsFactors = FALSE)
 fns <- unlist(lapply(catalog_pred$tiles_relate, function(relates) {
     strsplit(relates, ",")[[1]]})) %>% unique()
