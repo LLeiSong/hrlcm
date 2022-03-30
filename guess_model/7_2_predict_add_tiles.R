@@ -1,4 +1,4 @@
-# Title     : Script to make guess labels
+# Title     : Script to make guess labels for some special regions
 # Objective : To use random forest guesser
 #             to get new labels. At this stage,
 #             we used Google Open Buildings as built-up label
@@ -41,24 +41,27 @@ source('guess_model/functions.R')
 # Directories
 message("--Set directories")
 stack_dir <- '/Volumes/elephant/pred_stack'
-labels_dir <- here('results/tanzania/guess_labels')
+labels_dir <- here('results/tanzania/guess_labels_add')
 if (!dir.exists(labels_dir)) dir.create(labels_dir)
 
 # Read vectors
 message("--Read vectors")
 tiles <- read_sf('data/geoms/tiles_nicfi.geojson') %>% select(tile)
 # Subset tiles
-tiles_north <- read_sf('data/geoms/tiles_nicfi_north.geojson')
-tiles <- tiles %>% filter(!tile %in% tiles_north$tile)
+oversample_zones <- read_sf('data/geoms/oversample_zones.geojson')
+tiles <- tiles %>% slice(unique(unlist(st_intersects(oversample_zones, tiles))))
+# Remove existing ones
+catalog_exist <- read.csv("results/tanzania/dl_catalog_train.csv")
+tiles <- tiles %>% filter(!tile %in% unique(catalog_exist$tile))
+rm(catalog_exist)
+
 ## Remove the problematic tile
 tiles <- tiles %>% filter(tile != '1210-1018')
-set.seed(123)
-tiles <- tiles %>% sample_frac(0.5); rm(tiles_north)
 
-# Cut the tiles and make 4 samples
-# 3 for train, 1 for validate
+# Cut the tiles and make 3 samples
+# 3 just for train
 message('--Generate catalog')
-n_sample <- 4
+n_sample <- 1
 indices <- matrix(1:64, 8, 8)
 indices <- indices[, ncol(indices):1]
 sample_tiles <- do.call(rbind, lapply(1:nrow(tiles), function(n){
@@ -71,17 +74,8 @@ sample_tiles <- do.call(rbind, lapply(1:nrow(tiles), function(n){
         mutate(tile = tile$tile,
                index = as.vector(indices)) %>% 
         slice(sample(1:nrow(.), n_sample))
-}))
-# st_write(sample_tiles, here('results/tanzania/catalog_sample_tiles.geojson'))
-
-# Filter finished ones [IN CASE]
-tiles_finished <- list.files(labels_dir, pattern = 'guess')
-tiles_finished <- str_extract(tiles_finished,
-                              '[0-9]+-[0-9]+_[0-9]+')
-sample_tiles <- sample_tiles %>%
-    mutate(fname = paste(tile, index, sep = '_')) %>%
-    filter(!fname %in% tiles_finished) %>%
-    dplyr::select(-fname); rm(tiles_finished)
+})) %>% mutate(use = 1, modify = 0, comment = NA)
+# st_write(sample_tiles, here('results/tanzania/catalog_sample_tiles_add.geojson'))
 
 # Roads
 ## Crop and join with tiles first
@@ -103,6 +97,7 @@ waterbodies <- st_join(
     filter(!is.na(tile))
 
 # Buildings
+ranges <- st_bbox(oversample_zones)
 fn <- 'open_buildings_v1_polygons_ne_10m_TZA.csv'
 buildings <- st_read(here(file.path('data/open_buildings', fn)),
                      int64_as_string = F,
@@ -112,16 +107,18 @@ buildings <- buildings %>%
            longitude = as.numeric(longitude),
            area_in_meters = as.numeric(area_in_meters),
            confidence = as.numeric(confidence)) %>% 
+    filter(latitude >= ranges[2] & latitude <= ranges[4] &
+               longitude >= ranges[1] & longitude <= ranges[3]) %>% 
     # Buildings with area less than a pixel might not be representative
     filter(confidence >= 0.75 & area_in_meters > 4.8^2) %>% 
     mutate(geometry = st_as_sfc(geometry) %>% 
                st_cast('MULTIPOLYGON')) %>% 
     st_as_sf() %>% st_set_crs(4326) %>% 
     st_make_valid()
-# st_write(buildings, here('data/open_buildings/buildings_all_filtered.geojson'))
 buildings <- st_join(
     buildings, sample_tiles %>% dplyr::select(tile, index)) %>% 
     filter(!is.na(tile))
+# save(buildings, file = 'results/tanzania/buildings.rda')
 
 message('--Start generating')
 lapply(unique(sample_tiles$tile), function(tile_id){
@@ -131,12 +128,12 @@ lapply(unique(sample_tiles$tile), function(tile_id){
         filter(tile == tile_id)
     building <- buildings %>% 
         filter(tile == tile_id)
-    make_pred(tile_id = tile_id,
-              sample_tiles = sample_tiles,
-              road = road,
-              waterbody = waterbody,
-              building = building,
-              img_dir = stack_dir)
+    make_pred_noscore(tile_id = tile_id,
+                      sample_tiles = sample_tiles,
+                      road = road,
+                      waterbody = waterbody,
+                      building = building,
+                      img_dir = stack_dir)
     
     # Remove big spat temps
     file.remove(list.files(tempdir(), pattern = 'spat',

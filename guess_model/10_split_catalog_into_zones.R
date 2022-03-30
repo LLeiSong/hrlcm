@@ -59,7 +59,7 @@ invisible(lapply(zone_groups, function(zone_ids) {
     if (zone_ids %in% c(1, 4)) {
         catalog_pred_zone1 <- catalog_pred_zone %>% 
             slice(1:(nrow(.) %/% 2))
-        catalog_pred_zone1 <- catalog_pred_zone %>% 
+        catalog_pred_zone2 <- catalog_pred_zone %>% 
             filter(!tile_id %in% catalog_pred_zone1$tile_id)
         write.csv(catalog_pred_zone1, 
                   sprintf('results/tanzania/dl_catalog_predict_zone%s_1.csv', 

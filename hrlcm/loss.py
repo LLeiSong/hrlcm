@@ -7,11 +7,12 @@ Maintainer: Lei Song (lsong@clarku.edu)
 """
 
 from __future__ import print_function
+
+import numpy as np
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
-import numpy as np
+from torch.autograd import Variable
 
 try:
     from itertools import ifilterfalse
@@ -47,8 +48,12 @@ class BalancedCrossEntropyLoss(nn.Module):
 
         lossWeight = torch.ones(predict.shape[1]).cuda() * 0.00001
         for i in range(len(unique)):
+            # Modify if you want to raise or reduce the weight of one class
             if unique[i] == 0:
                 lossWeight[unique[i]] = 2 * weight[i]
+            # # For 2-zone fine tune
+            # if unique[i] == 5:
+            #     lossWeight[unique[i]] = 0.5 * weight[i]
             else:
                 lossWeight[unique[i]] = weight[i]
         loss = nn.CrossEntropyLoss(weight=lossWeight, ignore_index=self.ignore_index, reduction=self.reduction)
@@ -182,6 +187,64 @@ def lovasz_softmax_flat(probas, labels, classes='present'):
     return mean(losses)
 
 
+def balanced_lovasz_softmax(predicts, labels, classes='present', per_image=False, ignore=None):
+    """
+    Multi-class Lovasz-Softmax loss
+      predicts: [B, C, H, W] Variable, class modeled result at each prediction.
+              Interpreted as binary (sigmoid) output with outputs of size [B, H, W].
+      labels: [B, H, W] Tensor, ground truth labels (between 0 and C - 1)
+      classes: 'all' for all, 'present' for classes present in labels, or a list of classes to average.
+      per_image: compute the loss per image instead of per batch
+      ignore: void class labels
+    """
+    probas = F.softmax(predicts, dim=1)
+    if per_image:
+        loss = mean(balanced_lovasz_softmax_flat(*flatten_probas(prob.unsqueeze(0), lab.unsqueeze(0), ignore))
+                    for prob, lab in zip(probas, labels))
+    else:
+        loss = balanced_lovasz_softmax_flat(*flatten_probas(probas, labels, ignore))
+    return loss
+
+
+def balanced_lovasz_softmax_flat(probas, labels):
+    """
+    Multi-class Lovasz-Softmax loss
+      probas: [P, C] Variable, class probabilities at each prediction (between 0 and 1)
+      labels: [P] Tensor, ground truth labels (between 0 and C - 1)
+    """
+    if probas.numel() == 0:
+        # only void pixels, the gradients should be 0
+        return probas * 0.
+
+    C = probas.size(1)
+
+    # get class weights
+    unique, unique_counts = torch.unique(labels, return_counts=True)
+    ratio = unique_counts.float() / torch.numel(labels)
+    weight = (1. / ratio) / torch.sum(1. / ratio)
+    lossWeight = []
+    for i in range(len(unique)):
+        # Modify if you want to raise or reduce the weight of one class
+        if unique[i] == 0:
+            lossWeight.append(2 * weight[i])
+        else:
+            lossWeight.append(weight[i])
+
+    losses = []
+    for c in unique:
+        fg = (labels == c).float()  # foreground for class c
+        class_pred = probas[:, c]
+        errors = (Variable(fg) - class_pred).abs()
+        errors_sorted, perm = torch.sort(errors, 0, descending=True)
+        perm = perm.data
+        fg_sorted = fg[perm]
+        losses.append(torch.dot(errors_sorted, Variable(lovasz_grad(fg_sorted))))
+    lossWeight = torch.stack(lossWeight)
+    losses = torch.stack(losses)
+    weighted_mean = sum(losses * lossWeight) / sum(lossWeight)
+    return weighted_mean
+
+
 def flatten_probas(probas, labels, ignore=None):
     """
     Flattens predictions in the batch
@@ -201,16 +264,25 @@ def flatten_probas(probas, labels, ignore=None):
     return vprobas, vlabels
 
 
-def lovasz_softmax_bce(predicts, labels, classes='present', per_image=False, ignore=None, alpha=0.5):
-    bce = BalancedCrossEntropyLoss(ignore_index=ignore)
-    if alpha == 1:
-        loss = bce(predicts, labels)
-    elif alpha == 0:
-        loss = lovasz_softmax(predicts, labels, classes, per_image, ignore)
-    else:
-        loss = alpha * bce(predicts, labels) + (1 - alpha) * lovasz_softmax(predicts, labels,
-                                                                            classes, per_image, ignore)
-    return loss
+class LovaszSoftmaxBce(nn.Module):
+    def __init__(self, classes='present', per_image=False, ignore=-100, alpha=0.5):
+        super(LovaszSoftmaxBce, self).__init__()
+        self.classes = classes
+        self.per_image = per_image
+        self.ignore = ignore
+        self.alpha = alpha
+
+    def forward(self, predict, target):
+        bce = BalancedCrossEntropyLoss(ignore_index=self.ignore)
+        
+        if self.alpha == 1:
+            loss = bce(predict, target)
+        elif self.alpha == 0:
+            loss = lovasz_softmax(predict, target, self.classes, self.per_image, self.ignore)
+        else:
+            loss = self.alpha * bce(predict, target) + (1 - self.alpha) * lovasz_softmax(predict, target,
+                                                                                self.classes, self.per_image, self.ignore)
+        return loss
 
 
 # --------------------------- HELPER FUNCTIONS ---------------------------

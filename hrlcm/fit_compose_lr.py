@@ -209,6 +209,25 @@ def main():
 
     # Get learning rate first
     learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr)
+    
+    # # Modify stages
+    # learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr, 
+    #                                 stage1=10, stage2=40, stage3=70)
+    
+    # # Modify stages and change some values
+    # learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr, 
+    #                                 stage1=20, stage2=40, stage3=60)
+    # learning_rates[0:10] = [0.001] * 10
+    # learning_rates[72:81] = [0.000001] * 10
+    
+    # # Use fixed values
+    # learning_rates = [args.max_lr] * args.epochs
+    
+    # # Fine tune scheduler
+    # learning_rates = [1e-6] * args.epochs
+    # learning_rates[0:10] = [1e-5] * 11
+    # learning_rates[11:30] = [5e-6] * 20
+    
     # Save learning rate scheduler
     pkl.dump(learning_rates, open(os.path.join(args.checkpoint_dir, "lrs.pkl"), "wb"))
 
@@ -249,7 +268,19 @@ def main():
                 epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            # # Update final learning rate to 0.00001
+            # # For instance, it could be used for fine tuning stage
+            # for param_group in optimizer.param_groups:
+            #     param_group["final_lr"] = 0.00001
             print("Load checkpoint '{}' (epoch {})".format(args.resume, epoch))
+            
+            # # Freeze some layers
+            # print("Freeze 72 layers.")
+            # count = 0
+            # for param in model.parameters():
+            #     if count < 72:
+            #         param.requires_grad = False
+            #     count += 1
         else:
             sys.exit("No checkpoint found at '{}'".format(args.resume))
 
@@ -259,18 +290,18 @@ def main():
         # Update info
         print("[Epoch {}] lr: {}".format(
             epoch, optimizer.param_groups[0]["lr"]))
+        
+        # Update learning rate
+        # Since learning rate is a very important hyper-parameter,
+        # it is recommended to visualize learning rate first.
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = learning_rates[epoch]
 
         # Run training for one epoch
         model, step = trainer.train(model, train_loader, loss_fn,
                                     optimizer, writer, step=step)
         # Run validation
         trainer.validate(model, validate_loader, step, loss_fn_valid, writer)
-
-        # Update learning rate
-        # Since learning rate is a very important hyper-parameter,
-        # it is recommended to visualize learning rate first.
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = learning_rates[epoch]
 
         # Save checkpoint
         if epoch % args.save_freq == 0:
