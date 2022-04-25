@@ -131,7 +131,7 @@ nicfi_s2 <- stack(fnames_nicfi[2]) %>% subset(1:4)
 rm(fnames_nicfi)
 
 # Define example points
-pts_example <- read_sf(here('data/north/pts_example.shp')) %>% 
+pts_example <- read_sf(here('data/north/pts_example.geojson')) %>% 
     st_cast('POINT')
 
 # NICFI
@@ -412,7 +412,7 @@ pts_fit <- rbind(pts_vv_fit, pts_vh_fit) %>%
     pivot_longer(names(.)[1:7], 
                  names_to = "Land cover type", 
                  values_to = "dB")
-rm(pts_vv_ts, pts_vh_ts)
+rm(pts_vv_fit, pts_vh_fit)
 
 # Make figure
 pts_ts <- merge(pts_ts, cols_lc[, 2:3])
@@ -439,12 +439,46 @@ s1_fg <- ggarrange(
               labels = c('VV', 'VH'),
               font.label = list(size = 12),
               vjust = 3,
-              ncol = 2), 
+              nrow = 2), 
     ts_epl, ncol = 2)
 
 ggsave(here('docs/figures/s1_image.png'),
        s1_fg,
        width = 8, height = 2.7, dpi = 300)
+
+# Version 2
+ts_epl <- ggplot() + 
+    geom_point(data = pts_ts, 
+               aes(x = DOY, y = `dB`, 
+                   color = factor(ids)),
+               size = 0.6) +
+    geom_line(data = pts_fit,
+              aes(x = DOY, y = `dB`, 
+                  color = factor(ids))) +
+    facet_wrap(~polarization, 
+               scales = 'free_y', nrow = 2,
+               strip.position = "top") +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    theme_bw() +
+    theme(text=element_text(size=8),
+          axis.text=element_text(size=8),
+          axis.title=element_text(size=8), 
+          plot.title=element_text(size=8), 
+          legend.text=element_text(size=8), 
+          legend.title=element_text(size=8))
+s1_fg <- ggarrange(
+    ggarrange(NA, vh_fg, NA, vv_fg, NA, nrow = 5,
+              heights = c(0.05, 1, 0.05, 1, 0.25),
+              labels = c(NA, 'VH', NA, 'VV', NA),
+              font.label = list(size = 8),
+              hjust = 0.05), 
+    ts_epl, ncol = 2, widths = c(1, 2.2))
+ggsave(here('docs/figures/s1_image_v2.png'),
+       s1_fg,
+       width = 6, height = 3.5, dpi = 300)
 ```
 
 ## Samples for Random forest and U-Net
@@ -759,12 +793,6 @@ tiles <- tiles %>%
   st_drop_geometry() %>% 
   mutate(quality = factor(quality))
 
-ggplot(tiles, aes(quality)) +
-  geom_bar(color = 'black',fill = 'cyan3') +
-  xlab('Quality (correctness, difficulty)') +
-  ylab('Count') +
-  theme_bw()
-
 quality_fig <- ggplot(
   tiles,
   aes(fill = factor(hardiness), x = score)) + 
@@ -772,13 +800,6 @@ quality_fig <- ggplot(
   scale_fill_brewer('Difficulty', palette = "Dark2") +
   xlab('Correctness') +
   ylab('Count') +
-  theme_bw()
-
-ggplot(
-  tiles,
-  aes(fill = factor(hardiness), x = score)) + 
-  geom_bar(position = "stack") +
-  coord_polar("x") +
   theme_bw()
 
 ggsave(here('docs/figures/humancheck_quality.png'),
@@ -899,12 +920,14 @@ names(final_mod_scalars) <- gsub(
     '.csv', "", 
     str_extract(fns, '[A-Z|a-z]{1}[A-Z|a-z]+.csv'))
 
-types <- c('Learning rate', 'Loss', 'AA', 'mIoU', 'Cropland', 'Forest', 
+types <- c('Learning rate', 'Loss', 'Average accuracy', 
+           'mIoU', 'Cropland', 'Forest/Dense tree', 
            'Grassland', 'Shrubland', 'Water', 
            'Built-up', 'Bareland')
-lc <- c('Cropland', 'Forest', 
+lc <- c('Cropland', 'Forest/Dense tree', 
         'Grassland', 'Shrubland', 'Water', 
-        'Built-up', 'Bareland', 'AA')
+        'Built-up', 'Bareland', 'Average accuracy')
+lb <- paste0(rep("(", 8), 1:8, rep(")", 8), rep(" ", 8), lc)
 content <- do.call(rbind, lapply(types, function(type){
     if (type == 'Built-up') {
         item <- 'Urban'
@@ -912,6 +935,10 @@ content <- do.call(rbind, lapply(types, function(type){
         item <- 'loss'
     } else if (type == 'Learning rate'){
         item <- 'lr'
+    } else if (type == 'Average accuracy') {
+        item <- 'AA'
+    } else if (type == 'Forest/Dense tree') {
+        item <- 'Forest'
     } else {item <- type}
     final_mod_scalars[[item]] %>% 
         mutate(Item = type)
@@ -924,35 +951,44 @@ curve_lr <- content %>%
     ggplot(., aes(x = Epoch, y = Value)) +
     geom_line() +
     labs(y = expression(Learning ~ rate ~ (10^-3)), x = '') +
-    theme_bw()
+    ggtitle('A') +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5))
 curve_loss <- content %>% 
     filter(Item == 'Loss') %>% 
     ggplot(., aes(x = Epoch, y = Value)) +
     geom_line() +
     labs(y = 'Loss', x = '') +
-    theme_bw()
+    ggtitle('B') +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5))
 curve_iou <- content %>% 
     filter(Item == 'mIoU') %>% 
     ggplot(., aes(x = Epoch, y = Value)) +
     geom_line() +
     labs(y = 'mIoU', x = '') +
-    theme_bw()
+    ggtitle('C') +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5))
 curves_acc <- content %>% 
     filter(Item %in% lc) %>% 
-    mutate(Item = factor(Item, levels = lc)) %>% 
+    mutate(Item = factor(Item, levels = lc, labels = lb)) %>% 
     ggplot(aes(x = Epoch, y = Value)) +
     geom_line() +
     labs(y = 'Accuracy') +
-    facet_wrap(~Item, scales = 'free_y', 
+    ggtitle('D') +
+    facet_wrap(~Item, 
+               # scales = 'free_y',
                nrow = 2, ncol = 4) +
-    theme_bw()
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5))
 curves <- ggarrange(
     ggarrange(curve_lr, curve_loss, curve_iou, ncol = 3),
-    curves_acc, nrow = 2, heights = c(1, 1.6))
+    curves_acc, nrow = 2, heights = c(1, 1.7))
 
-ggsave(here('docs/figures/curves_k15_only_final_mod.png'),
+ggsave(here('docs/figures/curves_k15_only_final_mod_v2.png'),
        curves,
-       width = 8, height = 5, dpi = 300)
+       width = 7, height = 5, dpi = 300)
 ```
 
 #### Prediction examples
@@ -1027,17 +1063,18 @@ pred_path <- here(file.path('results/dl/prediction',
                            'landcover_north_withwl.tif'))
 color_tb <- data.frame(
     id = 1:8,
-    type = c("Cropland", "Forest", 
+    type = c("Cropland", "Forest/Dense tree", 
              "Grassland", "Shrubland", 
              "Water", 'Built-up', "Bareland", 
              'Wetland'),
     color = c('#ff7f00', '#074702', '#b2df8a',
               '#33a02c', '#3347f9', '#5a6057',
               '#fdbf6f', '#0ea591'))
-# pred <- read_stars(pred_path)
-pred <- rast(pred_path)
-setCats(pred, value = color_tb$type, index = color_tb$id)
-pred <- st_as_stars(pred)
+pred <- read_stars(pred_path)
+names(pred) <- 'landcover'
+# pred <- rast(pred_path)
+# set.cats(pred, value = color_tb$type, index = color_tb$id)
+# pred <- st_as_stars(pred)
 
 # plot
 # Get examples
@@ -1050,7 +1087,7 @@ tiles <- tiles %>% filter(tile %in% id_selected) %>%
 rst_tiles <- lapply(1:nrow(tiles), function(n){
     tm <- st_crop(pred, tiles %>% slice(n)) %>% 
         tm_shape() + 
-        tm_raster("landcover_north", 
+        tm_raster("landcover", 
               n = 8, style = 'cat',
               labels = color_tb$type,
               palette = color_tb$color) +
@@ -1069,7 +1106,7 @@ plot_right <- ggarrange(
 
 tmap_mode("plot")
 pred_final <- tm_shape(pred) +
-    tm_raster("landcover_north", 
+    tm_raster("landcover", 
               title = "Land cover types",
               n = 8, style = 'cat',
               labels = color_tb$type,
@@ -1107,7 +1144,7 @@ legend_lc <- ggplot() +
           panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
           plot.margin = unit(rep(0, 4),"cm"))+
-    guides(fill = guide_legend(ncol = 2))
+    guides(fill = guide_legend(ncol = 8))
 legend_lc <- get_legend(legend_lc)
 
 tbl_theme <- gridExtra::ttheme_default(
@@ -1126,6 +1163,395 @@ pred_example <- ggarrange(plot_left, pred_final_plt, plot_right,
 ggsave(here('docs/figures/pred_example.png'),
        pred_example,
        width = 7, height = 6, dpi = 300)
+```
+
+#### Class areas
+
+```{r}
+# Class proportion, class 1 - 7
+cls_prop <- cls_freq %>% 
+    slice(1:7) %>% 
+    mutate(proportion = ratio / sum(.$ratio)) %>% 
+    select(landcover, proportion)
+
+# Confusion matrix
+cf_orig <- data.frame(cf$table) %>% 
+    select(Prediction, Freq, Reference) %>% 
+    pivot_wider(names_from = Reference, 
+                values_from = Freq)
+cf_orig$num <- rowSums(cf_orig[, -1], na.rm = TRUE)
+cf_orig$proportion <- cls_prop$proportion
+cf_ratio <- do.call(rbind, lapply(1:nrow(cf_orig), function(n){
+    cf_orig[n, 2:8] / cf_orig[[n, 9]] * cf_orig[[n, 10]]
+}))
+
+## Get the adjusted proportion
+cf_ratio['Pj', ] <- colSums(cf_ratio)
+
+# Calculate the area of the whole image
+pred_area <- rast(pred_path)
+cell_num <- freq(pred_area)
+whole_area <- sum(cell_num[1:7, 3]) * 
+    (res(pred_area)[1] / 1000) * 
+    (res(pred_area)[2] / 1000)
+class_area <- cf_ratio["Pj", ] * whole_area
+class_area[, '8'] <- cell_num[[8, 3]] * 
+    (res(pred_area)[1] / 1000) * 
+    (res(pred_area)[2] / 1000)
+
+# Calculate the errors
+cf_ratio_error <- cf_ratio[1:7, ]
+cf_ratio_error$wi <- cf_orig$proportion
+cf_ratio_error$n <- cf_orig$num
+
+err_calc <- function(pi, wi, ni, whole_area) {
+    # 1.96 for 95% confidence
+    sqrt(sum((wi * pi - pi ^ 2) / (ni - 1))) * whole_area * 1.96
+}
+
+adjust_class_err <- unlist(lapply(1:7, function(n) {
+    err_calc(cf_ratio_error[, n], 
+             cf_ratio_error$wi, 
+             cf_ratio_error$n, whole_area)
+}))
+
+adjust_stats_area <- data.frame(
+    area = unlist(class_area),
+    confidence_interval = c(adjust_class_err, NA),
+    proportion = cls_freq[, 2])
+save(adjust_stats_area, file = 'docs/figures/adjust_stats_area.rda')
+
+# 3D pie
+cols <- color_tb$color
+lab <- paste(round(adjust_stats_area$area, 1), "km2")
+plotrix::pie3D(adjust_stats_area$proportion,
+      col = cols,
+      labels = lab,
+      explode = 0.15,
+      labelcex = 1,
+      radius = 1.1,
+      border = "white",
+      theta = 1.1)
+
+# Version 2 of final map
+tmap_mode("plot")
+pred_final <- tm_shape(pred) +
+    tm_raster("landcover_north_withwl.tif", 
+              #title = "Land cover types",
+              title = '',
+              n = 8, style = 'cat',
+              labels = color_tb$type,
+              palette = color_tb$color) +
+    tm_layout(frame = F,
+              legend.show = FALSE,
+              outer.margins = c(0.02, 0.01, 0, 0.01),
+              inner.margins = 0)
+pred_final <- tmap_grob(pred_final)
+
+r_df <- data.frame(x = 1:8, 
+                   y = 1:8,
+                   rst = as.factor(1:8))
+legend_lc <- ggplot() + 
+    geom_raster(
+        data = r_df, 
+        aes(x = x, y = y, 
+            fill = rst)) +
+    scale_fill_manual('',
+                      values = color_tb$color, 
+                      breaks = 1:8,
+                      labels = color_tb$type) +
+    theme_minimal() +
+    theme(legend.position = 'right',
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.margin = unit(rep(-1, 4),"cm"))+
+    guides(fill = guide_legend(ncol = 4))
+legend_lc <- get_legend(legend_lc)
+f1 <- ggarrange(pred_final, legend_lc, NA, 
+          nrow = 3, heights = c(5, 1, 0.5))
+
+# Get pie chart for class frequency
+cls_freq <- rast(pred_path)
+cls_freq <- freq(cls_freq) %>% 
+    data.frame() %>% 
+    mutate(landcover = value,
+           ratio = count / sum(.$count)) %>% 
+    select(landcover, ratio)
+save(cls_freq, file = 'docs/figures/cls_freq.rda')
+
+
+cls_freq <- cls_freq %>% arrange(landcover)
+cols <- color_tb$color
+lab <- paste0(round(cls_freq$ratio/sum(cls_freq$ratio) * 100, 1), "%")
+
+# Barplot
+cls_freq <- cls_freq %>% 
+    mutate(landcover = factor(landcover, 
+                              levels = cls_freq %>% 
+                               arrange(desc(ratio)) %>% 
+                               pull(landcover)),
+        label_ypos = 0.9 * ratio)
+barplot <- ggplot(data=cls_freq, aes(x=landcover, y=ratio)) +
+    geom_bar(stat="identity", aes(fill=as.factor(landcover))) +
+    geom_text(aes(y=label_ypos, label=lab), angle = 90,
+              color="black", size=3)+
+    scale_fill_manual(values = cols[as.integer(levels(cls_freq$landcover))]) +
+    theme_void() +
+    theme(legend.position = "none")
+
+# Table
+adjust_stats_area <- adjust_stats_area %>% 
+    mutate(Landcover = color_tb$type) %>% 
+    arrange(desc(area)) %>% 
+    mutate(`Error-adjusted area` = glue(
+        paste0('{format(round(area, digits = 1), nsmall = 1)}',
+               '\u00B1{format(round(confidence_interval, digits = 1), nsmall = 1)}',
+               ' km\u00B2'))) %>% 
+    select(Landcover, `Error-adjusted area`)
+adjust_stats_area[8, 2] <- '1435.7 km\u00B2*'
+
+tbl_theme <- gridExtra::ttheme_default(
+    core = list(fg_params=list(cex = 0.7, hjust = 0, x = 0.1,
+                               parse = TRUE),
+                bg_params = list(fill = 'gray95')),
+    colhead = list(fg_params=list(cex = 0.8)),
+    rowhead = list(fg_params=list(cex = 0.8)))
+tbl_conf <- tableGrob(adjust_stats_area, rows = NULL, theme = tbl_theme)
+
+pred_final_plt <- ggarrange(f1,
+                            ggarrange(NA, tbl_conf,
+                                      barplot, NA, 
+                                      nrow = 4,
+                                      labels = c(NA, 'B', 'C', NA),
+                                      hjust = c(2, 4, 2, 2),
+                                      heights = c(0.2, 1, 1, 0.3)), 
+                            NA,
+                            labels = c('A', NA, NA),
+                            vjust = 5, hjust = -1,
+                            ncol = 3, widths = c(6, 2, 0.5))
+ggsave(here('docs/figures/final_map.png'),
+       pred_final_plt,
+       width = 8, height = 5.5, dpi = 300)
+```
+
+```{r}
+library(terra)
+library(stars)
+library(tmap)
+library(ggpubr)
+library(gridExtra)
+
+pred_path <- here(file.path('results/dl/prediction',
+                            'unet_k15_only_clr_200epc',
+                            'landcover_north_withwl.tif'))
+color_tb <- data.frame(
+    id = 1:8,
+    type = c("Cropland", "Forest/Dense tree", 
+             "Grassland", "Shrubland", 
+             "Water", 'Built-up', "Bareland", 
+             'Wetland'),
+    color = c('#ff7f00', '#074702', '#b2df8a',
+              '#33a02c', '#3347f9', '#5a6057',
+              '#fdbf6f', '#0ea591'))
+pred <- read_stars(pred_path)
+names(pred) <- 'landcover'
+
+# Get examples
+id_selected <- c('1211-1008', '1209-997', '1221-1012', '1234-992')
+
+## Images
+library(ggpubr)
+library(RStoolbox)
+library(ggplot2)
+
+fnames_s1 <- file.path("data/plts_nicfi",
+                       sprintf('planet_medres_normalized_analytic_2017-12_2018-05_mosaic_%s.tif', 
+                               id_selected))
+fnames_s2 <- file.path("data/plts_nicfi",
+                       sprintf('planet_medres_normalized_analytic_2018-06_2018-11_mosaic_%s.tif', 
+                               id_selected))
+fg_s1 <- lapply(fnames_s1, function(fname) {
+    x <- stack(fname) %>% subset(1:3) %>% 
+        raster::stretch(minq = 0.02, maxq = 0.98)
+    tm <- tm_shape(x) +
+        tm_rgb(r = 1, g = 2, b = 3,
+               max.value = max(values(x)[, 1:3]))
+    tmap_grob(tm)
+    # stack(fname) %>% subset(1:4) %>% 
+    #     ggRGB(r = 1, g = 2, b = 3, 
+    #           scale = max(values(.)[, 1:3]), 
+    #           stretch = 'lin') +
+    #     theme_minimal() +
+    #     theme(axis.title.x = element_blank(),
+    #           axis.text.x = element_blank(),
+    #           axis.ticks.x = element_blank(),
+    #           axis.title.y = element_blank(),
+    #           axis.text.y = element_blank(),
+    #           axis.ticks.y = element_blank(),
+    #           plot.margin = unit(rep(0, 4),"cm"))
+})
+
+fg_s2 <- lapply(fnames_s2, function(fname) {
+    x <- stack(fname) %>% subset(1:3) %>% 
+        raster::stretch(minq = 0.02, maxq = 0.98)
+    tm <- tm_shape(x) +
+        tm_rgb(r = 1, g = 2, b = 3,
+               max.value = max(values(x)[, 1:3]))
+    tmap_grob(tm)
+    # stack(fname) %>% subset(1:4) %>% 
+    #     ggRGB(r = 1, g = 2, b = 3, 
+    #           scale = max(values(.)[, 1:3]), 
+    #           stretch = 'hist') +
+    #     theme_minimal() +
+    #     theme(axis.title.x = element_blank(),
+    #           axis.text.x = element_blank(),
+    #           axis.ticks.x = element_blank(),
+    #           axis.title.y = element_blank(),
+    #           axis.text.y = element_blank(),
+    #           axis.ticks.y = element_blank(),
+    #           plot.margin = unit(rep(0, 4),"cm"))
+})
+s1 <- ggarrange(fg_s1[[1]], fg_s1[[2]], 
+          fg_s1[[3]], fg_s1[[4]], 
+          nrow = 4, ncol = 1)
+s2 <- ggarrange(fg_s2[[1]], fg_s2[[2]], 
+          fg_s2[[3]], fg_s2[[4]], 
+          nrow = 4, ncol = 1)
+
+# Prediction
+tiles <- read_sf('data/geoms/tiles_nicfi_north.geojson')
+tiles <- tiles %>% filter(tile %in% id_selected) %>% 
+    st_transform(crs = crs(rast(pred_path))) %>% 
+    mutate(id = 1:nrow(.))
+rst_tiles <- lapply(1:nrow(tiles), function(n){
+    tm <- st_crop(pred, tiles %>% slice(n)) %>% 
+        tm_shape() + 
+        tm_raster("landcover", 
+                  n = 8, style = 'cat',
+                  labels = color_tb$type,
+                  palette = color_tb$color) +
+        tm_layout(frame = F,
+                  legend.show = F)
+    tmap_grob(tm)
+})
+pred_ours <- ggarrange(
+    rst_tiles[[2]], rst_tiles[[3]], rst_tiles[[1]], 
+    rst_tiles[[4]], nrow = 4, ncol = 1)
+
+ggarrange(s1, s2, pred_ours, ncol = 3)
+
+# ESA GLC
+colors <- c(color_tb$color[1:4], color_tb$color[8], 
+            color_tb$color[5], color_tb$color[6:7])
+labels <- c(color_tb$type[1:4], color_tb$type[8], 
+            color_tb$type[5], color_tb$type[6:7])
+tiles <- read_sf('data/geoms/tiles_nicfi_north.geojson')
+tiles <- tiles %>% filter(tile %in% id_selected)
+esa_glc <- read_stars('data/landcovers/esaglc_rcl.tif')
+fgs_esa <- lapply(1:nrow(tiles), function(n){
+    tm <- st_crop(esa_glc, tiles %>% slice(n)) %>% 
+        tm_shape() + 
+        tm_raster("esaglc_rcl.tif", 
+                  n = 8, style = 'cat',
+                  labels = labels,
+                  palette = colors) +
+        tm_layout(frame = F,
+                  legend.show = F)
+    tmap_grob(tm)
+})
+fgs_esa <- ggarrange(
+    fgs_esa[[2]], fgs_esa[[3]], fgs_esa[[1]], 
+    fgs_esa[[4]], nrow = 4, ncol = 1)
+
+ggarrange(s1, s2, pred_ours, fgs_esa, ncol = 4)
+
+# FROMGLC
+from_glc <- read_stars('data/landcovers/fromglc_rcl.tif')
+fgs_from <- lapply(1:nrow(tiles), function(n){
+    tm <- st_crop(from_glc, tiles %>% slice(n)) %>% 
+        tm_shape() + 
+        tm_raster("fromglc_rcl.tif", 
+                  n = 8, style = 'cat',
+                  labels = labels,
+                  palette = colors) +
+        tm_layout(frame = F,
+                  legend.show = F)
+    tmap_grob(tm)
+})
+fgs_from <- ggarrange(
+    fgs_from[[2]], fgs_from[[3]], fgs_from[[1]], 
+    fgs_from[[4]], nrow = 4, ncol = 1)
+
+# Get legend
+r_df <- data.frame(x = 1:8, 
+                   y = 1:8,
+                   rst = as.factor(1:8))
+legend_lc <- ggplot() + 
+    geom_raster(
+        data = r_df, 
+        aes(x = x, y = y, 
+            fill = rst)) +
+    scale_fill_manual('',
+                      values = color_tb$color, 
+                      breaks = 1:8,
+                      labels = color_tb$type) +
+    theme_minimal() +
+    theme(legend.position = 'right',
+          axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          plot.margin = unit(rep(0, 4),"cm"))+
+    guides(fill = guide_legend(ncol = 8))
+legend_lc <- get_legend(legend_lc)
+
+ids <- ggplot() +  
+    annotate("text",
+             x = 0,
+             y = 1,
+             size = 5,
+             label = "(d)") + 
+    annotate("text",
+             x = 0,
+             y = 2,
+             size = 5,
+             label = "(c)") +
+    annotate("text",
+             x = 0,
+             y = 3,
+             size = 5,
+             label = "(b)") +
+    annotate("text",
+             x = 0,
+             y = 4,
+             size = 5,
+             label = "(a)") +
+    theme_void()
+
+examples <- ggarrange(ggarrange(ids, NA, nrow = 2, heights = c(1, 0.2)), 
+                      s1, s2, pred_ours, fgs_esa, fgs_from, 
+                      ncol = 6, widths = c(0.2, rep(1, 5)),
+          labels = c('', 'NICFI season 1', 'NICFI season 2', 
+                     'Prediction', 'CGLS_LC100m',
+                     'FROM-GLC 2017v1'),
+          hjust = -0.2, vjust = 63,
+          font.label = list(size = 10, color = "black"),
+          legend.grob = legend_lc,
+          legend = 'bottom')
+
+ggsave(here('docs/figures/compare_example.png'),
+       examples,
+       width = 8, height = 6.8, dpi = 300)
 ```
 
 ## Sensitivity analysis
