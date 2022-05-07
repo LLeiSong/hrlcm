@@ -760,15 +760,37 @@ pred <- argmax(pred$predictions)
 pred <- data.frame(predict = pred,
                    test = test_rf_features$landcover)
 lc_types <- data.frame(id = 1:7,
-                       type = c('cropland', 'forest', 'grassland',
+                       type = c('Cropland', 'Forest/dense tree', 'Grassland',
+                                'Shrubland', 'Water', 'Built-up',
+                                'Bareland'))
+lc_cvt <- data.frame(type_use = c('Cropland', 'Forest/dense tree', 'Grassland',
+                                'Shrubland', 'Water', 'Built-up',
+                                'Bareland'),
+                     type_record = c('cropland', 'forest', 'grassland',
                                 'shrubland', 'water', 'built-up',
                                 'bareland'))
+# pred_eval <- left_join(pred, lc_types, 
+#                        by = c('test' = 'type')) %>% 
+#     dplyr::select(-test) %>% 
+#     rename(test = id) %>% 
+#     mutate(predict = as.factor(predict),
+#            test = as.factor(test))
+
 pred_eval <- left_join(pred, lc_types, 
-                       by = c('test' = 'type')) %>% 
+                       by = c('predict' = 'id')) %>% 
+    dplyr::select(-predict) %>% 
+    rename(predict = type) %>% 
+    left_join(., lc_cvt, by = c('test' = 'type_record')) %>% 
     dplyr::select(-test) %>% 
-    rename(test = id) %>% 
-    mutate(predict = as.factor(predict),
-           test = as.factor(test))
+    rename(test = type_use) %>% 
+    mutate(predict = factor(predict, 
+                            levels = c('Cropland', 'Forest/dense tree', 
+                                       'Grassland', 'Shrubland', 'Water', 
+                                       'Built-up','Bareland')),
+           test = factor(test,
+                         levels = c('Cropland', 'Forest/dense tree', 
+                                    'Grassland', 'Shrubland', 'Water', 
+                                    'Built-up','Bareland')))
 
 cf <- confusionMatrix(data = pred_eval$predict, 
                       reference = pred_eval$test)
@@ -878,11 +900,27 @@ lc_types <- data.frame(id = 1:7,
                        type = c('cropland', 'forest', 'grassland',
                                 'shrubland', 'water', 'built-up',
                                 'bareland'))
-pred_eval <- left_join(pred_eval, lc_types, by = c('test' = 'type')) %>% 
+# pred_eval <- left_join(pred_eval, lc_types, by = c('test' = 'type')) %>% 
+#     dplyr::select(-test) %>% 
+#     rename(test = id) %>% 
+#     mutate(predict = as.factor(predict),
+#            test = as.factor(test))
+pred_eval <- left_join(pred_eval, lc_types, 
+                       by = c('predict' = 'id')) %>% 
+    dplyr::select(-predict) %>% 
+    rename(predict = type) %>% 
+    left_join(., lc_cvt, by = c('test' = 'type_record')) %>% 
     dplyr::select(-test) %>% 
-    rename(test = id) %>% 
-    mutate(predict = as.factor(predict),
-           test = as.factor(test))
+    rename(test = type_use) %>% 
+    mutate(predict = factor(predict, 
+                            levels = c('Cropland', 'Forest/dense tree', 
+                                       'Grassland', 'Shrubland', 'Water', 
+                                       'Built-up','Bareland')),
+           test = factor(test,
+                         levels = c('Cropland', 'Forest/dense tree', 
+                                    'Grassland', 'Shrubland', 'Water', 
+                                    'Built-up','Bareland')))
+
 cf <- confusionMatrix(data=pred_eval$predict, reference = pred_eval$test)
 save(cf, file = here('docs/figures/test_conf.rda'))
 
@@ -1954,6 +1992,16 @@ library(ggplot2)
 library(ggpubr)
 
 load("~/Dropbox/research/hrlcm/data/north/forest_vip.rda")
+# os 2017-12_2018-05, gs 2018-06_2018-11
+names(forest_vip$fit$variable.importance) <- 
+    c('B_S1', 'G_S1', 'R_S1', 'NIR_S1', 
+      'NDVI_S1', 'EVI_S1', 'SAVI_S1', 'ARVI_S1',
+      'B_S2', 'G_S2', 'R_S2', 'NIR_S2',
+      'NDVI_S1', 'EVI_S1', 'SAVI_S1', 'ARVI_S1',
+      'Intercept_VV', 'Slope_VV', 'Coef_sin(t)_VV',
+      'Coef_cos(t)_VV', 'Coef_sin(2t)_VV', 'Coef_cos(2t)_VV',
+      'Intercept_VH', 'Slope_VH', 'Coef_sin(t)_VH',
+      'Coef_cos(t)_VH', 'Coef_sin(2t)_VH', 'Coef_cos(2t)_VH')
 vip_figure <- vip(forest_vip, 
     num_features = forest_vip$fit$num.independent.variables,
     aesthetics = list(color = "transparent", 
@@ -1975,7 +2023,7 @@ params_fig <- ggarrange(vip_figure, tune_figure,
                         ncol = 2, widths = c(1, 1.5))
 ggsave(here('docs/figures/rf_tuning.png'),
        params_fig,
-       width = 8, height = 4, dpi = 300)
+       width = 6.5, height = 3.5, dpi = 300)
 ```
 
 ### Confusion matrix heatmap for RF
@@ -1984,10 +2032,11 @@ ggsave(here('docs/figures/rf_tuning.png'),
 cm <- pred_eval %>% 
     conf_mat(truth = test, 
              estimate = predict)
-cm_figure <- autoplot(cm, type = 'heatmap')
+cm_figure <- autoplot(cm, type = 'heatmap') +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ggsave(here('docs/figures/rf_cm_heatmap.png'),
        cm_figure,
-       width = 4, height = 3, dpi = 300)
+       width = 5, height = 3.5, dpi = 300)
 ```
 
 ### Confusion matrix heatmap for U-Net
@@ -1995,10 +2044,11 @@ ggsave(here('docs/figures/rf_cm_heatmap.png'),
 cm <- pred_eval %>% 
     conf_mat(truth = test, 
              estimate = predict)
-cm_figure <- autoplot(cm, type = 'heatmap')
+cm_figure <- autoplot(cm, type = 'heatmap') +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ggsave(here('docs/figures/unet_cm_heatmap.png'),
        cm_figure,
-       width = 4, height = 3, dpi = 300)
+       width = 5, height = 3.5, dpi = 300)
 ```
 
 ### Land cover classification confidence
@@ -2011,6 +2061,10 @@ pred_path <- here(file.path('results/dl/prediction',
                             'unet_k15_only_clr_200epc',
                             'landcover_confidence_north_withwl.tif'))
 pred <- read_stars(pred_path)
+wetlands <- read_stars(file.path('results/dl/prediction',
+                                 'unet_k15_only_clr_200epc',
+                                 'wetland_add.tif'))
+pred[wetlands == 1] <- NA
 conf_fig <- tm_shape(pred) +
     tm_raster("landcover_confidence_north_withwl.tif", 
               title = "Confidence",
