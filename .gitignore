@@ -6,7 +6,10 @@
 .idea/
 venv/
 docs/*.html
+.html
+*/*.html
 data
 results
 !data/geoms
-test.py
+docs/figures/
+hrlcm.Rproj
