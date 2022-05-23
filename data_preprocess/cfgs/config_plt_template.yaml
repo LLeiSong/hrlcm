@@ -1,0 +1,12 @@
+# Planet Mosaic Quads query parameters
+planet:
+  key:
+imagery:
+  aoiname: Permian
+  # Full path or relative path to the repo
+  geom: data/geoms/permian_trail.geojson
+  # Full path or relative path to the repo
+  quads_path: data/plt_nicfi
+  # Make sure use the right format
+  dates: ['2017-12_2018-05', '2018-06_2018-11']
+  
