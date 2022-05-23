@@ -1,0 +1,112 @@
+# Main config for the repo
+dirs:
+  dst_dir:
+  # The prefix of dir_clip and dir_ard
+  dir_clip: temp
+  dir_ard: temp_ard
+  # The folder for harmonic coefficients
+  dir_coefs: sentinel1_hr_coefs
+  # The folder for script logs
+  log_dir: logs
+  # The folder for peps MAJA log
+  maja_log: maja_logs
+  # The folder for download
+  download_path: sentinel2_level1
+  # The folder for level-2 processed images
+  # Preprocess of S1, and atmospheric correction of S2 (fmask or maja)
+  processed_path: sentinel2_level2
+  # The folder for level-3
+  # Harmonic regression of S1, WASP of S2
+  level3_processed_path: sentinel2_level3
+parallel:
+  # the number of threads for parallel
+  threads_number: default
+# User set for peps
+peps:
+  user:
+  password:
+# User set for scihub
+sci_hub:
+  user:
+  password:
+# Sentinel query related variables
+sentinel:
+  # The path of geojson of tiles to query
+  # there must be a column named tile to store the tile id
+  geojson:
+  # town name (pick one which is not too frequent to avoid confusions)
+  location:
+  # [lat, lon]
+  point:
+  # [latmin, latmax, lonmin, lonmax]
+  bbox:
+  # Sentinel-2 tile number
+  tile:
+  # the date interval for downloading, fmt('2017-10-01')
+  date_start:
+  date_end:
+  # platform of sentinel, 'S1', 'S2', 'S2ST', 'S3'
+  platformname: Sentinel-1
+  # the following two for sentinel-1 only
+  producttype: GRD
+  sensoroperationalmode: IW
+  orbit:
+  # S1A,S1B,S2A,S2B,S3A,S3B
+  satellite:
+  # Maximum cloud coverage for sentinel-2
+  clouds:
+  # Path for search catalog json
+  # Full path in order to run this part separately
+  catalog_json: /Volumes/wildebeest/gcam/catalogs/s1_footprints_gcam_mu.geojson
+  search_table: /Volumes/wildebeest/gcam/catalogs/s1_search_table_gcam_mu.csv
+  # If download the imagery and download path
+  download: True
+  download_path:
+  # Extract zipfile or not
+  extract: False
+  # Work on windows machine or not
+  windows: False
+gpt:
+  # the path of SNAP GPT
+  gpt_path: /Applications/snap/bin/gpt
+  # the path of xml to be used in SNAP GPT
+  xml_path: files/S1_GRD_preprocessing.xml
+# For Sentinel-1 harmonic regression
+harmonic:
+  gcs_rec: 0.000025
+  # the flag of reading local files or not
+  if_local: false
+  # only used if if_local is true
+  local_path: data/s1_preprocessed
+  # the polarizations of sentinel-1 GRD
+  polarizations: ["VH", "VV"]
+  # Filter parameters
+  kernel: 3
+  iteration: 3
+  eps: 3
+  # Harmonics parameters
+  harmonic_frequency: 365
+  harmonic_pairs: 2
+  # Keep the moderate results
+  keep_mid: False
+# For sentinel-2 Fmask cloud detection
+sen2cor:
+  # the path of sen2cor
+  sen2cor_path:
+fmask:
+  # use docker to run Fmask or not
+  # some machines could install Fmask directly,
+  # some have to use docker to run it.
+  docker: true
+  # If you don't use docker, set the following two paths correctly
+  mc_root: /usr/local/MATLAB/MATLAB_Runtime/v96
+  fmask_path: /usr/GERS/Fmask_4_2/application/run_Fmask_4_2.sh
+  # some parameters for fmask
+  cloudprobthreshold: 15
+  cloudbufferdistance: 6
+  shadowbufferdistance: 6
+wasp:
+  docker: True
+  # Time interval to run WASP
+  # It has include the start date, the interim dates, and the end date.
+  time_series: ['2019-03-01', '2019-06-01', '2019-11-01', '2020-03-01']
