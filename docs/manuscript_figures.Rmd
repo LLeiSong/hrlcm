@@ -1997,12 +1997,12 @@ names(forest_vip$fit$variable.importance) <-
     c('B_S1', 'G_S1', 'R_S1', 'NIR_S1', 
       'NDVI_S1', 'EVI_S1', 'SAVI_S1', 'ARVI_S1',
       'B_S2', 'G_S2', 'R_S2', 'NIR_S2',
-      'NDVI_S1', 'EVI_S1', 'SAVI_S1', 'ARVI_S1',
+      'NDVI_S2', 'EVI_S2', 'SAVI_S2', 'ARVI_S2',
       'Intercept_VV', 'Slope_VV', 'Coef_sin(t)_VV',
       'Coef_cos(t)_VV', 'Coef_sin(2t)_VV', 'Coef_cos(2t)_VV',
       'Intercept_VH', 'Slope_VH', 'Coef_sin(t)_VH',
       'Coef_cos(t)_VH', 'Coef_sin(2t)_VH', 'Coef_cos(2t)_VH')
-vip_figure <- vip(forest_vip, 
+vip_figure <- vip(vi(forest_vip), 
     num_features = forest_vip$fit$num.independent.variables,
     aesthetics = list(color = "transparent", 
                       fill = "red")) +
@@ -2020,7 +2020,7 @@ tune_figure <- tune_res %>%
     theme_light()
 
 params_fig <- ggarrange(vip_figure, tune_figure,
-                        ncol = 2, widths = c(1, 1.5))
+                        ncol = 2, widths = c(1, 1.2))
 ggsave(here('docs/figures/rf_tuning.png'),
        params_fig,
        width = 6.5, height = 3.5, dpi = 300)
