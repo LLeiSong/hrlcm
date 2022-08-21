@@ -143,9 +143,9 @@ pts_nicfi <- pts_example %>%
 cols_lc <- tibble(cols = c('#ff7f00', '#074702', '#b2df8a',
                            '#33a02c', '#3347f9', '#5a6057',
                            '#fdbf6f'),
-                  `Land cover type` = c("Cropland", 'Forest', "Grassland", 
-                                        'Shrubland',  "Water", "Built-up",
-                                        'Bareland'),
+                  `Land cover type` = c("Cropland", 'Forest/dense tree', 
+                                        "Grassland", 'Shrubland',  "Water", 
+                                        "Built-up", 'Bareland'),
                   ids = as.factor(1:7))
 
 # Image of season 1
@@ -222,6 +222,12 @@ pts_nicfi_s2 <- raster::extract(nicfi_s2, pts_nicfi) %>%
            Season = 'Season 2')
 pts_nicfi_all <- rbind(pts_nicfi_s1, pts_nicfi_s2)
 rm(pts_nicfi_s1, pts_nicfi_s2)
+
+# Replace Forest with Forest/dense tree
+pts_nicfi_all <- pts_nicfi_all %>% 
+    mutate(`Land cover type` = ifelse(
+        `Land cover type` == "Forest",
+        "Forest/dense tree", as.character(`Land cover type`)))
 
 # Figure
 pts_nicfi_all <- merge(pts_nicfi_all, cols_lc[, 2:3])
@@ -414,9 +420,20 @@ pts_fit <- rbind(pts_vv_fit, pts_vh_fit) %>%
                  values_to = "dB")
 rm(pts_vv_fit, pts_vh_fit)
 
+# Replace Forest with Forest/dense tree
+pts_ts <- pts_ts %>% 
+    mutate(`Land cover type` = ifelse(
+        `Land cover type` == "Forest",
+        "Forest/dense tree", `Land cover type`))
+pts_fit <- pts_fit %>% 
+    mutate(`Land cover type` = ifelse(
+        `Land cover type` == "Forest",
+        "Forest/dense tree", `Land cover type`))
+
 # Make figure
 pts_ts <- merge(pts_ts, cols_lc[, 2:3])
 pts_fit <- merge(pts_fit, cols_lc[, 2:3])
+
 ts_epl <- ggplot() + 
     geom_point(data = pts_ts, 
                aes(x = DOY, y = `dB`, 
@@ -1750,6 +1767,152 @@ params_cost <- ggarrange(curves_corr, curves_diff,
 ggsave(here('docs/figures/sa_loss_params.png'),
        params_cost,
        width = 6.5, height = 4, dpi = 300)
+```
+
+```{r}
+library(tidyverse)
+library(gridExtra)
+
+# Define function
+get_curves <- function(experiment_name,
+                       step = 59,
+                       path = here('results/scalar/compare_score')){
+    # Get file names
+    fns <- list.files(path, 
+                      pattern = experiment_name,
+                      full.names = T)
+    fns <- fns[str_detect(fns, 'Validate')]
+    
+    # Process each csv
+    scalars <- lapply(fns, function(fn){
+        scalar <- read.csv(fn, stringsAsFactors = F) %>% 
+            mutate(Step = Step / step) %>% # step of each epoch
+            dplyr::select(-Wall.time)
+    })
+    names(scalars) <- gsub(
+        '.csv', "", 
+        str_extract(fns, '[A-Z]{1}[A-Z|a-z]+.csv'))
+    
+    scalars
+}
+
+# Clean scalar csvs
+curves_no_weight <- get_curves(
+    'unet_no_weight',
+    path = here('results/scalar/compare_score'))
+curves_k05 <- get_curves(
+    'unet_k05_only',
+    path = here('results/scalar/compare_score'))
+curves_k15 <- get_curves(
+    'unet_k15_only',
+    path = here('results/scalar/compare_score'))
+curves_k30 <- get_curves(
+    'unet_k3_only',
+    path = here('results/scalar/compare_score'))
+
+types <- c('AA', 'mIoU', 'Cropland', 'Forest', 
+           'Grassland', 'Shrubland', 'Water', 
+           'Built-up', 'Bareland')
+content <- do.call(rbind, lapply(types, function(type){
+    if (type == 'Built-up') {
+        item <- 'Urban'
+    } else if (type == 'mIoU'){
+        item <- 'IoU'
+    } else {item <- type}
+    list(curves_no_weight[[item]],
+         curves_k05[[item]],
+         curves_k15[[item]],
+         curves_k30[[item]]) %>% 
+        reduce(left_join, by = "Step") %>% 
+        `colnames<-`(c("Epoch", '0', '0.5', '1.5', '3.0')) %>% 
+        mutate(Item = type) %>% 
+        pivot_longer(cols = setdiff(names(.), c("Epoch", 'Item')),
+                     names_to = 'k of logistic function', 
+                     values_to = 'Value')
+})) %>% mutate(Item = factor(Item, levels = types),
+               `k of logistic function` = factor(
+                   `k of logistic function`, 
+                   levels = c('0', '0.5', '1.5', '3.0')))
+
+# Calculate mean and sd of last 10 epochs
+content_k <- content %>% 
+    filter(Epoch >= 26) %>% 
+    filter(Item == 'AA') %>% 
+    group_by(Item, `k of logistic function`) %>% 
+    summarise(Mean = mean(Value), 
+              sd = sd(Value))
+
+# Clean scalar csvs
+curves_k15_nohard <- get_curves(
+    'unet_k15_only',
+    path = here('results/scalar/compare_score'))
+curves_k15_h11 <- get_curves(
+    'unet_k15_hard11',
+    path = here('results/scalar/compare_score'))
+curves_k15_h12 <- get_curves(
+    'unet_k15_hard12',
+    path = here('results/scalar/compare_score'))
+curves_k15_h14 <- get_curves(
+    'unet_k15_hard14',
+    path = here('results/scalar/compare_score'))
+
+types <- c('AA', 'mIoU', 'Cropland', 'Forest', 
+           'Grassland', 'Shrubland', 'Water', 
+           'Built-up', 'Bareland')
+content <- do.call(rbind, lapply(types, function(type){
+    if (type == 'Built-up') {
+        item <- 'Urban'
+    } else if (type == 'mIoU'){
+        item <- 'IoU'
+    } else {item <- type}
+    list(curves_k15_nohard[[item]],
+         curves_k15_h11[[item]],
+         curves_k15_h12[[item]],
+         curves_k15_h14[[item]]) %>% 
+        reduce(left_join, by = "Step") %>% 
+        `colnames<-`(c("Epoch", '1', '1.1', '1.2', '1.4')) %>% 
+        mutate(Item = type) %>% 
+        pivot_longer(cols = setdiff(names(.), c("Epoch", 'Item')),
+                     names_to = 'Weight scale', 
+                     values_to = 'Value')
+})) %>% mutate(Item = factor(Item, levels = types),
+               `Weight scale` = factor(
+                   `Weight scale`, 
+                   levels = c('1', '1.1', '1.2', '1.4')))
+
+# Calculate mean and sd of last 10 epochs
+content_weight <- content %>% 
+    filter(Epoch >= 26) %>% 
+    filter(Item  == 'AA') %>% 
+    group_by(Item, `Weight scale`) %>% 
+    summarise(Mean = mean(Value), 
+              sd = sd(Value))
+
+# Get final plot
+curves_corr <- ggplot(
+    content_k, 
+    aes(x = `k of logistic function`, y = Mean)) + 
+    geom_point() +
+    geom_errorbar(aes(ymin = Mean - sd, ymax = Mean + sd), width=.2,
+                  position = position_dodge(0.05)) +
+    labs(y = 'Average accuracy (AA)', 
+         x = expression(paste(k, ' of logistic function'))) +
+    theme_bw()
+curves_diff <- ggplot(
+    content_weight, 
+    aes(x = `Weight scale`, y = Mean)) + 
+    geom_point() +
+    geom_errorbar(aes(ymin = Mean - sd, ymax = Mean + sd), width=.2,
+                  position = position_dodge(0.05)) +
+    labs(y = 'Average accuracy (AA)', x = expression(s[max])) +
+    theme_bw()
+
+params_cost <- ggarrange(curves_corr, curves_diff,
+                         ncol = 2)
+ggsave(here('docs/figures/sa_loss_params_v2.png'),
+       params_cost,
+       width = 6, height = 2, dpi = 300)
+
 ```
 
 ### Sampling
