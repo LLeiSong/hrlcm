@@ -118,11 +118,17 @@ library(tidyr)
 library(stringr)
 library(RStoolbox)
 
-# Read example images
-# tile 1227-1002, 
-# this tile has a few different land cover types and obvious characteristics
+# Combine the Figure S2 and S3 into a single figure
+## The structure is the satellite images are on the top,
+## the signature curves are on the bottom.
+############### PREPROCESS THE DATASET ##################
+# Use tile 1227-1002, 
+# this tile has a few different land cover types 
+# and obvious characteristics
 # so it could be a good example tile.
+########################################################
 tile_id <- '1227-1002'
+######################## NICFI ########################
 fnames_nicfi <- list.files(here('data/plts_nicfi'),
                            pattern = tile_id,
                            full.names = T)
@@ -134,67 +140,9 @@ rm(fnames_nicfi)
 pts_example <- read_sf(here('data/north/pts_example.geojson')) %>% 
     st_cast('POINT')
 
-# NICFI
 # Transform points
 pts_nicfi <- pts_example %>% 
     st_transform(crs = crs(nicfi_s1))
-
-# Define colors
-cols_lc <- tibble(cols = c('#ff7f00', '#074702', '#b2df8a',
-                           '#33a02c', '#3347f9', '#5a6057',
-                           '#fdbf6f'),
-                  `Land cover type` = c("Cropland", 'Forest/dense tree', 
-                                        "Grassland", 'Shrubland',  "Water", 
-                                        "Built-up", 'Bareland'),
-                  ids = as.factor(1:7))
-
-# Image of season 1
-s1_fg <- ggRGB(nicfi_s1, r = 4, g = 3, b = 2, 
-               scale = max(values(nicfi_s1)[, 2:4]), 
-               stretch = 'hist') +
-    geom_sf(data = pts_nicfi,
-            color = 'black',
-            size = 3) +
-    geom_sf(data = pts_nicfi,
-            aes(color = factor(id)),
-            size = 2,
-            show.legend = F) +
-    scale_color_manual("Land cover type",
-                       values = cols_lc$cols, 
-                       breaks = cols_lc$ids,
-                       labels = cols_lc$`Land cover type`) +
-    theme_minimal() +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          plot.margin = unit(rep(0, 4),"cm"))
-
-# Image of season 2
-s2_fg <- ggRGB(nicfi_s2, r = 4, g = 3, b = 2, 
-               scale = max(values(nicfi_s2)[, 2:4]), 
-               stretch = 'lin') +
-    geom_sf(data = pts_nicfi,
-            color = 'black',
-            size = 3) +
-    geom_sf(data = pts_nicfi,
-            aes(color = factor(id)),
-            size = 2,
-            show.legend = F) +
-    scale_color_manual("Land cover type",
-                       values = cols_lc$cols, 
-                       breaks = cols_lc$ids,
-                       labels = cols_lc$`Land cover type`) +
-    theme_minimal() +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          plot.margin = unit(rep(0, 4),"cm"))
 
 # Spectral signature of examples
 # Extract values
@@ -208,7 +156,7 @@ pts_nicfi_s1 <- raster::extract(nicfi_s1, pts_nicfi) %>%
                  names_to = 'Land cover type',
                  values_to = 'Reflectance') %>% 
     mutate(`Land cover type` = as.factor(`Land cover type`),
-           Season = 'Season 1')
+           Season = 'NICFI (season 1)')
 pts_nicfi_s2 <- raster::extract(nicfi_s2, pts_nicfi) %>% 
     t() %>% data.frame() %>% 
     `names<-`(pts_nicfi$type) %>% 
@@ -219,102 +167,22 @@ pts_nicfi_s2 <- raster::extract(nicfi_s2, pts_nicfi) %>%
                  names_to = 'Land cover type',
                  values_to = 'Reflectance') %>% 
     mutate(`Land cover type` = as.factor(`Land cover type`),
-           Season = 'Season 2')
+           Season = 'NICFI (season 2)')
 pts_nicfi_all <- rbind(pts_nicfi_s1, pts_nicfi_s2)
 rm(pts_nicfi_s1, pts_nicfi_s2)
 
-# Replace Forest with Forest/dense tree
+# Replace Forest with Forest/dense tree just for the label
 pts_nicfi_all <- pts_nicfi_all %>% 
     mutate(`Land cover type` = ifelse(
         `Land cover type` == "Forest",
         "Forest/dense tree", as.character(`Land cover type`)))
 
-# Figure
-pts_nicfi_all <- merge(pts_nicfi_all, cols_lc[, 2:3])
-ref_epl <- ggplot(pts_nicfi_all,
-                  aes(x = Band, y = Reflectance / 1000,
-                      color = ids)) +
-    geom_point() + geom_line(show.legend = 'line') +
-    ylab(bquote('Reflectance'~(10^3))) + 
-    scale_color_manual("Land cover type",
-                       values = cols_lc$cols, 
-                       breaks = cols_lc$ids,
-                       labels = cols_lc$`Land cover type`) +
-    scale_x_discrete(limit = factor(1:4),
-                     labels = unique(pts_nicfi_all$`Band name`)) +
-    theme_bw() +
-    theme(axis.title.x = element_blank()) +
-    facet_wrap(~ Season, nrow = 2, 
-               scales = "free_y",
-               strip.position = "top")
-
-nicfi_fg <- ggarrange(
-    ggarrange(s1_fg, s2_fg,
-              labels = c('Season 1', 'Season 2'),
-              font.label = list(size = 12),
-              vjust = 3,
-              ncol = 2), 
-    ref_epl, ncol = 2)
-ggsave(here('docs/figures/nicfi_image.png'),
-       nicfi_fg,
-       width = 8, height = 2.7, dpi = 300)
-
-# Sentinel-1 harmonic coefficient regression
+##### Sentinel-1 harmonic coefficient regression ######
 fnames_s1 <- list.files(here('data/s1_harmonic'),
                         pattern = tile_id,
                         full.names = T)
 vv_coefs <- stack(fnames_s1[str_detect(fnames_s1, 'VV')])
 vh_coefs <- stack(fnames_s1[str_detect(fnames_s1, 'VH')])
-
-# Image of VV
-# Slope, Cos(x), Intercept
-vv_fg <- ggRGB(vv_coefs, r = 2, g = 4, b = 1, 
-               scale = max(values(vv_coefs)[, c(2, 4, 1)]), 
-               stretch = 'hist') +
-    geom_sf(data = pts_example,
-            color = 'white',
-            size = 3) +
-    geom_sf(data = pts_example,
-            aes(color = factor(id)),
-            size = 2,
-            show.legend = F) +
-    scale_color_manual("Land cover type",
-                       values = cols_lc$cols, 
-                       breaks = cols_lc$ids,
-                       labels = cols_lc$`Land cover type`) +
-    theme_minimal() +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          plot.margin = unit(rep(0, 4),"cm"))
-
-# Image of VH
-# Slope, Cos(x), Intercept
-vh_fg <- ggRGB(vh_coefs, r = 2, g = 4, b = 1, 
-               scale = max(values(vh_coefs)[, c(1, 2, 4)]), 
-               stretch = 'lin') +
-    geom_sf(data = pts_example,
-            color = 'white',
-            size = 3) +
-    geom_sf(data = pts_example,
-            aes(color = factor(id)),
-            size = 2,
-            show.legend = F) +
-    scale_color_manual("Land cover type",
-                       values = cols_lc$cols, 
-                       breaks = cols_lc$ids,
-                       labels = cols_lc$`Land cover type`) +
-    theme_minimal() +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          plot.margin = unit(rep(0, 4),"cm"))
 
 # Time series and harmonic fitting of examples
 # out = cos((2 * pi * n0 * t) / freq - (n % 2) * pi / 2)
@@ -341,9 +209,9 @@ vh_ts <- stack(
 
 # DOY
 doy <- c(0,   9,  12,  21,  33,  45,  48,  57,  69,  81,  93, 105, 117,
-       129, 141, 153, 165, 177, 189, 201, 213, 225, 237, 249, 261, 273,
-       285, 288, 293, 297, 300, 305, 309, 312, 317, 321, 324, 329, 333,
-       336, 345, 348, 357, 360)
+         129, 141, 153, 165, 177, 189, 201, 213, 225, 237, 249, 261, 273,
+         285, 288, 293, 297, 300, 305, 309, 312, 317, 321, 324, 329, 333,
+         336, 345, 348, 357, 360)
 
 # Extract values
 pts_vv_ts <- raster::extract(vv_ts, pts_example) %>% 
@@ -353,7 +221,7 @@ pts_vv_ts <- raster::extract(vv_ts, pts_example) %>%
     `rownames<-`(1:nrow(.)) %>% 
     mutate(date = str_extract(date, '[0-9]{8}')) %>% 
     arrange(date) %>% 
-    mutate(DOY = doy, polarization = 'VV',
+    mutate(DOY = doy, polarization = 'Sentinel-1 (VV)',
            type = 'Real value')
 
 pts_vh_ts <- raster::extract(vh_ts, pts_example) %>% 
@@ -363,7 +231,7 @@ pts_vh_ts <- raster::extract(vh_ts, pts_example) %>%
     `rownames<-`(1:nrow(.)) %>% 
     mutate(date = str_extract(date, '[0-9]{8}')) %>% 
     arrange(date) %>% 
-    mutate(DOY = doy, polarization = 'VH',
+    mutate(DOY = doy, polarization = 'Sentinel-1 (VH)',
            type = 'Real value')
 
 pts_ts <- rbind(pts_vv_ts, pts_vh_ts) %>% 
@@ -385,15 +253,15 @@ pts_vv <- raster::extract(vv_coefs, pts_example) %>%
 pts_vv_fit <- do.call(cbind, lapply(names(pts_vv)[1:7], function(typ){
     coefs <- pts_vv %>% pull(typ)
     data.frame(val = coefs[1] + coefs[2] * doy +
-    coefs[3] * sin(2 * pi * doy /365) + 
-    coefs[4] * cos(2 * pi * doy /365) + 
-    coefs[5] * sin(4 * pi * doy /365) + 
-    coefs[6] * cos(4 * pi * doy /365))
+                   coefs[3] * sin(2 * pi * doy /365) + 
+                   coefs[4] * cos(2 * pi * doy /365) + 
+                   coefs[5] * sin(4 * pi * doy /365) + 
+                   coefs[6] * cos(4 * pi * doy /365))
 })) %>% `names<-`(names(pts_vv)[1:7]) %>% 
     mutate(DOY = doy) %>% 
-    mutate(polarization = 'VV',
+    mutate(polarization = 'Sentinel-1 (VV)',
            type = 'Harmoic regression')
-    
+
 pts_vh <- raster::extract(vh_coefs, pts_example) %>% 
     t() %>% data.frame() %>% 
     `names<-`(pts_example$type) %>% 
@@ -405,13 +273,13 @@ pts_vh <- raster::extract(vh_coefs, pts_example) %>%
 pts_vh_fit <- do.call(cbind, lapply(names(pts_vh)[1:7], function(typ){
     coefs <- pts_vh %>% pull(typ)
     data.frame(val = coefs[1] + coefs[2] * doy +
-    coefs[3] * sin(2 * pi * doy /365) + 
-    coefs[4] * cos(2 * pi * doy /365) + 
-    coefs[5] * sin(4 * pi * doy /365) + 
-    coefs[6] * cos(4 * pi * doy /365))
+                   coefs[3] * sin(2 * pi * doy /365) + 
+                   coefs[4] * cos(2 * pi * doy /365) + 
+                   coefs[5] * sin(4 * pi * doy /365) + 
+                   coefs[6] * cos(4 * pi * doy /365))
 })) %>% `names<-`(names(pts_vh)[1:7]) %>% 
     mutate(DOY = doy) %>% 
-    mutate(polarization = 'VH',
+    mutate(polarization = 'Sentinel-1 (VH)',
            type = 'Harmoic regression')
 
 pts_fit <- rbind(pts_vv_fit, pts_vh_fit) %>% 
@@ -430,40 +298,152 @@ pts_fit <- pts_fit %>%
         `Land cover type` == "Forest",
         "Forest/dense tree", `Land cover type`))
 
-# Make figure
-pts_ts <- merge(pts_ts, cols_lc[, 2:3])
-pts_fit <- merge(pts_fit, cols_lc[, 2:3])
-
-ts_epl <- ggplot() + 
-    geom_point(data = pts_ts, 
-               aes(x = DOY, y = `dB`, 
-                   color = factor(ids)),
-               size = 0.6) +
-    geom_line(data = pts_fit,
-               aes(x = DOY, y = `dB`, 
-                   color = factor(ids))) +
-    facet_wrap(~polarization, 
-               scales = 'free_y', nrow = 2,
-               strip.position = "top") +
+#################### Make the figure ##################
+# Satellite images
+# Image of season 1
+s1_fg <- ggRGB(nicfi_s1, r = 4, g = 3, b = 2, 
+               scale = max(values(nicfi_s1)[, 2:4]), 
+               stretch = 'hist') +
+    geom_sf(data = pts_nicfi,
+            color = 'black',
+            size = 3) +
+    geom_sf(data = pts_nicfi,
+            aes(color = factor(id)),
+            size = 2,
+            show.legend = F) +
     scale_color_manual("Land cover type",
                        values = cols_lc$cols, 
                        breaks = cols_lc$ids,
                        labels = cols_lc$`Land cover type`) +
-    theme_bw()
+    ggtitle("NICFI (season 1)") +
+    theme_void() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.title = element_text(size = 10, hjust = 0.5),
+          plot.margin = unit(rep(-0.1, 4),"cm"))
 
-s1_fg <- ggarrange(
-    ggarrange(vv_fg, vh_fg,
-              labels = c('VV', 'VH'),
-              font.label = list(size = 12),
-              vjust = 3,
-              nrow = 2), 
-    ts_epl, ncol = 2)
+# Image of season 2
+s2_fg <- ggRGB(nicfi_s2, r = 4, g = 3, b = 2, 
+               scale = max(values(nicfi_s2)[, 2:4]), 
+               stretch = 'lin') +
+    geom_sf(data = pts_nicfi,
+            color = 'black',
+            size = 3) +
+    geom_sf(data = pts_nicfi,
+            aes(color = factor(id)),
+            size = 2,
+            show.legend = F) +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    ggtitle("NICFI (season 2)") +
+    theme_void() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.title = element_text(size = 10, hjust = 0.5),
+          plot.margin = unit(rep(-0.1, 4),"cm"))
 
-ggsave(here('docs/figures/s1_image.png'),
-       s1_fg,
-       width = 8, height = 2.7, dpi = 300)
+# Image of VV
+# Slope, Cos(x), Intercept
+vv_fg <- ggRGB(vv_coefs, r = 2, g = 4, b = 1, 
+               scale = max(values(vv_coefs)[, c(2, 4, 1)]), 
+               stretch = 'hist') +
+    geom_sf(data = pts_example,
+            color = 'white',
+            size = 3) +
+    geom_sf(data = pts_example,
+            aes(color = factor(id)),
+            size = 2,
+            show.legend = F) +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    ggtitle("Sentinel-1 (VV)") +
+    theme_void() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.title = element_text(size = 10, hjust = 0.5),
+          plot.margin = unit(rep(-0.1, 4),"cm"))
 
-# Version 2
+# Image of VH
+# Slope, Cos(x), Intercept
+vh_fg <- ggRGB(vh_coefs, r = 2, g = 4, b = 1, 
+               scale = max(values(vh_coefs)[, c(1, 2, 4)]), 
+               stretch = 'lin') +
+    geom_sf(data = pts_example,
+            color = 'white',
+            size = 3) +
+    geom_sf(data = pts_example,
+            aes(color = factor(id)),
+            size = 2,
+            show.legend = F) +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    ggtitle("Sentinel-1 (VH)") +
+    theme_void() +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.title = element_text(size = 10, hjust = 0.5),
+          plot.margin = unit(rep(-0.1, 4),"cm"))
+
+images <- ggarrange(
+    s1_fg, s2_fg, vh_fg, vv_fg,
+    ncol = 4)
+
+## Signatures
+# Define colors
+cols_lc <- tibble(
+    cols = c('#ff7f00', '#074702', '#b2df8a',
+             '#33a02c', '#3347f9', '#5a6057',
+             '#fdbf6f'),
+    `Land cover type` = c("Cropland", 'Forest/dense tree', 
+                          "Grassland", 'Shrubland',  "Water", 
+                          "Built-up", 'Bareland'),
+    ids = as.factor(1:7))
+
+# Burn the color table in
+pts_nicfi_all <- merge(pts_nicfi_all, cols_lc[, 2:3])
+pts_ts <- merge(pts_ts, cols_lc[, 2:3])
+pts_fit <- merge(pts_fit, cols_lc[, 2:3])
+
+ref_epl <- ggplot(pts_nicfi_all,
+                  aes(x = Band, y = Reflectance / 1000,
+                      color = ids)) +
+    geom_point() + geom_line(show.legend = 'line') +
+    ylab(bquote('Reflectance'~(10^3))) + 
+    xlab("Band") +
+    scale_color_manual("Land cover type",
+                       values = cols_lc$cols, 
+                       breaks = cols_lc$ids,
+                       labels = cols_lc$`Land cover type`) +
+    scale_x_discrete(limit = factor(1:4),
+                     labels = unique(pts_nicfi_all$`Band name`)) +
+    theme_bw() +
+    facet_wrap(~ Season, nrow = 2, 
+               scales = "free_y",
+               strip.position = "top") +
+    theme(text = element_text(size = 11))
+
 ts_epl <- ggplot() + 
     geom_point(data = pts_ts, 
                aes(x = DOY, y = `dB`, 
@@ -479,23 +459,18 @@ ts_epl <- ggplot() +
                        values = cols_lc$cols, 
                        breaks = cols_lc$ids,
                        labels = cols_lc$`Land cover type`) +
-    theme_bw() +
-    theme(text=element_text(size=8),
-          axis.text=element_text(size=8),
-          axis.title=element_text(size=8), 
-          plot.title=element_text(size=8), 
-          legend.text=element_text(size=8), 
-          legend.title=element_text(size=8))
-s1_fg <- ggarrange(
-    ggarrange(NA, vh_fg, NA, vv_fg, NA, nrow = 5,
-              heights = c(0.05, 1, 0.05, 1, 0.25),
-              labels = c(NA, 'VH', NA, 'VV', NA),
-              font.label = list(size = 8),
-              hjust = 0.05), 
-    ts_epl, ncol = 2, widths = c(1, 2.2))
-ggsave(here('docs/figures/s1_image_v2.png'),
-       s1_fg,
-       width = 6, height = 3.5, dpi = 300)
+    theme_bw() + theme(text = element_text(size = 11))
+
+epl <- ggarrange(
+    ref_epl, ts_epl,
+    common.legend = TRUE, 
+    legend = "bottom",
+    ncol = 2)
+
+fg <- ggarrange(images, epl, nrow = 2, heights = c(1, 2.5))
+ggsave(here('docs/figures/satellite_images.tiff'),
+       fg, bg = "white",
+       width = 6, height = 6, dpi = 600)
 ```
 
 ## Samples for Random forest and U-Net
