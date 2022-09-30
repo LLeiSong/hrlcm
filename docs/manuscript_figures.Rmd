@@ -1027,9 +1027,10 @@ curves <- ggarrange(
     ggarrange(curve_lr, curve_loss, curve_iou, ncol = 3),
     curves_acc, nrow = 2, heights = c(1, 1.7))
 
-ggsave(here('docs/figures/curves_k15_only_final_mod_v2.png'),
-       curves,
-       width = 7, height = 5, dpi = 300)
+# Figure 6, line art
+# Double figure (7 in in width), 7000 * 5000 at 1000 dpi
+ggsave(here('docs/figures/figure6_training_curves.tiff'),
+       curves, bg = "white", width = 7, height = 5, dpi = 1000)
 ```
 
 #### Prediction examples
