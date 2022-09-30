@@ -99,6 +99,8 @@ main_fg <- ggplot(ecozones) +
     guides(fill = guide_legend(nrow = 4, title.position = "top"),
            color = guide_legend(nrow = 2))
 
+# Figure 1, combination art
+# Single column figure, 1772 * 1772 at 500 dpi
 ggsave(here('docs/figures/figure1_study_area.tiff'),
        main_fg, bg = "white", units = "px", 
        width = 1772, height = 1772)
@@ -299,6 +301,15 @@ pts_fit <- pts_fit %>%
         "Forest/dense tree", `Land cover type`))
 
 #################### Make the figure ##################
+# Define colors
+cols_lc <- tibble(
+    cols = c('#ff7f00', '#074702', '#b2df8a',
+             '#33a02c', '#3347f9', '#5a6057',
+             '#fdbf6f'),
+    `Land cover type` = c("Cropland", 'Forest/dense tree', 
+                          "Grassland", 'Shrubland',  "Water", 
+                          "Built-up", 'Bareland'),
+    ids = as.factor(1:7))
 # Satellite images
 # Image of season 1
 s1_fg <- ggRGB(nicfi_s1, r = 4, g = 3, b = 2, 
@@ -399,16 +410,6 @@ images <- ggarrange(
     ncol = 4)
 
 ## Signatures
-# Define colors
-cols_lc <- tibble(
-    cols = c('#ff7f00', '#074702', '#b2df8a',
-             '#33a02c', '#3347f9', '#5a6057',
-             '#fdbf6f'),
-    `Land cover type` = c("Cropland", 'Forest/dense tree', 
-                          "Grassland", 'Shrubland',  "Water", 
-                          "Built-up", 'Bareland'),
-    ids = as.factor(1:7))
-
 # Burn the color table in
 pts_nicfi_all <- merge(pts_nicfi_all, cols_lc[, 2:3])
 pts_ts <- merge(pts_ts, cols_lc[, 2:3])
@@ -456,9 +457,16 @@ epl <- ggarrange(
     ncol = 2)
 
 fg <- ggarrange(images, epl, nrow = 2, heights = c(1, 2.5))
+
 ggsave(here('docs/figures/satellite_images.tiff'),
-       fg, bg = "white",
+       fg, bg = "white", 
        width = 6, height = 6, dpi = 600)
+
+# Figure 2, combination art
+# Double column figure, 3740 * 3740 at 500 dpi
+ggsave(here('docs/figures/figure2_satellite_images.tiff'),
+       main_fg, bg = "white", units = "px", 
+       width = 3740, height = 3740)
 ```
 
 ## Samples for Random forest and U-Net
