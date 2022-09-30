@@ -822,11 +822,14 @@ quality_fig <- ggplot(
   scale_fill_brewer('Difficulty', palette = "Dark2") +
   xlab('Correctness') +
   ylab('Count') +
-  theme_bw()
+  theme_bw() +
+    theme(text = element_text(size = 16))
 
-ggsave(here('docs/figures/humancheck_quality.png'),
-       quality_fig,
-       width = 4, height = 4, dpi = 300)
+# Figure 5, combination art
+# Single figure (3.2 in in width), 1600 * 1600 at 500 dpi
+ggsave(here('docs/figures/figure5_humancheck_quality.tiff'),
+       quality_fig, bg = "white", units = "px", 
+       width = 1600, height = 1600)
 ```
 
 ### Overall results
