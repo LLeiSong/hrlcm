@@ -328,8 +328,8 @@ s1_fg <- ggRGB(nicfi_s1, r = 4, g = 3, b = 2,
                        labels = cols_lc$`Land cover type`) +
     ggtitle("NICFI (season 1)") +
     theme_void() +
-    theme(plot.title = element_text(size = 10, hjust = 0.5),
-          plot.margin = unit(rep(-0.1, 4),"cm"))
+    theme(plot.title = element_text(size = 12, hjust = 0.5),
+          plot.margin = unit(c(-0.1, rep(-0.5, 3)),"cm"))
 
 # Image of season 2
 s2_fg <- ggRGB(nicfi_s2, r = 4, g = 3, b = 2, 
@@ -348,8 +348,8 @@ s2_fg <- ggRGB(nicfi_s2, r = 4, g = 3, b = 2,
                        labels = cols_lc$`Land cover type`) +
     ggtitle("NICFI (season 2)") +
     theme_void() +
-    theme(plot.title = element_text(size = 10, hjust = 0.5),
-          plot.margin = unit(rep(-0.1, 4),"cm"))
+    theme(plot.title = element_text(size = 12, hjust = 0.5),
+          plot.margin = unit(c(-0.1, rep(-0.5, 3)),"cm"))
 
 # Image of VV
 # Slope, Cos(x), Intercept
@@ -369,14 +369,8 @@ vv_fg <- ggRGB(vv_coefs, r = 2, g = 4, b = 1,
                        labels = cols_lc$`Land cover type`) +
     ggtitle("Sentinel-1 (VV)") +
     theme_void() +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          plot.title = element_text(size = 10, hjust = 0.5),
-          plot.margin = unit(rep(-0.1, 4),"cm"))
+    theme(plot.title = element_text(size = 12, hjust = 0.5),
+          plot.margin = unit(c(-0.1, rep(-0.5, 3)),"cm"))
 
 # Image of VH
 # Slope, Cos(x), Intercept
@@ -396,14 +390,8 @@ vh_fg <- ggRGB(vh_coefs, r = 2, g = 4, b = 1,
                        labels = cols_lc$`Land cover type`) +
     ggtitle("Sentinel-1 (VH)") +
     theme_void() +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          plot.title = element_text(size = 10, hjust = 0.5),
-          plot.margin = unit(rep(-0.1, 4),"cm"))
+    theme(plot.title = element_text(size = 12, hjust = 0.5),
+          plot.margin = unit(c(-0.1, rep(-0.5, 3)),"cm"))
 
 images <- ggarrange(
     s1_fg, s2_fg, vh_fg, vv_fg,
@@ -418,7 +406,7 @@ pts_fit <- merge(pts_fit, cols_lc[, 2:3])
 ref_epl <- ggplot(pts_nicfi_all,
                   aes(x = Band, y = Reflectance / 1000,
                       color = ids)) +
-    geom_point() + geom_line(show.legend = 'line') +
+    geom_point(size = 1.6) + geom_line(show.legend = 'line', size = 0.8) +
     ylab(bquote('Reflectance'~(10^3))) + 
     xlab("Band") +
     scale_color_manual("Land cover type",
@@ -431,16 +419,18 @@ ref_epl <- ggplot(pts_nicfi_all,
     facet_wrap(~ Season, nrow = 2, 
                scales = "free_y",
                strip.position = "top") +
-    theme(text = element_text(size = 11))
+    theme(text = element_text(size = 14),
+          legend.text = element_text(size = 13))
 
 ts_epl <- ggplot() + 
     geom_point(data = pts_ts, 
                aes(x = DOY, y = `dB`, 
                    color = factor(ids)),
-               size = 0.6) +
+               size = 1.6) +
     geom_line(data = pts_fit,
               aes(x = DOY, y = `dB`, 
-                  color = factor(ids))) +
+                  color = factor(ids)),
+              size = 0.8) +
     facet_wrap(~polarization, 
                scales = 'free_y', nrow = 2,
                strip.position = "top") +
@@ -448,7 +438,8 @@ ts_epl <- ggplot() +
                        values = cols_lc$cols, 
                        breaks = cols_lc$ids,
                        labels = cols_lc$`Land cover type`) +
-    theme_bw() + theme(text = element_text(size = 11))
+    theme_bw() + theme(text = element_text(size = 14),
+          legend.text = element_text(size = 13))
 
 epl <- ggarrange(
     ref_epl, ts_epl,
@@ -458,15 +449,11 @@ epl <- ggarrange(
 
 fg <- ggarrange(images, epl, nrow = 2, heights = c(1, 2.5))
 
-ggsave(here('docs/figures/satellite_images.tiff'),
-       fg, bg = "white", 
-       width = 6, height = 6, dpi = 600)
-
 # Figure 2, combination art
-# Double column figure, 3740 * 3740 at 500 dpi
+# 1.5 column figure, 2756 * 2500 at 500 dpi
 ggsave(here('docs/figures/figure2_satellite_images.tiff'),
-       main_fg, bg = "white", units = "px", 
-       width = 3740, height = 3740)
+       fg, bg = "white", units = "px", 
+       width = 2756, height = 2500)
 ```
 
 ## Samples for Random forest and U-Net
@@ -516,9 +503,10 @@ sub_tiling_fg <- ggplot(sub_tiling) +
             color = 'blue', lwd = 0.3) +
     scale_fill_manual(values = c('forestgreen', 'orangered')) +
     geom_sf(color = 'blue', fill = NA, lwd = 0.3) + 
-    geom_sf_text(aes(label = index), size = 3) +
+    geom_sf_text(aes(label = index), size = 5) +
     theme_void() +
     theme(legend.position = 'bottom',
+          text = element_text(size = 17),
           plot.title = element_text(hjust = -0.15, vjust = -6),
           plot.margin = unit(rep(0, 4),"cm"))
 
@@ -612,6 +600,7 @@ legend_lc <- ggplot() +
                                  'Bareland')) +
     theme_minimal() +
     theme(legend.position = 'right',
+          text = element_text(size = 17),
           plot.margin = unit(rep(0, 4),"cm"))+
     guides(fill = guide_legend(ncol = 2))
 
@@ -621,42 +610,11 @@ sub_tiling_fg <- ggarrange(NULL, legend_lc, NULL, sub_tiling_fg, NULL,
 
 esb_fg <- ggarrange(plotlist = plots_esb, ncol = 4,
                     labels = sub_tiles$index,
-                    font.label = list(size = 12, color = "black", 
+                    font.label = list(size = 16, color = "black", 
                                    face = "plain"),
-                    hjust = -3, vjust = 0.1)
+                    hjust = -3, vjust = 0.25)
 guess_fg <- ggarrange(plotlist = plots_guess, ncol = 4)
 refine_fg <- ggarrange(plotlist = plots_refine, ncol = 4)
-
-id_selected <- '1240-995'
-# Read tiles
-nicfi_tiles <- read_sf(
-    here('data/geoms/tiles_nicfi_north.geojson'))
-
-# Sub-tiling
-indices <- matrix(1:64, 8, 8)
-indices <- indices[, ncol(indices):1]
-sub_tiling <- nicfi_tiles %>% 
-    filter(tile == id_selected) %>% 
-    st_make_grid(n = c(8, 8)) %>% 
-    st_sf() %>% 
-    mutate(index = as.vector(indices))
-trains_inside <- sub_tiling %>% 
-    filter(index %in% (read.csv(
-        here('results/north/dl_catalog_train.csv'),
-        stringsAsFactors = F) %>% 
-            filter(tile == id_selected) %>% 
-            pull(index))) %>% 
-    mutate(Usage = 'Train')
-valids_inside <- sub_tiling %>% 
-    filter(index %in% (read.csv(
-        here('results/north/dl_catalog_valid.csv'),
-        stringsAsFactors = F) %>% 
-            filter(tile == id_selected) %>% 
-            pull(index))) %>% 
-    mutate(Usage = 'Validate')
-# Labels of each sub-tile
-sub_tiles <- rbind(trains_inside, valids_inside) %>% 
-    arrange(index); rm(trains_inside, valids_inside)
 
 # Add satellite images for reference
 # Satellite images
@@ -678,8 +636,7 @@ plot_img <- function(rst, bry){
                 color = 'blue', fill = NA,
                 lwd = 0.4) +
         theme_void() +
-        theme(plot.title = element_text(size = 10, hjust = 0.5),
-              plot.margin = unit(rep(-0.1, 4),"cm"))
+        theme(plot.margin = unit(rep(-0.1, 4),"cm"))
 }
 s1_plots <- lapply(1:length(images), function(n) {
     nm <- names(images)[n]
@@ -701,16 +658,18 @@ s2_fg <- ggarrange(plotlist = s2_plots, ncol = 4)
 
 fgs <- ggarrange(esb_fg, guess_fg, refine_fg, s1_fg, s2_fg, nrow = 5,
                  labels = c('A', 'B', 'C', "S1", "S2"),
-                 font.label = list(size = 12, color = "black", 
+                 font.label = list(size = 16, color = "black", 
                                    face = "plain"),
                  hjust = 0.9, vjust = 6)
 labels_fg <- ggarrange(NULL, fgs, sub_tiling_fg, 
                        ncol = 3, widths = c(0.1, 2, 1)) +
     theme(plot.margin = margin(0.3, 0 ,0, 0, "cm"))
 
-ggsave(here('docs/figures/labels.tiff'),
-       labels_fg, bg = "white",
-       width = 8, height = 6.5, dpi = 600)
+# Figure 4, combination art
+# 2 column figure, 3150 * 2560 at 500 dpi
+ggsave(here('docs/figures/figure4_labels_example.tiff'),
+       labels_fg, bg = "white", units = "px", 
+       width = 3150, height = 2560)
 ```
 
 ## Workflow
