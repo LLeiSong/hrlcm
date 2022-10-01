@@ -1409,8 +1409,6 @@ pred_ours <- ggarrange(
     rst_tiles[[2]], rst_tiles[[3]], rst_tiles[[1]], 
     rst_tiles[[4]], nrow = 4, ncol = 1)
 
-ggarrange(s1, s2, pred_ours, ncol = 3)
-
 # ESA GLC
 colors <- c(color_tb$color[1:4], color_tb$color[8], 
             color_tb$color[5], color_tb$color[6:7])
@@ -1433,8 +1431,6 @@ fgs_esa <- lapply(1:nrow(tiles), function(n){
 fgs_esa <- ggarrange(
     fgs_esa[[2]], fgs_esa[[3]], fgs_esa[[1]], 
     fgs_esa[[4]], nrow = 4, ncol = 1)
-
-ggarrange(s1, s2, pred_ours, fgs_esa, ncol = 4)
 
 # FROMGLC
 from_glc <- read_stars('data/landcovers/fromglc_rcl.tif')
@@ -1466,17 +1462,11 @@ legend_lc <- ggplot() +
                       values = color_tb$color, 
                       breaks = 1:8,
                       labels = color_tb$type) +
-    theme_minimal() +
+    theme_void() +
     theme(legend.position = 'right',
-          axis.title.x = element_blank(),
-          axis.text.x = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),
-          plot.margin = unit(rep(0, 4),"cm"))+
+          plot.margin = unit(rep(0, 4),"cm"),
+          text = element_text(size = 14),
+          legend.text = element_text(size = 14))+
     guides(fill = guide_legend(ncol = 8))
 legend_lc <- get_legend(legend_lc)
 
@@ -1501,7 +1491,8 @@ ids <- ggplot() +
              y = 4,
              size = 5,
              label = "(a)") +
-    theme_void()
+    theme_void() +
+    theme(text = element_text(size = 14))
 
 examples <- ggarrange(ggarrange(ids, NA, nrow = 2, heights = c(1, 0.2)), 
                       s1, s2, pred_ours, fgs_esa, fgs_from, 
@@ -1509,14 +1500,17 @@ examples <- ggarrange(ggarrange(ids, NA, nrow = 2, heights = c(1, 0.2)),
           labels = c('', 'NICFI season 1', 'NICFI season 2', 
                      'Prediction', 'CGLS_LC100m',
                      'FROM-GLC 2017v1'),
-          hjust = -0.2, vjust = 63,
-          font.label = list(size = 10, color = "black"),
+          hjust = -0.1, vjust = 59,
+          font.label = list(size = 14, color = "black", face = "plain"),
           legend.grob = legend_lc,
           legend = 'bottom')
 
-ggsave(here('docs/figures/compare_example.png'),
-       examples,
-       width = 8, height = 6.8, dpi = 300)
+# Figure 8, combination art
+# 2 column figure (6.2 in) , 3150 * 2600 at 500 dpi
+ggsave(here('docs/figures/figure8_compare_examples.tiff'),
+       examples, bg = "white", 
+       width = 3150, height = 2600, 
+       units = "px")
 ```
 
 ## Sensitivity analysis
