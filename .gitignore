@@ -13,3 +13,4 @@ results
 !data/geoms
 docs/figures/
 hrlcm.Rproj
+*/*.bkp
