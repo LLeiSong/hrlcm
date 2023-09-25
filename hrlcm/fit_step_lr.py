@@ -60,7 +60,7 @@ def main():
     # Training hyper-parameters
     parser.add_argument('--max_lr', type=float, default=0.001,
                         help='maximum or initial learning rate for scheduler.')
-    parser.add_argument('--step_size', type=int, default=10,
+    parser.add_argument('--step_size', type=int, default=5,
                         help='step size for scheduler.')
     parser.add_argument('--gamma_lr', type=float, default=0.8,
                         help='gamma for learning rate.')
@@ -126,17 +126,19 @@ def main():
     ])
 
     # Image transform
-    id_bands = list(range(1, 13)) if args.img_bands == "all" else list(range(1, 9))
+    bands_all = [1, 2, 4, 5, 7, 9, 10, 12, 13, 15, 17, 18, 19, 20] + list(range(23,27))
+    bands_opt = [1, 2, 3, 4, 9, 10, 11, 12]
+    id_bands = bands_all if args.img_bands == "all" else bands_opt
     # Load mean and sd for normalization
     with open(os.path.join(args.stats_dir,
-                           "means.pkl"), "rb") as input_file:
-        mean = tuple(pkl.load(input_file))
-        mean = mean[0:len(id_bands)]
+                           "means_2018.pkl"), "rb") as input_file:
+        mean = pkl.load(input_file)
+        mean = tuple([mean[i] for i in id_bands])
 
     with open(os.path.join(args.stats_dir,
-                           "stds.pkl"), "rb") as input_file:
-        std = tuple(pkl.load(input_file))
-        std = std[0:len(id_bands)]
+                           "stds_2018.pkl"), "rb") as input_file:
+        std = pkl.load(input_file)
+        std = tuple([std[i] for i in id_bands])
     img_transform = ImgNorm(mean, std)
 
     # Get train dataset
@@ -145,7 +147,7 @@ def main():
                              usage='train',
                              label_offset=args.label_offset,
                              sync_transform=sync_transform,
-                             img_transform=img_transform,
+                             img_transform=img_transform, # img_transform
                              label_transform=None)
     # Put into DataLoader
     train_loader = DataLoader(dataset=train_dataset,
@@ -161,7 +163,7 @@ def main():
                                 usage='validate',
                                 label_offset=args.label_offset,
                                 sync_transform=sync_transform_val,
-                                img_transform=img_transform,
+                                img_transform=img_transform, # img_transform
                                 label_transform=None)
     # Put into DataLoader
     validate_loader = DataLoader(dataset=validate_dataset,

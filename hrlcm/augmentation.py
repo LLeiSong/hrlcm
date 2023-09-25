@@ -8,6 +8,7 @@ import random
 import torch
 import numpy as np
 import cv2
+import scipy.fftpack
 
 
 class Compose(object):
@@ -55,6 +56,87 @@ def uni_shape(img, label, dsize, tl_x=0, tl_y=0):
     canvas_label[tl_x:tl_x + resize_h, tl_y:tl_y + resize_w] = label
 
     return canvas_img, canvas_label
+
+
+def fftind(size):
+    """ Returns a numpy array of shifted Fourier coordinates k_x k_y.
+        
+        Input args:
+            size (integer): The size of the coordinate array to create
+        Returns:
+            k_ind, numpy array of shape (2, size, size) with:
+                k_ind[0,:,:]:  k_x components
+                k_ind[1,:,:]:  k_y components
+                
+        Example:
+        
+            print(fftind(5))
+            
+            [[[ 0  1 -3 -2 -1]
+            [ 0  1 -3 -2 -1]
+            [ 0  1 -3 -2 -1]
+            [ 0  1 -3 -2 -1]
+            [ 0  1 -3 -2 -1]]
+
+            [[ 0  0  0  0  0]
+            [ 1  1  1  1  1]
+            [-3 -3 -3 -3 -3]
+            [-2 -2 -2 -2 -2]
+            [-1 -1 -1 -1 -1]]]
+            
+    """
+    k_ind = np.mgrid[:size, :size] - int( (size + 1)/2 )
+    k_ind = scipy.fftpack.fftshift(k_ind)
+    return(k_ind)
+
+
+def gaussian_random_field(alpha = [0.1, 0.2, 0.3],
+                          size = 512,
+                          interval = [0.5, 1.5]):
+    """ Returns a numpy array of shifted Fourier coordinates k_x k_y.
+        Just regular for now.
+        
+        Input args:
+            alpha (double, default = 3.0): 
+                The power of the power-law momentum distribution
+            size (integer, default = 128):
+                The size of the square output Gaussian Random Fields
+            flag_normalize (boolean, default = True):
+                Normalizes the Gaussian Field:
+                    - to have an average of 0.0
+                    - to have a standard deviation of 1.0
+
+        Returns:
+            gfield (numpy array of shape (size, size)):
+                The random gaussian random field
+                
+        Example:
+        import matplotlib
+        import matplotlib.pyplot as plt
+        example = gaussian_random_field()
+        plt.imshow(example)
+    """
+    
+    alpha = random.choice(alpha)
+    # Defines momentum indices
+    k_idx = fftind(size)
+
+    # Defines the amplitude as a power law 1/|k|^(alpha/2)
+    amplitude = np.power( k_idx[0]**2 + k_idx[1]**2 + 1e-10, -alpha/4.0)
+    amplitude[0,0] = 0
+    
+    # Draws a complex gaussian random noise with normal
+    # (circular) distribution
+    noise = np.random.normal(size = (size, size)) \
+        + 1j * np.random.normal(size = (size, size))
+    
+    # To real space
+    gfield = np.fft.ifft2(noise * amplitude).real
+    
+    # Sets the standard deviation to one
+    gfield = (gfield - np.min(gfield)) / (np.max(gfield) - np.min(gfield)) * (interval[1] - interval[0]) + interval[0]
+        
+    return gfield
 
 
 class RandomCenterRotate(object):
@@ -209,6 +291,40 @@ class RandomScale(object):
             return img_re, label_re
         else:
             return img, label
+          
+
+class AdjustBrightness(object):
+    """Dataset based normalize image layers. This indicates a general standardization."""
+
+    def __init__(self, gammaRange=(0.5, 1.5), prob=0.5):
+        """Initialize the object.
+        Params:
+            factor (float): The factor for brightness adjust.
+        """
+        self.gammaRange = gammaRange
+        self.prob = prob
+
+    def __call__(self, img, label):
+        """"Define the call.
+        Params:
+            img (numpy.ndarray): Concatenated variables or brightness value with a dimension of (H, W, C)
+            label (numpy.ndarray): Ground truth with a dimension of (H,W)
+        Returns:
+            (numpy.ndarray, numpy.ndarray) tuple of flipped image, and label.
+        """
+        if random.random() < self.prob:
+            factors = gaussian_random_field(interval=self.gammaRange)
+            condition = random.choice([1,2,3])
+            if condition == 1:
+                index = [1,2,3,4,6]
+            elif condition == 2:
+                index = [7,8,9,10,12]
+            else:
+                index = [1,2,3,4,6,7,8,9,10,12]
+            for i in index:
+                img[:,:,i] = img[:,:,i] * factors
+
+        return img, label
 
 
 class SyncToTensor(object):
@@ -325,4 +441,3 @@ class ImgMinMaxScaler(object):
                 t.sub_(b).div_(a - b)
 
         return img
-

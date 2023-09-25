@@ -11,6 +11,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import rasterio
+import multiprocessing as mp
 from torch.utils.data import Dataset
 from rasterio.plot import reshape_as_image
 
@@ -155,6 +156,15 @@ def get_chips(img, dsize, buffer=0):
     return img_ls, index
 
 
+# Use multi-threads
+def _read_img_label(index, catalog, bands, label_offset, data_dir):
+    tile_info = catalog.iloc[index]
+    tile_info = tile_info.replace(tile_info['img'], os.path.join(data_dir, tile_info["img"]))
+    tile_info = tile_info.replace(tile_info['label'], os.path.join(data_dir, tile_info["label"]))
+    img, label = load_tile(tile_info, bands=bands, offset=label_offset)
+    return img,label
+
+
 class NFSEN1LC(Dataset):
     """PyTorch dataset class for NFSEN1LC
     Which is short for NICFI + SENTINEL-1 land cover classification
@@ -219,11 +229,27 @@ class NFSEN1LC(Dataset):
             sys.exit('Not valid usage setting.')
         catalog_full = pd.read_csv(os.path.join(self.data_dir, catalog_nm))
 
-        # Shrink the catalog based on noise ratio
-        if self.usage == 'train':
+        # Read chips for train and validate
+        if self.usage in ['train', 'validate']:
             self.catalog = catalog_full
-        elif self.usage == 'validate':
-            self.catalog = catalog_full
+            # Load all images here before the training to save time
+            # img_ls = []
+            # label_ls = []
+            # for index in range(len(self.catalog)):
+            #     tile_info = self.catalog.iloc[index]
+            #     tile_info = tile_info.replace(tile_info['img'], os.path.join(self.data_dir, tile_info["img"]))
+            #     tile_info = tile_info.replace(tile_info['label'], os.path.join(self.data_dir, tile_info["label"]))
+            #     img, label = load_tile(tile_info, bands=self.bands, offset=self.label_offset)
+            #     img_ls.append(img)
+            #     label_ls.append(label)
+            # self.img_ls = img_ls
+            # self.label_ls = label_ls
+            args = [(index, catalog_full, bands, label_offset, data_dir) for index in range(len(catalog_full))]
+            with mp.Pool(processes=30) as pool:
+                results = pool.starmap(_read_img_label, args)
+            self.img_ls = [result[0] for result in results]
+            self.label_ls = [result[1] for result in results]
+            del results
         # Prediction
         else:
             self.chip_size = 512 + self.chip_buffer * 2  # image size of train, hardcoded
@@ -248,13 +274,8 @@ class NFSEN1LC(Dataset):
             tuple
         """
         if self.usage in ['train', 'validate']:
-            tile_info = self.catalog.iloc[index]
-            tile_info = tile_info.replace(tile_info['img'],
-                                          os.path.join(self.data_dir, tile_info["img"]))
-            tile_info = tile_info.replace(tile_info['label'],
-                                          os.path.join(self.data_dir, tile_info["label"]))
-            img, label = load_tile(tile_info, bands=self.bands, offset=self.label_offset)
-
+            img = self.img_ls[index]
+            label = self.label_ls[index]
             # Transform
             if self.sync_transform is not None:
                 img, label = self.sync_transform(img, label)

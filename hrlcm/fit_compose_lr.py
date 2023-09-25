@@ -32,10 +32,10 @@ def main():
                              'for logs and checkpoints (default: experiment)')
 
     # dataset
-    parser.add_argument('--data_dir', type=str, default='results/tanzania',
-                        help='path to dataset (default: results/tanzania)')
-    parser.add_argument('--out_dir', type=str, default="results/dl",
-                        help='path to output dir (default: results/dl)')
+    parser.add_argument('--data_dir', type=str, default='/scratch/lsong36/tanzania/training',
+                        help='path to dataset (default: /scratch/lsong36/tanzania/training)')
+    parser.add_argument('--out_dir', type=str, default="/scratch/lsong36/tanzania/results",
+                        help='path to output dir (default: /scratch/lsong36/tanzania/results)')
     parser.add_argument('--label_offset', type=int, default=1,
                         help='offset value to minus from label in order to start from 0 (default: 1)')
     parser.add_argument('--img_bands', type=str, choices=['all', 'nicfi'],
@@ -46,7 +46,7 @@ def main():
     parser.add_argument('--rg_rotate', type=str, default='-90, 90',
                         help='ratio of noise to subset train dataset (default: -90, 90)')
     parser.add_argument('--trans_prob', type=float, default=0.5,
-                        help='probability to do data transformation (default:0.5)')
+                        help='probability to do data transformation (default:0.3)')
     parser.add_argument('--num_workers', type=int, default=0,
                         help='number of worker(s) to load dataset (default: 0)')
 
@@ -71,9 +71,9 @@ def main():
     parser.add_argument('--save_freq', type=int, default=10,
                         help='training state will be saved every save_freq \
                         batches during training')
-    parser.add_argument('--train_batch_size', type=int, default=32,
+    parser.add_argument('--train_batch_size', type=int, default=128,
                         help='batch size for training (default: 32)')
-    parser.add_argument('--val_batch_size', type=int, default=32,
+    parser.add_argument('--val_batch_size', type=int, default=128,
                         help='batch size for validation (default: 32)')
     parser.add_argument('--epochs', type=int, default=201,
                         help='number of training epochs (default: 200). '
@@ -102,7 +102,7 @@ def main():
     if not os.path.isdir(args.logs_dir):
         os.makedirs(args.logs_dir)
 
-    # Dir for mean and sd pickles
+    # # Dir for mean and sd pickles
     args.stats_dir = os.path.join(args.data_dir, 'norm_stats')
 
     # Set flags for GPU processing if available
@@ -115,11 +115,23 @@ def main():
     # synchronize transform for train dataset
     sync_transform = Compose([
         RandomScale(prob=args.trans_prob),
-        RandomFlip(prob=args.trans_prob),
-        RandomCenterRotate(degree=args.rg_rotate,
-                           prob=args.trans_prob),
+        AdjustBrightness(prob=args.trans_prob),
         SyncToTensor()
     ])
+    
+    # Original transform
+    # sync_transform = Compose([
+    #     RandomScale(prob=args.trans_prob),
+    #     RandomFlip(prob=args.trans_prob),
+    #     RandomCenterRotate(degree=args.rg_rotate,
+    #                        prob=args.trans_prob),
+    #     SyncToTensor()
+    # ])
+    
+    # No transform
+    # sync_transform = Compose([
+    #     SyncToTensor()
+    # ])
 
     # synchronize transform for validate dataset
     sync_transform_val = Compose([
@@ -127,17 +139,22 @@ def main():
     ])
 
     # Image transform
-    id_bands = list(range(1, 13)) if args.img_bands == "all" else list(range(1, 9))
+    # bands_all = [1,2,4,5,7,9,10,12,13,15,17,18,19,20] + list(range(23,27))
+    bands_all = [1,2,3,4,5,7,9,10,11,12,13,15,17,18,19,20] + list(range(23,27))
+    # bands_all = [1,2,3,4,9,10,11,12,17,20,23,26]
+    bands_opt = [1,2,3,4,9,10,11,12]
+    id_bands = bands_all if args.img_bands == "all" else bands_opt
+    
     # Load mean and sd for normalization
     with open(os.path.join(args.stats_dir,
-                           "means.pkl"), "rb") as input_file:
-        mean = tuple(pkl.load(input_file))
-        mean = mean[0:len(id_bands)]
+                           "means_2018.pkl"), "rb") as input_file:
+        mean = pkl.load(input_file)
+        mean = tuple([mean[i-1] for i in id_bands])
 
     with open(os.path.join(args.stats_dir,
-                           "stds.pkl"), "rb") as input_file:
-        std = tuple(pkl.load(input_file))
-        std = std[0:len(id_bands)]
+                           "stds_2018.pkl"), "rb") as input_file:
+        std = pkl.load(input_file)
+        std = tuple([std[i-1] for i in id_bands])
     img_transform = ImgNorm(mean, std)
 
     # Get train dataset
@@ -146,7 +163,7 @@ def main():
                              usage='train',
                              label_offset=args.label_offset,
                              sync_transform=sync_transform,
-                             img_transform=img_transform,
+                             img_transform=img_transform, # img_transform
                              label_transform=None)
     # Put into DataLoader
     train_loader = DataLoader(dataset=train_dataset,
@@ -162,7 +179,7 @@ def main():
                                 usage='validate',
                                 label_offset=args.label_offset,
                                 sync_transform=sync_transform_val,
-                                img_transform=img_transform,
+                                img_transform=img_transform, # img_transform
                                 label_transform=None)
     # Put into DataLoader
     validate_loader = DataLoader(dataset=validate_dataset,
@@ -208,11 +225,11 @@ def main():
         model = model.cuda()
 
     # Get learning rate first
-    learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr)
+    # learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr)
     
     # # Modify stages
-    # learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr, 
-    #                                 stage1=10, stage2=40, stage3=70)
+    # learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr,
+    #                                 stage1=50, stage2=100, stage3=150)
     
     # # Modify stages and change some values
     # learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr, 
@@ -221,7 +238,8 @@ def main():
     # learning_rates[72:81] = [0.000001] * 10
     
     # # Use fixed values
-    # learning_rates = [args.max_lr] * args.epochs
+    learning_rates = [args.max_lr] * args.epochs
+    # learning_rates = [args.max_lr] * 11 + [args.min_lr] * 10
     
     # # Fine tune scheduler
     # learning_rates = [1e-6] * args.epochs
@@ -239,7 +257,7 @@ def main():
     if args.optimizer_name.lower() == 'adabound':
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
-                                   final_lr=0.01)  # use constant final_lr 0.001
+                                   final_lr=0.01)  # use constant final_lr 0.01
     elif args.optimizer_name.lower() == 'amsbound':
         optimizer = optim.AdaBound(model.parameters(),
                                    lr=args.max_lr,
