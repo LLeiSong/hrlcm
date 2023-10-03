@@ -170,7 +170,8 @@ class NFSEN1LC(Dataset):
     Which is short for NICFI + SENTINEL-1 land cover classification
     """
 
-    def __init__(self, data_dir,
+    def __init__(self, 
+                 data_dir,
                  bands,
                  usage='train',
                  label_offset=1,
@@ -178,6 +179,7 @@ class NFSEN1LC(Dataset):
                  sync_transform=None,
                  img_transform=None,
                  label_transform=None,
+                 predict_catalog=None,
                  tile_id='1207-996'):
         """Initialize the dataset
         Args:
@@ -215,7 +217,7 @@ class NFSEN1LC(Dataset):
         self.n_channels = len(self.bands)
 
         # Check inputs
-        assert usage in ['train', 'validate', 'predict']
+        assert usage in ['train', 'validate', 'predict', "ipredict"]
         assert os.path.exists(data_dir)
 
         # Read catalog
@@ -224,33 +226,28 @@ class NFSEN1LC(Dataset):
         elif self.usage == 'validate':
             catalog_nm = 'dl_catalog_valid.csv'
         elif self.usage == 'predict':
-            catalog_nm = 'dl_catalog_predict.csv'
+            catalog_nm = predict_catalog
+        elif self.usage == "ipredict":
+            catalog_nm = predict_catalog
         else:
             sys.exit('Not valid usage setting.')
         catalog_full = pd.read_csv(os.path.join(self.data_dir, catalog_nm))
 
         # Read chips for train and validate
-        if self.usage in ['train', 'validate']:
+        if self.usage in ['train', 'validate', 'ipredict']:
             self.catalog = catalog_full
             # Load all images here before the training to save time
-            # img_ls = []
-            # label_ls = []
-            # for index in range(len(self.catalog)):
-            #     tile_info = self.catalog.iloc[index]
-            #     tile_info = tile_info.replace(tile_info['img'], os.path.join(self.data_dir, tile_info["img"]))
-            #     tile_info = tile_info.replace(tile_info['label'], os.path.join(self.data_dir, tile_info["label"]))
-            #     img, label = load_tile(tile_info, bands=self.bands, offset=self.label_offset)
-            #     img_ls.append(img)
-            #     label_ls.append(label)
-            # self.img_ls = img_ls
-            # self.label_ls = label_ls
             args = [(index, catalog_full, bands, label_offset, data_dir) for index in range(len(catalog_full))]
-            with mp.Pool(processes=30) as pool:
+            with mp.Pool(processes=10) as pool:
                 results = pool.starmap(_read_img_label, args)
             self.img_ls = [result[0] for result in results]
             self.label_ls = [result[1] for result in results]
             del results
-        # Prediction
+            
+            # Do more for ipredict
+            if self.usage == 'ipredict':
+                self.tile_id_ls = [catalog_full.iloc[index]['tile_id'] for index in range(len(catalog_full))]
+        # Final prediction
         else:
             self.chip_size = 512 + self.chip_buffer * 2  # image size of train, hardcoded
             self.tile_id = tile_id
@@ -273,7 +270,7 @@ class NFSEN1LC(Dataset):
         Returns:
             tuple
         """
-        if self.usage in ['train', 'validate']:
+        if self.usage in ['train', 'validate', 'ipredict']:
             img = self.img_ls[index]
             label = self.label_ls[index]
             # Transform
@@ -286,6 +283,9 @@ class NFSEN1LC(Dataset):
 
             if self.usage == 'train':
                 return img, label, index
+            elif self.usage == 'ipredict':
+                tile_id = self.tile_id_ls[index]
+                return img, label, tile_id
             else:
                 return img, label
         else:
@@ -303,7 +303,7 @@ class NFSEN1LC(Dataset):
         """
         if self.usage == 'predict':
             return len(self.index_ls)
-        elif self.usage in ['train', 'validate']:
+        elif self.usage in ['train', 'validate', 'ipredict']:
             return len(self.catalog.index)
         else:
             return 0

@@ -138,6 +138,9 @@ class Trainer:
 
         # Flush to disk
         writer.flush()
+        
+        # Return the average accuracy
+        return conf_mat.get_aa(), conf_mat.get_mIoU()
 
     def export_model(self, model, optimizer=None, scheduler=None, name=None, step=None):
         # Set output filename

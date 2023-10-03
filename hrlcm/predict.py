@@ -26,6 +26,8 @@ def main():
                         help='path to checkpoint file (default: ./checkpoint.pth)')
 
     # Dataset
+    parser.add_argument('--year', type=str,
+                        default='2018', help='The year for the prediction.')
     parser.add_argument('--fname_predict', type=str,
                         default='dl_catalog_predict.csv',
                         help='the csv file name to do prediction.')
@@ -52,8 +54,8 @@ def main():
                              'none: no score map. (default: overall)')
 
     # Hyper-parameters of GPU
-    parser.add_argument('--batch_size', type=int, default=16,
-                        help='mini-batch size (default: 16)')
+    parser.add_argument('--batch_size', type=int, default=64,
+                        help='mini-batch size (default: 64)')
     parser.add_argument('--gpu_devices', type=str, default=None,
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
@@ -74,6 +76,7 @@ def main():
     print()
 
     # Create output dir
+    args.out_dir = os.path.join(args.out_dir, args.year)
     os.makedirs(args.out_dir, exist_ok=True)
     # Set and create paths
     score_path = os.path.join(args.out_dir, 'score')
@@ -115,22 +118,26 @@ def main():
 
     # Predict
     # Image transform
-    id_bands = list(range(1, 13)) if args.img_bands == "all" else list(range(1, 9))
+    bands_all = [1,2,3,4,5,7,9,10,11,12,13,15,17,18,19,20] + list(range(23,27))
+    bands_opt = [1,2,3,4,9,10,11,12]
+    id_bands = bands_all if args.img_bands == "all" else bands_opt
+    
     # Load mean and sd for normalization
     with open(os.path.join(args.stats_dir,
-                           "means.pkl"), "rb") as input_file:
+                           "means_2018.pkl"), "rb") as input_file:
         mean = tuple(pkl.load(input_file))
-        mean = mean[0:len(id_bands)]
+        mean = tuple([mean[i-1] for i in id_bands])
 
     with open(os.path.join(args.stats_dir,
-                           "stds.pkl"), "rb") as input_file:
+                           "stds_2018.pkl"), "rb") as input_file:
         std = tuple(pkl.load(input_file))
-        std = std[0:len(id_bands)]
+        std = tuple([std[i-1] for i in id_bands])
     pred_transform = ComposeImg([
         ImgToTensor(),
         ImgNorm(mean, std)
     ])
-
+    
+    # Read catalog with full path
     catalog = pd.read_csv(os.path.join(args.data_dir, args.fname_predict))
     for tile_id in catalog['tile_id']:
         print('Do prediction for {}'.format(tile_id))
@@ -142,6 +149,7 @@ def main():
                                    sync_transform=None,
                                    img_transform=pred_transform,
                                    label_transform=None,
+                                   predict_catalog=args.fname_predict,
                                    tile_id=tile_id)
         # Put into DataLoader
         predict_loader = DataLoader(dataset=predict_dataset,
@@ -214,8 +222,6 @@ def main():
                 dst.write(canvas_score)
 
         del predict_dataset, predict_loader
-        # for fname in catalog.loc[catalog['tile_id'] == tile_id]['tiles_relate'].item().split(','):
-        #     os.remove(os.path.join(args.data_path, fname))
 
 
 if __name__ == "__main__":

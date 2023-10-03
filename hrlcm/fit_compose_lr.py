@@ -228,8 +228,9 @@ def main():
     # learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr)
     
     # # Modify stages
-    # learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr,
-    #                                 stage1=50, stage2=100, stage3=150)
+    learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr,
+                                    stage1=110, stage2=145, stage3=180)
+    learning_rates[191:201] = [0.00001] * 10
     
     # # Modify stages and change some values
     # learning_rates = get_compose_lr(model, args.epochs, args.min_lr, args.max_lr, 
@@ -238,7 +239,7 @@ def main():
     # learning_rates[72:81] = [0.000001] * 10
     
     # # Use fixed values
-    learning_rates = [args.max_lr] * args.epochs
+    # learning_rates = [args.max_lr] * args.epochs
     # learning_rates = [args.max_lr] * 11 + [args.min_lr] * 10
     
     # # Fine tune scheduler
@@ -275,6 +276,8 @@ def main():
     # Start train
     step = 0
     epoch = 0
+    best_aa = 0.85
+    best_miou = 0.55
     # Resume model based on settings
     if args.resume:
         if os.path.isfile(args.resume):
@@ -319,9 +322,21 @@ def main():
         model, step = trainer.train(model, train_loader, loss_fn,
                                     optimizer, writer, step=step)
         # Run validation
-        trainer.validate(model, validate_loader, step, loss_fn_valid, writer)
+        aa, miou = trainer.validate(model, validate_loader, step, loss_fn_valid, writer)
 
-        # Save checkpoint
+        # Save checkpoint when get a better model based on AA or mIOU
+        if aa > best_aa:
+            trainer.export_model(model, optimizer=optimizer,
+                                 scheduler=None, name='best_aa',
+                                 step=step)
+            best_aa = aa
+        if miou > best_miou:
+            trainer.export_model(model, optimizer=optimizer,
+                                 scheduler=None, name='best_miou',
+                                 step=step)
+            best_miou = miou
+        
+        # Save checkpoint regularly
         if epoch % args.save_freq == 0:
             trainer.export_model(model, optimizer=optimizer,
                                  scheduler=None, name='interim',
