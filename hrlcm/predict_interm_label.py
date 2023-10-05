@@ -51,6 +51,11 @@ def main():
                         help='mini-batch size (default: 64)')
     parser.add_argument('--gpu_devices', type=str, default=None,
                         help='the gpu devices to use (default: None) (format: 1, 2)')
+    
+    # Output format
+    parser.add_argument('--label_format', type=str, choices=['full', 'intersect'],
+                        default='intersect',
+                        help='the format of the output labels. (default: intersect)')
 
     args = parser.parse_args()
     assert args.img_bands in ['all', 'nicfi']
@@ -148,8 +153,10 @@ def main():
             output = prediction[n, :, :]
             output = output.astype(np.uint8)
             output = np.pad(output, 4, 'constant', constant_values = 255)
-            label_to_compare = orig_label[n, :, :]
-            output[output != label_to_compare] = 255
+            
+            if args.label_format == "intersect":
+                label_to_compare = orig_label[n, :, :]
+                output[output != label_to_compare] = 255
             
             # Read meta
             tile_index = tile_ids[n]

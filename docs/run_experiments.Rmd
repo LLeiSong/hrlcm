@@ -40,13 +40,6 @@ git clone git@github.com:LLeiSong/hrlcm.git
 If necessary, use `git checkout` to switch branch and use `git pull` to grab the updates.
   
 ## Run experiments
-
-### Fit models
-
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_20bs_sbaug_startup --num_workers 30 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --epochs 201
-```
-
 ### Tensorboard
 
 If download log file to local machine, then it is easy to check the training loss curves.
@@ -63,209 +56,44 @@ Do the following steps to use the tensorboard on a remote server (reference: htt
 
     (on the remote server) `tensorboard --logdir='./tensorboard_dirs' --port=16007`
     
-### Hyperparameter tunning
-#### Network parameter
+### Fit the model
 
-Before official running, test a bit about the largest values of `num_worker`, `train_batch_size`, `val_batch_size` that could be used. For `g5.12xlarge`, these values can be:
-
-- `num_worker`:48 (CPU cores)
-- `train_batch_size`: 32 (could be a bit bigger, but it is recommended to use $2^n$)
-- `val_batch_size`: 32
-
-#### Learning rate
-Also, test the optimal learning rate and scheduler to use:
-
-- 0.001 is a good start point.
-- 0.00001 is a good end point with middle value of 0.0001.
-
-`final_lr` for `optim.AdaBound`:
-
-- 0.01 still works fine. The default value is robust for many cases.
-
-#### Augmentation
-
-- Random flip (always use)
-- Random scale
-- Random center rotate
-- Normalization: Dataset based standardization. *Among dataset-based standardization, image-based standardization, image-based normalization, and no such transformation, dataset-based standardization works the best because the U-Net learned much faster.*
-
-Experiments indicate using all of them can improve model performance.
-
-#### Loss functions
-
-No luck on using different loss function. The most effective loss function is still the balanced cross entropy loss function.
-
-According to the experiments, balanced cross entropy loss performs well. In summary (based on my knowledge), changing loss function is not an efficient and effective way to increase the model performance in this case. This might because the modeling task here does not have special characteristics that need special loss functions to deal with. For example, some loss functions were created to detect vessel-like objects. Instead, the problems here are mainly the noisy labels and not enough representative features (satellite image bands).
-
-#### Loss weights
-
-According to some previous experiments, the accuracy of cropland is relatively low. One reason is that the farming condition over Tanzania is complex and thus hard to model. Another reason is the validation of this class has relatively low quality as well. There are limited things we could do for these reasons. But we can let the model to consider more about cropland when training. The strategy can be increasing the loss weight of cropland class. However, the effect is not conclusive.
-
-Hum... Using a bigger weight for cropland in loss calculation increased the overall accuracy a bit. However, the cost is the overestimation of cropland over sparse vegetation area.
-
-#### Freeze layers
-
-Sometimes, people freeze some layers, only update weights of last few layers. The parameters for U-Net used in this project are: 
-
-1 * 8 (initial) + 4 * 8 (down) + 4 * 8 (up) + 2 = 74 layers
-
-- 40: freeze all down layers
-- 56: freeze all down and the first two up blocks
-- 64: freeze all down and the first three up blocks
-- 72: freeze all down and up blocks, just update the last two layers
-
-#### U-Net structure
-
-Using `ConvTranspose2d` instead of `Upsample` could reduce the overestimation issue of built-up areas. Because upsampling just uses bilinear sampling method, which could smooth the whole image. However, built-up objects are usually tiny. Thus, they are affected by bilinear upsampling a lot.
-
-However, there are also cons of `ConvTranspose2d`. Using `ConvTranspose2d` loses the advantage of bilinear smoothing. Thus, at the boundary of an object, it might be some salt noises. If post-segmentation pruning is applied, this is not a big issue.
-
-Another issue is that because using `ConvTranspose2d` means add another learnable parameter layer, it slightly increases the need of computational resources. It really depends if this is an issue.
-
-Thus, whether using `ConvTranspose2d` or not depends what you want. 
-
-#### "Hierachical" training
-
-When training a full model using the whole dataset, the main problem is cropland. One reason is that
-cropland highly relies on local climate and cultivating conditions and Tanzania is a large country. To reduce this impact, we could shrink the study area gradually into each agro-ecological zone.
-
-- Modeling structure:
+Load conda environment:
 
 ```
-1, 2, 4, 5 -> 1, 2, 5 -> 1
-                      -> 2
-                      -> 5
-2, 3, 4, 5 -> 2, 3, 4 -> 3
-                      -> 4
+module load mamba/latest
+source activate pytorch_spatial
 ```
-
-Zone 1, 2, 3, 4, 5
-
-Comment out line 211 and add `learning_rates = [args.max_lr] * args.epochs` to use a fixed learning rate 0.001 to train.
+Run script to fit the model:
 
 ```
-python hrlcm/fit_compose_lr.py --exp_name unet_full_startup_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --max_lr 0.001 --save_freq 20 --epochs 81
+python hrlcm/fit_compose_lr.py --exp_name unet_128_20bs_sbaug_startup --num_workers 30 --gpu_devices '0,1,2,3'
+python hrlcm/fit_compose_lr.py --exp_name unet_128_20bs_sbaug_tune --num_workers 30 --gpu_devices '0,1,2,3' --resume '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_startup/checkpoints/final.pth'
 ```
 
-Then, discard the changes above.
+### Predict of labels of years
 
-Zone 1, 2, 4, 5
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_z1245_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 121 --resume 'results/dl/unet_full_startup_80epochs/checkpoints/final.pth'
-```
+One GPU and use batch size 32 is enough. This step would be very fast as long as CPU RAM can load the dataset.
 
-Comment out line 249 in `fit_compose_lr.py`, and modify `lr_scheduler.py` correspondingly. The learning rate scheduler is saved as a pickle as well.
-
-Zone 1, 2, 5
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_z125_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.0001 --save_freq 10 --epochs 81 --resume 'results/dl/unet_z1245_120epochs/checkpoints/final.pth'
-
-# Fine tune using a smaller learning rate
-python hrlcm/fit_compose_lr.py --exp_name unet_z125_ft_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.000001 --max_lr 0.00001 --save_freq 10 --epochs 81 --resume 'results/dl/unet_z125_80epochs/checkpoints/final.pth'
-```
-
-Discard the changes above.
-
-Zone 2, 3, 4, 5
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_z2345_120epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.001 --save_freq 20 --epochs 121 --resume 'results/dl/unet_full_startup_80epochs/checkpoints/final.pth'
-```
-
-Do the same as zone 1, 2, 5.
-
-Zone 2, 3, 4
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_z234_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.0001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z2345_120epochs/checkpoints/final.pth'
-
-# Fine tune with a smaller learning rate
-python hrlcm/fit_compose_lr.py --exp_name unet_z234_ft_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.000001 --max_lr 0.00001 --save_freq 10 --epochs 81 --resume 'results/dl/unet_z234_80epochs/checkpoints/final.pth'
-```
-
-**[NOTE:]** _I tried multiple ways, which includes adding more training labels, using different types of loss functions (particularly ones to deal with class imbalance), and applying different model structure. No luck to get a reasonable balanced results if shrink the training area further into single zones. So I decided to stop here to use three zones as a group for the final result._
-
-_But if you like, or I get the right method to do further, go further to finish the following steps._
-
-_Zone 1_
-```
-# "Shrink" the model to zone1
-python hrlcm/fit_compose_lr.py --exp_name unet_z125_ew_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.0001 --save_freq 10 --epochs 81 --resume 'results/dl/unet_z125_80epochs/checkpoints/final.pth'
-
-# "Fine-tune" the zone1 model
-python hrlcm/fit_compose_lr.py --exp_name unet_z1_ft_72fz_cl_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --max_lr 0.00000001 --save_freq 10 --epochs 81 --resume 'results/dl/unet_z1_ew80epochs/checkpoints/final.pth'
-```
-
-_Zone 2, 5 (For zone 2 & 5)_
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_z25_ew_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.00001 --max_lr 0.0001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z125_80epochs/checkpoints/final.pth'
-```
-
-_Zone 2, 3 (For zone 3)_
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_z23_12bs_4augs_ft_fz56_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z234_12bs_4augs_ft_80epochs/checkpoints/final.pth'
-```
-
-_Zone 2, 4 (For zone 4)_
-```
-python hrlcm/fit_compose_lr.py --exp_name unet_z24_12bs_4augs_ft_fz56_80epochs --num_workers 48 --gpu_devices '0,1,2,3' --min_lr 0.0000001 --max_lr 0.00001 --save_freq 20 --epochs 81 --resume 'results/dl/unet_z234_12bs_4augs_ft_80epochs/checkpoints/final.pth'
-```
-
-### Prediction
-
-Doing prediction is simple. Applying a model into its zones.
+2018:
 
 ```
-cd path/of/hrlcm
-python hrlcm/predict.py --arg arg_value
-```
-Check arguments:
-```
-python hrlcm/predict.py --help
+python hrlcm/predict_interm_label.py --args_path '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_tune/checkpoints/args.pkl' --checkpoint_file '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_tune/checkpoints/final.pth' --year '2018' --fname_predict 'training/dl_catalog_ipredict_2018.csv' --data_dir '/scratch/lsong36/tanzania' --out_dir '/scratch/lsong36/tanzania/training/label' --stats_dir '/scratch/lsong36/tanzania/training/norm_stats' --num_workers 24 --batch_size 64 --gpu_devices '0,1' --label_format 'full'
 ```
 
-For example:
-```
-python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3'
-
-aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction
-```
-
-`tools/parse_img_from_s3.R` is a script to grab image stacks from S3 to local machine.
-
-Steps in production (for records):
+2019:
 
 ```
-# Grab models, it could be more specific because prediction just uses 2 final models
-aws s3 cp --recursive s3://activemapper/leisong/model $HOME/hrlcm/results/dl
-
-# Navigate to hrlcm
-cd ~/hrlcm
-
-# Run all steps for different zones together 
-Rscript tools/parse_img_from_s3.R -z 1 -s 1;python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone1_1.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone1;rm -rf results/prediction;rm -rf results/tanzania/predict;Rscript tools/parse_img_from_s3.R -z 1 -s 2;python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone1_2.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone1;rm -rf results/prediction;rm -rf results/tanzania/predict;Rscript tools/parse_img_from_s3.R -z 2;python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone2.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone2;rm -rf results/prediction;rm -rf results/tanzania/predict;Rscript tools/parse_img_from_s3.R -z 5;python hrlcm/predict.py --args_path 'results/dl/unet_z125_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z125_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone5.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone5;rm -rf results/prediction;rm -rf results/tanzania/predict;Rscript tools/parse_img_from_s3.R -z 3;python hrlcm/predict.py --args_path 'results/dl/unet_z234_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z234_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone3.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone3;rm -rf results/prediction;rm -rf results/tanzania/predict;Rscript tools/parse_img_from_s3.R -z 4 -s 1;python hrlcm/predict.py --args_path 'results/dl/unet_z234_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z234_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone4_1.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone4;rm -rf results/prediction;rm -rf results/tanzania/predict;Rscript tools/parse_img_from_s3.R -z 4 -s 2;python hrlcm/predict.py --args_path 'results/dl/unet_z234_ft_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z234_ft_80epochs/checkpoints/final.pth' --fname_predict 'dl_catalog_predict_zone4_2.csv' --data_dir 'results/tanzania' --out_dir 'results/prediction' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3';aws s3 cp --recursive $HOME/hrlcm/results/prediction s3://activemapper/leisong/prediction/zone4;rm -rf results/prediction;rm -rf results/tanzania/predict
+python hrlcm/predict_interm_label.py --args_path '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_tune/checkpoints/args.pkl' --checkpoint_file '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_tune/checkpoints/final.pth' --year '2019' --fname_predict 'training/dl_catalog_ipredict_2019.csv' --data_dir '/scratch/lsong36/tanzania' --out_dir '/scratch/lsong36/tanzania/training_2019/label' --stats_dir '/scratch/lsong36/tanzania/training/norm_stats' --num_workers 24 --batch_size 64 --gpu_devices '0,1' --label_format 'intersect'
 ```
 
-### Evaluation
+### Predict
+
+No need to use intensive GPU resource because the prediction is made tile by tile. Use one A100 GPU with batch size 64, 35 cores, CPU RAM 100G:
 
 ```
-cd path/of/hrlcm
-python hrlcm/evaluate.py --arg arg_value
+python hrlcm/predict.py --args_path '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_tune/checkpoints/args.pkl' --checkpoint_file '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_tune/checkpoints/final.pth' --year '2019' --fname_predict 'training/dl_catalog_predict_2019.csv' --data_dir '/scratch/lsong36/tanzania' --out_dir '/scratch/lsong36/tanzania/prediction' --stats_dir '/scratch/lsong36/tanzania/training/norm_stats' --num_workers 35 --batch_size 64 --gpu_devices '0'
 ```
-Check arguments:
-```
-python hrlcm/evaluate.py --help
-```
-
-For example:
-```
-python hrlcm/evaluate.py --args_path 'results/dl/unet_z12_12bs_4augs_ft_fz56_80epochs/checkpoints/args.pkl' --checkpoint_file 'results/dl/unet_z12_12bs_4augs_ft_fz56_80epochs/checkpoints/final.pth' --data_dir 'results/tanzania' --out_dir 'results/evaluation' --stats_dir 'results/tanzania/norm_stats' --num_workers 48 --batch_size 32 --gpu_devices '0,1,2,3'
-
-scp -r ubuntu@ec2-18-191-228-234.us-east-2.compute.amazonaws.com:~/hrlcm/results/evaluation /Users/pinot/Dropbox/research/hrlcm/results/dl/unet_score08_hardiness2_epoch200
-```
-
-#### Post-cleaning (TBD)
-
-- Cropland/Water: Object fixing
-- Grassland/Shrubland/Forest/Build-up/Bareland: No fix
 
 ## Other useful commands
 
