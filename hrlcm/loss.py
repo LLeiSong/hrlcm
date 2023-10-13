@@ -3,7 +3,7 @@ This is a script of multiple losses.
 References:
     https://github.com/bermanmaxim/LovaszSoftmax
 Author: Lei Song, Boka Luo
-Maintainer: Lei Song (lsong@clarku.edu)
+Maintainer: Lei Song (lsong@ucsb.edu)
 """
 
 from __future__ import print_function

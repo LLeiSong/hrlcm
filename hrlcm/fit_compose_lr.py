@@ -2,7 +2,7 @@
 This is a script of fitting DL model.
 Reference: https://github.com/lukasliebel/dfc2020_baseline/blob/master/code/train.py
 Author: Lei Song
-Maintainer: Lei Song (lsong@clarku.edu)
+Maintainer: Lei Song (lsong@ucsb.edu)
 """
 
 import sys
@@ -30,10 +30,12 @@ def main():
     parser.add_argument('--exp_name', type=str, default="experiment",
                         help='experiment name that will be used in path names '
                              'for logs and checkpoints (default: experiment)')
+    parser.add_argument('--year', type=str, default="2020",
+                        help='the year to process (default: 2020)')
 
     # dataset
-    parser.add_argument('--data_dir', type=str, default='/scratch/lsong36/tanzania/training',
-                        help='path to dataset (default: /scratch/lsong36/tanzania/training)')
+    parser.add_argument('--data_dir', type=str, default='/scratch/lsong36/tanzania/training_2019',
+                        help='path to dataset (default: /scratch/lsong36/tanzania/training_2019)')
     parser.add_argument('--out_dir', type=str, default="/scratch/lsong36/tanzania/results",
                         help='path to output dir (default: /scratch/lsong36/tanzania/results)')
     parser.add_argument('--label_offset', type=int, default=1,
@@ -147,12 +149,12 @@ def main():
     
     # Load mean and sd for normalization
     with open(os.path.join(args.stats_dir,
-                           "means_2018.pkl"), "rb") as input_file:
+                           "means_{}.pkl".format(args.year)), "rb") as input_file:
         mean = pkl.load(input_file)
         mean = tuple([mean[i-1] for i in id_bands])
 
     with open(os.path.join(args.stats_dir,
-                           "stds_2018.pkl"), "rb") as input_file:
+                           "stds_{}.pkl".format(args.year)), "rb") as input_file:
         std = pkl.load(input_file)
         std = tuple([std[i-1] for i in id_bands])
     img_transform = ImgNorm(mean, std)

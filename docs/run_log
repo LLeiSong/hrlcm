@@ -1,0 +1,42 @@
+# Train
+## Load environment
+module load mamba/latest
+source activate pytorch_spatial
+
+## 2018
+python hrlcm/fit_compose_lr.py --exp_name unet_128_20bs_sbaug_2018 --num_workers 35 --gpu_devices '0,1,2,3' --resume '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_startup/checkpoints/final.pth'
+
+## 2019
+python hrlcm/fit_compose_lr.py --exp_name unet_128_20bs_sbaug_2019 --year 2019 --data_dir '/scratch/lsong36/tanzania/training_2019' --num_workers 35 --gpu_devices '0,1,2,3'
+
+## 2020
+python hrlcm/fit_compose_lr.py --exp_name unet_128_20bs_sbaug_2020 --year 2020 --data_dir '/scratch/lsong36/tanzania/training_2020' --num_workers 35 --gpu_devices '0,1,2,3'
+
+## 2021
+python hrlcm/fit_compose_lr.py --exp_name unet_128_20bs_sbaug_2021 --year 2021 --data_dir '/scratch/lsong36/tanzania/training_2021' --num_workers 35 --gpu_devices '0,1,2,3'
+
+## 2022
+python hrlcm/fit_compose_lr.py --exp_name unet_128_20bs_sbaug_2022 --year 2022 --data_dir '/scratch/lsong36/tanzania/training_2022' --num_workers 35 --gpu_devices '0,1,2,3'
+
+# Predict, one A100 GPU with batch size 64, 35 cores, CPU RAM 100G
+## 2018
+python hrlcm/predict.py --args_path '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2018/checkpoints/args.pkl' --checkpoint_file '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2018/checkpoints/final.pth' --year '2018' --fname_predict 'training/dl_catalog_predict_2018.csv' --data_dir '/scratch/lsong36/tanzania' --out_dir '/scratch/lsong36/tanzania/prediction' --stats_dir '/scratch/lsong36/tanzania/training/norm_stats' --num_workers 20 --batch_size 64 --gpu_devices '0'
+
+## 2019
+python hrlcm/predict.py --args_path '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2019/checkpoints/args.pkl' --checkpoint_file '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2019/checkpoints/final.pth' --year '2019' --fname_predict 'training_2019/dl_catalog_predict_2019.csv' --data_dir '/scratch/lsong36/tanzania' --out_dir '/scratch/lsong36/tanzania/prediction' --stats_dir '/scratch/lsong36/tanzania/training/norm_stats' --num_workers 35 --batch_size 64 --gpu_devices '0'
+
+# Predict of labels of years
+# One GPU and use batch size 32 is enough. This step would be very fast as long as CPU RAM (safely > 350G) can load the dataset.
+## 2019, done
+### Step 1: remove intersect labels, done
+/scratch/lsong36/tanzania/training/label
+
+### Step 2: make full label of 2018, done
+python hrlcm/predict_interm_label.py --args_path '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2018/checkpoints/args.pkl' --checkpoint_file '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2018/checkpoints/final.pth' --year '2018' --fname_predict 'training/dl_catalog_ipredict_2018.csv' --data_dir '/scratch/lsong36/tanzania' --out_dir '/scratch/lsong36/tanzania/training/label' --stats_dir '/scratch/lsong36/tanzania/training/norm_stats' --num_workers 24 --batch_size 64 --gpu_devices '0,1' --label_format 'full'
+
+### Step 3: make intersect label of target year
+python hrlcm/predict_interm_label.py --args_path '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2018/checkpoints/args.pkl' --checkpoint_file '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2018/checkpoints/final.pth' --year '2019' --fname_predict 'training/dl_catalog_ipredict_2019.csv' --data_dir '/scratch/lsong36/tanzania' --out_dir '/scratch/lsong36/tanzania/training_2019/label' --stats_dir '/scratch/lsong36/tanzania/training/norm_stats' --num_workers 24 --batch_size 32 --gpu_devices '0' --label_format 'intersect'
+
+## 2020
+### Step 3: make intersect label of target year
+python hrlcm/predict_interm_label.py --args_path '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2018/checkpoints/args.pkl' --checkpoint_file '/scratch/lsong36/tanzania/results/unet_128_20bs_sbaug_2018/checkpoints/final.pth' --year '2020' --fname_predict 'training/dl_catalog_ipredict_2020.csv' --data_dir '/scratch/lsong36/tanzania' --out_dir '/scratch/lsong36/tanzania/training_2020/label' --stats_dir '/scratch/lsong36/tanzania/training/norm_stats' --num_workers 35 --batch_size 32 --gpu_devices '0' --label_format 'intersect'

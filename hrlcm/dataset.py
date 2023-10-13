@@ -1,7 +1,7 @@
 """
 This is a script to read data for deep learning classification.
 Author: Lei Song
-Maintainer: Lei Song (lsong@clarku.edu)
+Maintainer: Lei Song (lsong@ucsb.edu)
 """
 
 import copy
@@ -238,7 +238,7 @@ class NFSEN1LC(Dataset):
             self.catalog = catalog_full
             # Load all images here before the training to save time
             args = [(index, catalog_full, bands, label_offset, data_dir) for index in range(len(catalog_full))]
-            with mp.Pool(processes=10) as pool:
+            with mp.Pool(processes=35) as pool:
                 results = pool.starmap(_read_img_label, args)
             self.img_ls = [result[0] for result in results]
             self.label_ls = [result[1] for result in results]
