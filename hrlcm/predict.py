@@ -124,12 +124,12 @@ def main():
     
     # Load mean and sd for normalization
     with open(os.path.join(args.stats_dir,
-                           "means_2019.pkl"), "rb") as input_file:
+                           "means_{}.pkl".format(args.year)), "rb") as input_file:
         mean = tuple(pkl.load(input_file))
         mean = tuple([mean[i-1] for i in id_bands])
 
     with open(os.path.join(args.stats_dir,
-                           "stds_2019.pkl"), "rb") as input_file:
+                           "stds_{}.pkl".format(args.year)), "rb") as input_file:
         std = tuple(pkl.load(input_file))
         std = tuple([std[i-1] for i in id_bands])
     pred_transform = ComposeImg([

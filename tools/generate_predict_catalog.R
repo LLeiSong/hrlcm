@@ -16,9 +16,9 @@ library(parallel)
 tiles_full <- read_sf('data/tiles_nicfi.geojson') %>% select(tile)
 
 # Generate catalog for years
-yr <- 2019
+yr <- 2022
 img_dir <- 'image_cube'
-catalog_dir <- '/scratch/lsong36/tanzania/training_2019'
+catalog_dir <- sprintf('/scratch/lsong36/tanzania/training_%s', yr)
 
 tiles <- tiles_full
 dl_catalog_full <- data.frame(tile_id = tiles$tile) %>% 
