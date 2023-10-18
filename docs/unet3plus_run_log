@@ -1,0 +1,11 @@
+# Train
+## Load environment
+module load mamba/latest
+source activate pytorch_spatial
+
+## Take 2018 as example
+python hrlcm/fit_compose_lr.py --exp_name unet_hbloss --year 2018 --num_workers 20 --model unet --gpu_devices '0'
+
+python hrlcm/fit_compose_lr.py --exp_name msunet_hbloss --year 2018 --num_workers 20 --model msunet --gpu_devices '0'
+
+python hrlcm/fit_compose_lr.py --exp_name unet3+_ce --year 2018 --num_workers 8 --model unet3+s --loss_function cross_entropy --train_batch_size 4 --val_batch_size 4 --gpu_devices '0'

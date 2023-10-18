@@ -33,9 +33,6 @@ class Trainer:
         pbar = tqdm(total=len(train_loader), desc="[Train]", dynamic_ncols=True)
         loss_total = 0
         for i, (image, target, indexes) in enumerate(train_loader):
-            # Shrink target
-            target = target[:, 4:-4, 4:-4]
-            
             # Add replicate padding
             # image = F.pad(image, (4, 4, 4, 4), 'replicate')
 
@@ -45,6 +42,12 @@ class Trainer:
 
             # Forward pass
             prediction = model(image)
+            
+            # Shrink target
+            if type(prediction) is not tuple:
+                if target.shape[1] != prediction.shape[2]:
+                    target = target[:, 4:-4, 4:-4]
+            
             loss = loss_fn(prediction, target)
             loss_total += loss.item()
 
@@ -92,7 +95,8 @@ class Trainer:
         conf_mat = metrics.ConfMatrix(validate_loader.dataset.n_classes)
         for i, (image, target) in enumerate(validate_loader):
             # Shrink target
-            target = target[:, 4:-4, 4:-4]
+            if target.shape[1] != image.shape[2]:
+                target = target[:, 4:-4, 4:-4]
             
             # Move data to gpu if model is on gpu
             if self.args.use_gpu:
@@ -101,6 +105,14 @@ class Trainer:
             # Forward pass
             with torch.no_grad():
                 prediction = model(image)
+            
+            # For multi-scale
+            if type(prediction) is tuple:
+                prediction = prediction[0]
+            else:
+                # Shrink target
+                if target.shape[1] != prediction.shape[2]:
+                    target = target[:, 4:-4, 4:-4]
             loss = loss_fn(prediction, target)
             loss_total += loss.cpu().item()
 

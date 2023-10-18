@@ -13,11 +13,13 @@ from dataset import *
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import pickle as pkl
-from models.deeplab import DeepLab
 from models.unet import UNet
+from models.ms_unet import MSU_Net
+from models.nested_unet import NestedUNet
+from models.unet_3plus import UNet3Plus, UNet3PlusDeepSup
 from train import Trainer
 import torch_optimizer as optim
-from loss import BalancedCrossEntropyLoss
+from loss import BalancedCrossEntropyLoss, HybridLoss, LossMs
 from lr_scheduler import get_compose_lr
 
 
@@ -34,8 +36,8 @@ def main():
                         help='the year to process (default: 2020)')
 
     # dataset
-    parser.add_argument('--data_dir', type=str, default='/scratch/lsong36/tanzania/training_2019',
-                        help='path to dataset (default: /scratch/lsong36/tanzania/training_2019)')
+    parser.add_argument('--data_dir', type=str, default='/scratch/lsong36/tanzania/training',
+                        help='path to dataset (default: /scratch/lsong36/tanzania/training)')
     parser.add_argument('--out_dir', type=str, default="/scratch/lsong36/tanzania/results",
                         help='path to output dir (default: /scratch/lsong36/tanzania/results)')
     parser.add_argument('--label_offset', type=int, default=1,
@@ -53,11 +55,12 @@ def main():
                         help='number of worker(s) to load dataset (default: 0)')
 
     # Network
-    parser.add_argument('--model', type=str, choices=['unet', 'deeplab'],
+    parser.add_argument('--model', type=str, choices=['unet', 'msunet', 'unet++', 'unet3+', 'unet3+s'],
                         default="unet",
                         help='network architecture (default: unet)')
-    parser.add_argument('--out_stride', type=int, default=8,
-                        help='out stride size for deeplab (default: 8)')
+    parser.add_argument('--loss_function', type=str, choices=['cross_entropy', 'hybrid'],
+                        default="cross_entropy",
+                        help='loss function (default: cross_entropy)')
     parser.add_argument('--gpu_devices', type=str, default=None,
                         help='the gpu devices to use (default: None) (format: 1, 2)')
 
@@ -73,9 +76,9 @@ def main():
     parser.add_argument('--save_freq', type=int, default=10,
                         help='training state will be saved every save_freq \
                         batches during training')
-    parser.add_argument('--train_batch_size', type=int, default=128,
+    parser.add_argument('--train_batch_size', type=int, default=8,
                         help='batch size for training (default: 32)')
-    parser.add_argument('--val_batch_size', type=int, default=128,
+    parser.add_argument('--val_batch_size', type=int, default=8,
                         help='batch size for validation (default: 32)')
     parser.add_argument('--epochs', type=int, default=201,
                         help='number of training epochs (default: 200). '
@@ -87,7 +90,8 @@ def main():
 
     # Check inputs
     assert args.optimizer_name.lower() in ['adabound', 'amsbound', 'adamp']
-    assert args.model in ['deeplab', 'unet']
+    assert args.model in ['unet', 'msunet', 'unet++', 'unet3+', 'unet3+s']
+    assert args.loss_function in ['cross_entropy', 'hybrid']
     assert args.img_bands in ['all', 'nicfi']
 
     # Set directory for saving files
@@ -118,8 +122,7 @@ def main():
     sync_transform = Compose([
         RandomScale(prob=args.trans_prob),
         AdjustBrightness(prob=args.trans_prob),
-        SyncToTensor()
-    ])
+        SyncToTensor()])
     
     # Original transform
     # sync_transform = Compose([
@@ -137,8 +140,7 @@ def main():
 
     # synchronize transform for validate dataset
     sync_transform_val = Compose([
-        SyncToTensor()
-    ])
+        SyncToTensor()])
 
     # Image transform
     # bands_all = [1,2,4,5,7,9,10,12,13,15,17,18,19,20] + list(range(23,27))
@@ -203,17 +205,16 @@ def main():
 
     # Train network
     # Define model
-    if args.model == "deeplab":
-        # TODO Not fully test yet
-        model = DeepLab(num_classes=args.n_classes,
-                        backbone='resnet',
-                        pretrained_backbone=False,
-                        output_stride=args.out_stride,
-                        freeze_bn=False,
-                        n_in=args.n_channels)
+    if args.model == "msunet":
+        model = MSU_Net(img_ch=args.n_channels, output_ch=args.n_classes)
+    elif args.model == "unet++":
+        model = NestedUNet(in_ch=args.n_channels, out_ch=args.n_classes)
+    elif args.model == "unet3+":
+        model = UNet3Plus(in_channels=args.n_channels, n_classes=args.n_classes)
+    elif args.model == "unet3+s":
+        model = UNet3PlusDeepSup(in_channels=args.n_channels, n_classes=args.n_classes)
     else:
-        model = UNet(n_classes=args.n_classes,
-                     n_channels=args.n_channels)
+        model = UNet(n_classes=args.n_classes, n_channels=args.n_channels)
 
     # Get devices
     if args.gpu_devices:
@@ -253,8 +254,16 @@ def main():
     pkl.dump(learning_rates, open(os.path.join(args.checkpoint_dir, "lrs.pkl"), "wb"))
 
     # Define loss function
-    loss_fn = BalancedCrossEntropyLoss()
-    loss_fn_valid = BalancedCrossEntropyLoss()
+    if args.loss_function == "cross_entropy":
+        loss_fn = BalancedCrossEntropyLoss()
+        loss_fn_valid = BalancedCrossEntropyLoss()
+    else:
+        loss_fn = HybridLoss
+        loss_fn_valid = HybridLoss
+    # Only for multi-scale loss
+    if args.model == 'unet3+s':
+        # loss_fn = BalancedCrossEntropyLoss_3plus
+        loss_fn = LossMs(loss_fn)
 
     # Define optimizer
     if args.optimizer_name.lower() == 'adabound':
@@ -291,10 +300,6 @@ def main():
                 epoch = floor(step / floor(len(train_dataset) / args.train_batch_size))
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            # # Update final learning rate to 0.00001
-            # # For instance, it could be used for fine tuning stage
-            # for param_group in optimizer.param_groups:
-            #     param_group["final_lr"] = 0.00001
             print("Load checkpoint '{}' (epoch {})".format(args.resume, epoch))
             
             # # Freeze some layers

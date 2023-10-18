@@ -316,11 +316,14 @@ class AdjustBrightness(object):
             factors = gaussian_random_field(interval=self.gammaRange)
             condition = random.choice([1,2,3])
             if condition == 1:
-                index = [1,2,3,4,6]
+                index = [0,1,2,3,5] # morebands
+                # index = [0,1,2,3]
             elif condition == 2:
-                index = [7,8,9,10,12]
+                index = [6,7,8,9,11] # morebands
+                # index = [4,5,6,7]
             else:
-                index = [1,2,3,4,6,7,8,9,10,12]
+                index = [0,1,2,3,5,6,7,8,9,11] # morebands
+                # index = [0,1,2,3,4,5,6,7]
             for i in index:
                 img[:,:,i] = img[:,:,i] * factors
 
