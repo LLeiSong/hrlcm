@@ -3,7 +3,7 @@
 
 """ Full assembly of the parts to form the complete network """
 
-from models.utils.unet_parts import *
+from models.unet_parts import *
 
 
 class UNet(nn.Module):

@@ -14,3 +14,4 @@ results
 test.py
 docs/figures/
 hrlcm.Rproj
+*/__pycache__
