@@ -9,6 +9,8 @@
 YEAR=$1
 
 module load mamba/latest
+# Finally get the right way to use other nodes
+eval "$(conda shell.bash hook)"
 source activate pytorch_spatial
 cd ~/hrlcm
 
